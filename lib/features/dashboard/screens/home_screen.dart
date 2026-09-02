@@ -1,0 +1,589 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../../app/theme/app_text_styles.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../shared/widgets/app_logo.dart';
+import '../../../shared/widgets/bottom_nav_bar.dart';
+
+// ── Colour tokens ─────────────────────────────────────────────────────────────
+class _C {
+  static const bg = Color(0xFF071519);
+  static const cardBg = Color(0xFF151A17);
+  static const cardBorder = Color(0xFF27312B);
+  static const surfCont = Color(0xFF142226);
+  static const surfBright = Color(0xFF2D3B40);
+  static const primary = Color(0xFF4BE277);
+  static const onPrimary = Color(0xFF003915);
+  static const onSurface = Color(0xFFD6E5EA);
+  static const textSec = Color(0xFFBCCBB9);
+  static const outlineVariant = Color(0xFF3D4A3D);
+  static const blueAccent = Color(0xFF38BDF8);
+  static const inputBg = Color(0xFF111613);
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  int _navIndex = 0;
+  final _searchController = TextEditingController();
+
+  // Pulsing glow animation for Start Ride button
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseRadius;
+  late final Animation<double> _pulseOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+    _pulseRadius = Tween<double>(begin: 0, end: 20).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut),
+    );
+    _pulseOpacity = Tween<double>(begin: 0.5, end: 0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _C.bg,
+      appBar: _buildAppBar(),
+      body: _buildBody(),
+      bottomNavigationBar: JustRideBottomNavBar(
+        currentIndex: _navIndex,
+        onTap: (i) {
+          if (i == 0) {
+            Navigator.of(context).pushReplacementNamed('/dashboard');
+          } else if (i == 1) {
+            Navigator.of(context).pushNamed('/places');
+          } else if (i == 2) {
+            Navigator.of(context).pushNamed('/pair-device');
+          } else if (i == 3) {
+            Navigator.of(context).pushNamed('/notifications');
+          } else if (i == 4) {
+            Navigator.of(context).pushNamed('/profile');
+          }
+        },
+      ),
+
+
+    );
+  }
+
+  // ── App Bar ────────────────────────────────────────────────────────────────
+  PreferredSizeWidget _buildAppBar() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(56),
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          height: 56,
+          decoration: const BoxDecoration(
+            color: _C.bg,
+            border: Border(
+              bottom: BorderSide(color: _C.outlineVariant, width: 1),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    Navigator.of(context).pushReplacementNamed('/dashboard');
+                  }
+                },
+                icon: const Icon(Icons.arrow_back_rounded,
+                    color: _C.primary, size: 24),
+              ),
+              const AppLogo(
+                iconSize: 16,
+                fontSize: 20,
+                showTagline: false,
+                isCentered: true,
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
+                icon: const Icon(Icons.settings_outlined,
+                    color: _C.textSec, size: 24),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  // ── Body ───────────────────────────────────────────────────────────────────
+  Widget _buildBody() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppConstants.spacingMd),
+
+          // Device Card
+          GestureDetector(
+            onTap: () => Navigator.of(context).pushNamed('/device'),
+            child: _DeviceCard(),
+          ),
+          const SizedBox(height: AppConstants.spacingXl),
+
+          // "Where are you going?"
+          Text(
+            'Where are you going?',
+            style: AppTextStyles.headingLarge.copyWith(
+              fontSize: 22,
+              color: _C.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppConstants.spacingMd),
+
+          // Search input
+          _SearchField(controller: _searchController),
+          const SizedBox(height: AppConstants.spacingMd),
+
+          // Home + Work quick shortcuts
+          Row(
+            children: [
+              Expanded(
+                child: _QuickShortcut(
+                  icon: Icons.home_rounded,
+                  label: 'Home',
+                  subtitle: '12 MIN AWAY',
+                  onTap: () => Navigator.of(context).pushNamed('/trips'),
+                ),
+              ),
+              const SizedBox(width: AppConstants.spacingMd),
+              Expanded(
+                child: _QuickShortcut(
+                  icon: Icons.work_outline_rounded,
+                  label: 'Work',
+                  subtitle: '45 MIN AWAY',
+                  onTap: () => Navigator.of(context).pushNamed('/trips'),
+                ),
+              ),
+            ],
+          ),
+
+          // Push CTA to bottom
+          const Spacer(),
+
+          // Start Ride button (pulsing glow)
+          _StartRideButton(
+            pulseRadius: _pulseRadius,
+            pulseOpacity: _pulseOpacity,
+            onTap: () => Navigator.of(context).pushNamed('/trips'),
+          ),
+
+          const SizedBox(height: AppConstants.spacingLg),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Device Card ───────────────────────────────────────────────────────────────
+class _DeviceCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppConstants.spacingMd),
+      decoration: BoxDecoration(
+        color: _C.cardBg,
+        border: Border.all(color: _C.cardBorder),
+        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // Top green accent line
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 2,
+            child: Container(color: _C.primary.withValues(alpha: 0.5)),
+          ),
+          Column(
+            children: [
+              // Title row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.bluetooth_connected_rounded,
+                          color: _C.blueAccent, size: 22),
+                      const SizedBox(width: AppConstants.spacingSm),
+                      Text(
+                        'JustRide Device',
+                        style: AppTextStyles.headingSmall.copyWith(
+                          color: _C.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _C.primary.withValues(alpha: 0.1),
+                      border: Border.all(
+                          color: _C.primary.withValues(alpha: 0.2)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'CONNECTED',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: _C.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.spacingSm),
+              // Stats row
+              Container(
+                padding: const EdgeInsets.only(top: AppConstants.spacingSm),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                        color: _C.outlineVariant.withValues(alpha: 0.5)),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _StatCell(
+                        label: 'BATTERY',
+                        value: '85%',
+                        icon: Icons.battery_5_bar_rounded,
+                        iconColor: _C.primary,
+                      ),
+                    ),
+                    Expanded(
+                      child: _StatCell(
+                        label: 'SIGNAL',
+                        value: 'Strong',
+                        icon: Icons.signal_cellular_4_bar_rounded,
+                        iconColor: _C.blueAccent,
+                      ),
+                    ),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Synced 2m ago',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                            color: _C.textSec,
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCell extends StatelessWidget {
+  const _StatCell({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.iconColor,
+  });
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: _C.textSec,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(icon, color: iconColor, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: _C.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ── Search Field ──────────────────────────────────────────────────────────────
+class _SearchField extends StatefulWidget {
+  const _SearchField({required this.controller});
+  final TextEditingController controller;
+
+  @override
+  State<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<_SearchField> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (v) => setState(() => _focused = v),
+      child: AnimatedContainer(
+        duration: AppConstants.animFast,
+        height: 56,
+        decoration: BoxDecoration(
+          color: _C.inputBg,
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+          border: Border.all(
+            color: _focused ? _C.primary : _C.outlineVariant,
+            width: _focused ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: AppConstants.spacingMd),
+            Icon(Icons.search_rounded,
+                color: _focused ? _C.primary : _C.textSec, size: 22),
+            const SizedBox(width: AppConstants.spacingMd),
+            Expanded(
+              child: TextField(
+                controller: widget.controller,
+                style: GoogleFonts.inter(fontSize: 16, color: _C.onSurface),
+                cursorColor: _C.primary,
+                decoration: InputDecoration(
+                  hintText: 'Search destination...',
+                  hintStyle: GoogleFonts.inter(
+                      fontSize: 16,
+                      color: _C.textSec.withValues(alpha: 0.5)),
+                  border: InputBorder.none,
+                  isDense: true,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Quick Shortcut Card ───────────────────────────────────────────────────────
+class _QuickShortcut extends StatefulWidget {
+  const _QuickShortcut({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  State<_QuickShortcut> createState() => _QuickShortcutState();
+}
+
+class _QuickShortcutState extends State<_QuickShortcut> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: AppConstants.animFast,
+        padding: const EdgeInsets.all(AppConstants.spacingMd),
+        decoration: BoxDecoration(
+          color: _C.surfCont,
+          border: Border.all(
+            color: _pressed
+                ? _C.primary.withValues(alpha: 0.5)
+                : _C.outlineVariant,
+          ),
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _C.surfBright,
+              ),
+              child: Icon(widget.icon, color: _C.onSurface, size: 20),
+            ),
+            const SizedBox(width: AppConstants.spacingSm),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.label,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: _C.onSurface,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  widget.subtitle,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                    color: _C.textSec,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Start Ride Button (pulsing glow) ──────────────────────────────────────────
+class _StartRideButton extends StatefulWidget {
+  const _StartRideButton({
+    required this.pulseRadius,
+    required this.pulseOpacity,
+    required this.onTap,
+  });
+  final Animation<double> pulseRadius;
+  final Animation<double> pulseOpacity;
+  final VoidCallback onTap;
+
+  @override
+  State<_StartRideButton> createState() => _StartRideButtonState();
+}
+
+class _StartRideButtonState extends State<_StartRideButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: AppConstants.animFast,
+        child: AnimatedBuilder(
+          animation: widget.pulseRadius,
+          builder: (_, child) => Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+              boxShadow: [
+                // Pulsing outer ring
+                BoxShadow(
+                  color: _C.primary
+                      .withValues(alpha: widget.pulseOpacity.value * 0.5),
+                  blurRadius: widget.pulseRadius.value,
+                  spreadRadius: widget.pulseRadius.value * 0.3,
+                ),
+                // Static glow
+                BoxShadow(
+                  color: _C.primary.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                ),
+              ],
+            ),
+            child: child,
+          ),
+          child: Container(
+            height: 64,
+            decoration: BoxDecoration(
+              color: _C.primary,
+              borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.two_wheeler_rounded,
+                    color: _C.onPrimary, size: 28),
+                const SizedBox(width: AppConstants.spacingSm),
+                Text(
+                  'Start Ride',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: _C.onPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

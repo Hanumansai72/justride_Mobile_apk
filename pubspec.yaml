@@ -1,0 +1,30 @@
+name: justride_ui
+description: JustRide â€“ production-level Flutter static UI for the ride navigation app.
+publish_to: 'none'
+version: 1.1.0+2
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Google Fonts (Poppins)
+  flutter_blue_plus: ^2.3.12
+  google_fonts: ^6.2.1
+
+  # Smooth page indicator (for potential onboarding extension)
+  http: ^1.6.0
+  shared_preferences: ^2.5.5
+  smooth_page_indicator: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/firmware/justride_firmware.bin
