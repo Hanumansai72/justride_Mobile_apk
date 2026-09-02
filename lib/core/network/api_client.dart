@@ -1,0 +1,293 @@
+﻿import 'dart:convert';
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../app/app.dart';
+import '../routes/app_routes.dart';
+
+/// Senior-Grade HTTP Client for JustRide Backend
+/// Features:
+/// - Base URL configuration for local / stage / prod
+/// - Automatic JWT Bearer token injection
+/// - Response standardisation matching Backend apiResponse wrapper
+/// - Automatic Session Expiration detection (401/403) with instant redirect to Login
+class ApiClient {
+  ApiClient._();
+  static final ApiClient instance = ApiClient._();
+
+  // Production / Staging Backend Host
+  static const String baseUrl = 'https://justfai-backend.vercel.app/api';
+
+  static const Duration timeoutDuration = Duration(seconds: 15);
+
+  static const String _tokenKey = 'justride_auth_token';
+  static const String _userKey = 'justride_user_data';
+
+  String? _authToken;
+  bool _isRedirectingToLogin = false;
+
+  /// Initialize token from local storage on app start
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    _authToken = prefs.getString(_tokenKey);
+  }
+
+  String? get token => _authToken;
+  bool get isAuthenticated => _authToken != null && _authToken!.isNotEmpty;
+
+  Future<void> saveAuthToken(String token) async {
+    _authToken = token;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, token);
+  }
+
+  Future<void> saveUserData(Map<String, dynamic> userJson) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userKey, jsonEncode(userJson));
+  }
+
+  Future<Map<String, dynamic>?> getSavedUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_userKey);
+    if (raw != null) {
+      try {
+        return jsonDecode(raw) as Map<String, dynamic>;
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  Future<void> clearAuth() async {
+    _authToken = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_userKey);
+  }
+
+  /// Handle session expiration: clears auth and forces user back to login screen
+  void handleSessionExpired() {
+    if (_isRedirectingToLogin) return;
+    _isRedirectingToLogin = true;
+
+    clearAuth().then((_) {
+      final nav = appNavigatorKey.currentState;
+      if (nav != null) {
+        nav.pushNamedAndRemoveUntil(
+          AppRoutes.login,
+          (route) => false,
+        );
+      }
+      Future.delayed(const Duration(seconds: 2), () {
+        _isRedirectingToLogin = false;
+      });
+    });
+  }
+
+  Map<String, String> _headers([Map<String, String>? extra]) {
+    final map = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (_authToken != null && _authToken!.isNotEmpty) {
+      map['Authorization'] = 'Bearer $_authToken';
+    }
+    if (extra != null) {
+      map.addAll(extra);
+    }
+    return map;
+  }
+
+  // ── GET ────────────────────────────────────────────────────────────
+  Future<ApiResponse<T>> get<T>(
+    String path, {
+    Map<String, String>? headers,
+    T Function(dynamic data)? fromJson,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final response = await http
+          .get(uri, headers: _headers(headers))
+          .timeout(timeoutDuration);
+      return _handleResponse<T>(response, fromJson);
+    } catch (e) {
+      return ApiResponse.error(e.toString());
+    }
+  }
+
+  // ── POST ───────────────────────────────────────────────────────────
+  Future<ApiResponse<T>> post<T>(
+    String path, {
+    dynamic body,
+    Map<String, String>? headers,
+    T Function(dynamic data)? fromJson,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(headers),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeoutDuration);
+      return _handleResponse<T>(response, fromJson);
+    } catch (e) {
+      return ApiResponse.error(e.toString());
+    }
+  }
+
+  // ── PUT ────────────────────────────────────────────────────────────
+  Future<ApiResponse<T>> put<T>(
+    String path, {
+    dynamic body,
+    Map<String, String>? headers,
+    T Function(dynamic data)? fromJson,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final response = await http
+          .put(
+            uri,
+            headers: _headers(headers),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeoutDuration);
+      return _handleResponse<T>(response, fromJson);
+    } catch (e) {
+      return ApiResponse.error(e.toString());
+    }
+  }
+
+  // ── PATCH ──────────────────────────────────────────────────────────
+  Future<ApiResponse<T>> patch<T>(
+    String path, {
+    dynamic body,
+    Map<String, String>? headers,
+    T Function(dynamic data)? fromJson,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final response = await http
+          .patch(
+            uri,
+            headers: _headers(headers),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeoutDuration);
+      return _handleResponse<T>(response, fromJson);
+    } catch (e) {
+      return ApiResponse.error(e.toString());
+    }
+  }
+
+  // ── DELETE ─────────────────────────────────────────────────────────
+  Future<ApiResponse<T>> delete<T>(
+    String path, {
+    dynamic body,
+    Map<String, String>? headers,
+    T Function(dynamic data)? fromJson,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final response = await http
+          .delete(
+            uri,
+            headers: _headers(headers),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeoutDuration);
+      return _handleResponse<T>(response, fromJson);
+    } catch (e) {
+      return ApiResponse.error(e.toString());
+    }
+  }
+
+  ApiResponse<T> _handleResponse<T>(
+    http.Response res,
+    T Function(dynamic data)? fromJson,
+  ) {
+    try {
+      // Check 401 Unauthorized or 403 Session Invalidation
+      if (res.statusCode == 401) {
+        debugPrint('[ApiClient] 401 Unauthorized encountered. Redirecting to Login...');
+        handleSessionExpired();
+      }
+
+      final Map<String, dynamic> body =
+          res.body.isNotEmpty ? jsonDecode(res.body) : {};
+      final bool success = (res.statusCode >= 200 && res.statusCode < 300) &&
+          (body['success'] == true || !body.containsKey('success'));
+
+      if (success) {
+        // Automatically capture and persist accessToken / token if returned by backend
+        final String? token = body['accessToken'] as String? ??
+            body['token'] as String? ??
+            (body['data'] is Map ? (body['data'] as Map)['accessToken'] ?? (body['data'] as Map)['token'] : null);
+        if (token != null && token.isNotEmpty) {
+          saveAuthToken(token);
+        }
+
+        final dynamic rawData = body.containsKey('data') ? body['data'] : body;
+        final T? parsedData =
+            (fromJson != null && rawData != null) ? fromJson(rawData) : rawData as T?;
+        return ApiResponse.success(
+          data: parsedData,
+          message: body['message'] as String? ?? 'Success',
+          statusCode: res.statusCode,
+        );
+      } else {
+        return ApiResponse.error(
+          body['message'] as String? ?? 'Request failed with status ${res.statusCode}',
+          statusCode: res.statusCode,
+          errors: body['errors'],
+        );
+      }
+    } catch (e) {
+      return ApiResponse.error('Malformed response: $e', statusCode: res.statusCode);
+    }
+  }
+}
+
+/// Standard Generic API Response container
+class ApiResponse<T> {
+  final bool success;
+  final T? data;
+  final String message;
+  final int? statusCode;
+  final dynamic errors;
+
+  ApiResponse({
+    required this.success,
+    this.data,
+    required this.message,
+    this.statusCode,
+    this.errors,
+  });
+
+  factory ApiResponse.success({
+    T? data,
+    String message = 'Success',
+    int? statusCode,
+  }) =>
+      ApiResponse(
+        success: true,
+        data: data,
+        message: message,
+        statusCode: statusCode,
+      );
+
+  factory ApiResponse.error(
+    String message, {
+    int? statusCode,
+    dynamic errors,
+  }) =>
+      ApiResponse(
+        success: false,
+        message: message,
+        statusCode: statusCode,
+        errors: errors,
+      );
+}
