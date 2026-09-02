@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -7,7 +7,7 @@ import '../../../core/services/backend_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 
-// ── Colour tokens ─────────────────────────────────────────────────────────────
+// â”€â”€ Colour tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _C {
   static const bg = Color(0xFF071519);
   static const surfCont = Color(0xFF142226);
@@ -23,7 +23,7 @@ class _C {
   static const outlineVariant = Color(0xFF3D4A3D);
 }
 
-// ── Data models ───────────────────────────────────────────────────────────────
+// â”€â”€ Data models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 enum _NotifState { unreadHigh, read }
 
 class _Notif {
@@ -41,10 +41,10 @@ class _Notif {
   final _NotifState state;
 }
 
-const _chips = ['ALL', 'DEVICE', 'FIRMWARE', 'SECURITY', 'ACCOUNT'];
+const _chips = ['ALL', 'APP & APK', 'FIRMWARE', 'DEVICE', 'SECURITY'];
 
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -95,7 +95,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
 
 
-  // ── App Bar ────────────────────────────────────────────────────────────────
+  // â”€â”€ App Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   PreferredSizeWidget _buildAppBar() {
     return PreferredSize(
       preferredSize: const Size.fromHeight(56),
@@ -143,7 +143,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
 
-  // ── Body ───────────────────────────────────────────────────────────────────
+  // â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildBody() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,7 +265,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
 }
 
-// ── Filter Chip ───────────────────────────────────────────────────────────────
+// â”€â”€ Filter Chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
     required this.label,
@@ -323,7 +323,7 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// ── Notification Card ─────────────────────────────────────────────────────────
+// â”€â”€ Notification Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _NotificationCard extends StatefulWidget {
   const _NotificationCard({required this.notif, this.onTap});
   final _Notif notif;
