@@ -481,5 +481,20 @@ class BackendService {
       fromJson: (json) => (json is Map ? Map<String, dynamic>.from(json) : {}),
     );
   }
+
+  /// Deletes custom display image from backend Cloudinary storage
+  Future<ApiResponse<Map<String, dynamic>>> deleteCustomDisplayImage({
+    String? imageUrl,
+    String? publicId,
+  }) async {
+    return _api.delete<Map<String, dynamic>>(
+      ApiEndpoints.uploadImage,
+      body: {
+        if (imageUrl != null) 'url': imageUrl,
+        if (publicId != null) 'public_id': publicId,
+      },
+      fromJson: (json) => (json is Map ? Map<String, dynamic>.from(json) : {}),
+    );
+  }
 }
 

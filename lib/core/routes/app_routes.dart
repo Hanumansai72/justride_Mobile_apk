@@ -85,7 +85,7 @@ abstract final class AppRoutes {
     displayCustomization: (context) => const DisplayCustomizationScreen(),
     
     profile: (context) => const ProfileScreen(),
-    profileSettings: (context) => const ProfileSettingsScreen(),
+    profileSettings: (context) => const ProfileScreen(),
     notifications: (context) => const NotificationsScreen(),
     helpSupport: (context) => const HelpSupportScreen(),
     myTickets: (context) => const MyTicketsScreen(),

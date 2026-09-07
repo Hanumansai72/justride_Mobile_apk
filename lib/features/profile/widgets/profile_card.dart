@@ -6,8 +6,9 @@ import '../../../core/models/app_models.dart';
 
 class ProfileCard extends StatelessWidget {
   final UserModel? user;
+  final VoidCallback? onEdit;
 
-  const ProfileCard({super.key, this.user});
+  const ProfileCard({super.key, this.user, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +31,7 @@ class ProfileCard extends StatelessWidget {
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Stack(
                 children: [
@@ -105,6 +107,26 @@ class ProfileCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onEdit != null)
+                IconButton(
+                  onPressed: onEdit,
+                  tooltip: 'Edit Profile',
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.edit_rounded,
+                      size: 16,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
             ],
           ),
         ],

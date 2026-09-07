@@ -10,7 +10,6 @@ import '../widgets/device_info_card.dart';
 import '../widgets/device_shortcuts.dart';
 import '../widgets/device_action_tile.dart';
 import '../widgets/device_health_card.dart';
-import '../widgets/find_device_card.dart';
 import 'device_pairing_screen.dart';
 
 class DeviceScreen extends StatefulWidget {
@@ -209,8 +208,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
             sliver: SliverToBoxAdapter(
               child: DeviceActionTile(
                 icon: Icons.tune_rounded,
-                title: 'Hardware & Audio Settings',
-                subtitle: 'Brightness, HUD, volume and shift lights',
+                title: 'Hardware Settings',
+                subtitle: 'Brightness, HUD, shift lights, and diagnostics',
                 onTap: () => Navigator.of(context).pushNamed('/device-settings'),
               ),
             ),
@@ -221,13 +220,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
           const SliverPadding(
             padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
             sliver: SliverToBoxAdapter(child: DeviceHealthCard()),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
-
-          // Find Device Card
-          const SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-            sliver: SliverToBoxAdapter(child: FindDeviceCard()),
           ),
 
           const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingSection)),

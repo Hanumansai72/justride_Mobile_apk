@@ -43,6 +43,7 @@ class ImageTransferService {
   static const int _kCmdStart = 0x01;
   static const int _kCmdFinish = 0x02;
   static const int _kCmdAbort = 0x03;
+  static const int _kCmdReset = 0x04;
 
   static const int kDisplayWidth = 320;
   static const int kDisplayHeight = 240;
@@ -226,6 +227,32 @@ class ImageTransferService {
     _isTransferring = false;
     _controlChr?.write([_kCmdAbort], withoutResponse: true);
     _updateProgress(ImageTransferState.idle, 0, 'Transfer cancelled.');
+  }
+
+  /// Sends a clear / reset image command to restore default display screen
+  Future<bool> resetImage(BluetoothDevice device) async {
+    try {
+      final services = await device.discoverServices();
+      BluetoothCharacteristic? ctrl;
+      for (final s in services) {
+        if (s.uuid.toString().toLowerCase().contains(_kImgServiceUuid)) {
+          for (final c in s.characteristics) {
+            if (c.uuid.toString().toLowerCase().contains(_kImgControlUuid)) {
+              ctrl = c;
+              break;
+            }
+          }
+        }
+      }
+      if (ctrl != null) {
+        await ctrl.write([_kCmdReset], withoutResponse: true);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[ImageTransferService] resetImage error: $e');
+      return false;
+    }
   }
 
   void _updateProgress(

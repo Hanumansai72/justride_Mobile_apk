@@ -15,6 +15,6 @@ void main() {
       ),
     );
     expect(find.text('JustRide'), findsOneWidget);
-    expect(find.text('Your Journey, Elevated.'), findsOneWidget);
+    expect(find.text('Made for Bikes'), findsOneWidget);
   });
 }

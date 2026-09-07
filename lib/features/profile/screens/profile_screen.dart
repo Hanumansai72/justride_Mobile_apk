@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -41,6 +42,345 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _showEditProfileDialog() {
+    final nameCtrl = TextEditingController(text: _user?.fullName ?? '');
+    final phoneCtrl = TextEditingController(text: _user?.phone ?? '');
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          title: Text(
+            'Edit Profile',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  cursorColor: AppColors.primary,
+                  decoration: InputDecoration(
+                    labelText: 'Full Name',
+                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                    enabledBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: phoneCtrl,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  cursorColor: AppColors.primary,
+                  decoration: InputDecoration(
+                    labelText: 'Phone Number',
+                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                    enabledBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: Text('CANCEL', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      setDialogState(() => isSaving = true);
+                      final res = await BackendService.instance.updateProfile(
+                        name: nameCtrl.text.trim(),
+                        phonenumber: phoneCtrl.text.trim(),
+                      );
+                      if (dialogCtx.mounted) {
+                        Navigator.of(dialogCtx).pop();
+                      }
+                      if (!mounted) return;
+                      if (res.success && res.data != null) {
+                        setState(() => _user = res.data);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Profile updated successfully!'),
+                            backgroundColor: AppColors.primary,
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(res.message),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: const Color(0xFF003915),
+              ),
+              child: isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF003915),
+                      ),
+                    )
+                  : Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog() {
+    final currentCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          title: Text(
+            'Change Password',
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: currentCtrl,
+                  obscureText: true,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  cursorColor: AppColors.primary,
+                  decoration: InputDecoration(
+                    labelText: 'Current Password',
+                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                    enabledBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: newCtrl,
+                  obscureText: true,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  cursorColor: AppColors.primary,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                    enabledBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: const UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: Text('CANCEL', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (currentCtrl.text.isEmpty || newCtrl.text.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please fill all fields')),
+                        );
+                        return;
+                      }
+                      setDialogState(() => isSaving = true);
+                      final res = await BackendService.instance.changePassword(
+                        currentPassword: currentCtrl.text.trim(),
+                        newPassword: newCtrl.text.trim(),
+                      );
+                      if (dialogCtx.mounted) {
+                        Navigator.of(dialogCtx).pop();
+                      }
+                      if (!mounted) return;
+                      if (res.success) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Password changed successfully!'),
+                            backgroundColor: AppColors.primary,
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(res.message),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: const Color(0xFF003915),
+              ),
+              child: isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF003915),
+                      ),
+                    )
+                  : Text('UPDATE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog() {
+    final pwdCtrl = TextEditingController();
+    bool isDeleting = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+            side: const BorderSide(color: AppColors.error),
+          ),
+          title: Text(
+            'Delete Account',
+            style: GoogleFonts.inter(
+              color: AppColors.error,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This action cannot be undone. All your saved places, trips, and settings will be permanently removed.',
+                style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: pwdCtrl,
+                obscureText: true,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                cursorColor: AppColors.error,
+                decoration: InputDecoration(
+                  labelText: 'Confirm Password',
+                  labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.error),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: Text('CANCEL', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isDeleting
+                  ? null
+                  : () async {
+                      setDialogState(() => isDeleting = true);
+                      final res = await BackendService.instance.deleteAccount(
+                        pwdCtrl.text.trim().isNotEmpty ? pwdCtrl.text.trim() : null,
+                      );
+                      if (dialogCtx.mounted) {
+                        Navigator.of(dialogCtx).pop();
+                      }
+                      if (!mounted) return;
+                      if (res.success) {
+                        Navigator.of(context).pushNamedAndRemoveUntil(
+                          '/login',
+                          (route) => false,
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(res.message),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+              ),
+              child: isDeleting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,7 +403,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           parent: BouncingScrollPhysics(),
                         ),
                         children: [
-                          ProfileCard(user: _user),
+                          ProfileCard(
+                            user: _user,
+                            onEdit: _showEditProfileDialog,
+                          ),
+                          const SizedBox(height: AppConstants.spacingMd),
+                          _buildAccountActionsSection(),
                           const SizedBox(height: AppConstants.spacingXl),
                           _buildMenuSection(),
                           const SizedBox(height: AppConstants.spacingXl),
@@ -93,7 +438,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-
+  Widget _buildAccountActionsSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          ProfileMenuItem(
+            icon: Icons.edit_note_rounded,
+            title: 'Edit Profile',
+            subtitle: 'Update your name and phone number',
+            onTap: _showEditProfileDialog,
+          ),
+          const Divider(color: AppColors.divider, height: 1, indent: 56),
+          ProfileMenuItem(
+            icon: Icons.lock_reset_rounded,
+            title: 'Change Password',
+            subtitle: 'Update your login password and security',
+            onTap: _showChangePasswordDialog,
+          ),
+          const Divider(color: AppColors.divider, height: 1, indent: 56),
+          ProfileMenuItem(
+            icon: Icons.delete_forever_outlined,
+            title: 'Delete Account',
+            subtitle: 'Permanently remove your account and data',
+            onTap: _showDeleteAccountDialog,
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildMenuSection() {
     return Container(
@@ -114,7 +492,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(
             icon: Icons.tune_rounded,
-            title: 'Display & Device Settings',
+            title: 'Hardware & Device Settings',
             subtitle: 'Speedometer customization & telemetry settings',
             onTap: () => Navigator.of(context).pushNamed('/device-settings'),
           ),
@@ -141,17 +519,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(
-            icon: Icons.manage_accounts_outlined,
-            title: 'Account Settings',
-            subtitle: 'Profile security, password & preferences',
-            onTap: () => Navigator.of(context).pushNamed('/profile-settings'),
-          ),
-          const Divider(color: AppColors.divider, height: 1, indent: 56),
-          ProfileMenuItem(
             icon: Icons.info_outline_rounded,
             title: 'About JustRide',
             subtitle: 'App version, terms and privacy policy',
-            trailing: Text('v1.2.3', style: AppTextStyles.bodySmall),
+            trailing: Text(AppConstants.appVersion, style: AppTextStyles.bodySmall),
             onTap: () => Navigator.of(context).pushNamed('/about'),
           ),
         ],

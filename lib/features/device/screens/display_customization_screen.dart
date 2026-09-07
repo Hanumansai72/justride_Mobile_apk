@@ -194,6 +194,75 @@ class _DisplayCustomizationScreenState
     });
   }
 
+  Future<void> _resetImage() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _C.surfCont,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: _C.outlineVariant),
+        ),
+        title: Text(
+          'Reset Display Image?',
+          style: GoogleFonts.inter(
+            color: _C.onSurface,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
+        content: Text(
+          'This will remove the custom image from your JustRide device and cloud storage, restoring the default speedometer HUD.',
+          style: GoogleFonts.inter(color: _C.textSec, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _C.errorContainer,
+              foregroundColor: _C.error,
+            ),
+            child: Text('RESET', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // 1. Reset on hardware device over BLE
+    final device = JustRideBleService.instance.connectedDevice;
+    if (device != null) {
+      await _imageTransferSvc.resetImage(device);
+    }
+
+    // 2. Delete from backend cloud storage
+    if (_backendUploadedUrl != null) {
+      await BackendService.instance.deleteCustomDisplayImage(
+        imageUrl: _backendUploadedUrl,
+      );
+    }
+
+    // 3. Clear local preview state
+    if (mounted) {
+      setState(() {
+        _previewImage = null;
+        _rgb565Bytes = null;
+        _backendUploadedUrl = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Custom image removed from device and backend! Default display restored.'),
+          backgroundColor: _C.primary,
+        ),
+      );
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -377,7 +446,7 @@ class _DisplayCustomizationScreenState
           ),
         ),
 
-        // Apply button pinned at bottom
+        // Action buttons pinned at bottom
         Container(
           padding: EdgeInsets.fromLTRB(
             AppConstants.pagePadding,
@@ -388,10 +457,23 @@ class _DisplayCustomizationScreenState
           decoration: const BoxDecoration(
             border: Border(top: BorderSide(color: _C.outlineVariant)),
           ),
-          child: _ApplyButton(
-            enabled: _rgb565Bytes != null && !_isConverting,
-            onTap: _sendToDevice,
-          ),
+          child: (_previewImage != null || _backendUploadedUrl != null)
+              ? Row(
+                  children: [
+                    _ResetButton(onTap: _resetImage),
+                    const SizedBox(width: AppConstants.spacingMd),
+                    Expanded(
+                      child: _ApplyButton(
+                        enabled: _rgb565Bytes != null && !_isConverting,
+                        onTap: _sendToDevice,
+                      ),
+                    ),
+                  ],
+                )
+              : _ApplyButton(
+                  enabled: _rgb565Bytes != null && !_isConverting,
+                  onTap: _sendToDevice,
+                ),
         ),
       ],
     );
@@ -889,6 +971,49 @@ class _ApplyButtonState extends State<_ApplyButton> {
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: _C.onPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResetButton extends StatelessWidget {
+  const _ResetButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: _C.errorContainer.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+        border: Border.all(color: _C.error.withValues(alpha: 0.6)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.refresh_rounded, color: _C.error, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Reset',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: _C.error,
                   ),
                 ),
               ],

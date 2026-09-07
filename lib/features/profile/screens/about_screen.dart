@@ -38,8 +38,10 @@ class _AboutScreenState extends State<AboutScreen> {
   Future<void> _checkAppUpdate() async {
     setState(() => _isChecking = true);
     try {
-      final res = await BackendService.instance.getLatestAppRelease(currentBuild: 2);
-      if (res.success && res.data != null && res.data!.buildNumber > 2) {
+      final res = await BackendService.instance.getLatestAppRelease(
+        currentBuild: AppConstants.appBuildNumber,
+      );
+      if (res.success && res.data != null && res.data!.buildNumber > AppConstants.appBuildNumber) {
         if (mounted) {
           setState(() {
             _latestApkRelease = res.data;
@@ -166,7 +168,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   BorderRadius.circular(AppConstants.radiusCircle),
             ),
             child: Text(
-              'v1.1.0 (Build 2)',
+              '${AppConstants.appVersion} (Build ${AppConstants.appBuildNumber})',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
@@ -9,16 +10,16 @@ import '../../../shared/widgets/app_logo.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../../navigation/widgets/destination_confirm_sheet.dart';
 
-// ── Colour tokens ─────────────────────────────────────────────────────────────
+// ── Colour tokens matching Master App Theme ──────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const cardBg = Color(0xFF142226);
-  static const iconCircleBg = Color(0xFF1E2C30);
-  static const primary = Color(0xFF4BE277);
+  static const bg = AppColors.background;
+  static const cardBg = AppColors.surface;
+  static const iconCircleBg = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
   static const onPrimary = Color(0xFF003915);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outlineVariant = Color(0xFF3D4A3D);
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outlineVariant = AppColors.border;
 }
 
 class _PlaceItem {

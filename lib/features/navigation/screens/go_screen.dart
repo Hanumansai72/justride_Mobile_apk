@@ -36,6 +36,7 @@ class _GoScreenState extends State<GoScreen>
   Timer? _debounceTimer;
 
   bool _isLoadingRoute = false;
+  bool _isStartingRide = false;
   NavigationRoute? _previewRoute;
 
   late final AnimationController _pulseCtrl;
@@ -214,60 +215,67 @@ class _GoScreenState extends State<GoScreen>
   }
 
   Future<void> _handleStartRide() async {
-    final destText = _destController.text.trim();
+    if (_isStartingRide) return;
+    setState(() => _isStartingRide = true);
 
-    // If no destination specified, user can navigate directly to inbuilt app maps
-    if (destText.isEmpty && _destLocation == null) {
-      Navigator.of(context).pushNamed('/active-navigation');
-      return;
-    }
+    try {
+      final destText = _destController.text.trim();
 
-    Destination? target = _destLocation;
-    if (target == null || target.latitude == 0.0) {
-      // Resolve destination query
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Locating destination coordinates...'),
-          duration: Duration(seconds: 1),
-        ),
+      // If no destination specified, user can navigate directly to inbuilt app maps
+      if (destText.isEmpty && _destLocation == null) {
+        Navigator.of(context).pushNamed('/active-navigation');
+        return;
+      }
+
+      Destination? target = _destLocation;
+      if (target == null || target.latitude == 0.0) {
+        // Resolve destination query
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Locating destination coordinates...'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+
+        target = await GoogleMapsService.instance.resolveDestination(
+          Destination(
+            name: destText,
+            address: destText,
+            latitude: 0.0,
+            longitude: 0.0,
+            rawQuery: destText,
+          ),
+        );
+      }
+
+      if (!mounted) return;
+
+      if (target == null || (target.latitude == 0.0 && target.longitude == 0.0)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not find location. Please pick from suggestions.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+
+      // Start navigation
+      final ok = await NavigationService.instance.startNavigation(
+        target,
+        startLocation: _startLocation,
       );
 
-      target = await GoogleMapsService.instance.resolveDestination(
-        Destination(
-          name: destText,
-          address: destText,
-          latitude: 0.0,
-          longitude: 0.0,
-          rawQuery: destText,
-        ),
-      );
-    }
+      if (!mounted) return;
 
-    if (!mounted) return;
-
-    if (target == null || (target.latitude == 0.0 && target.longitude == 0.0)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not find location. Please pick from suggestions.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
-    // Start navigation
-    final ok = await NavigationService.instance.startNavigation(
-      target,
-      startLocation: _startLocation,
-    );
-
-    if (!mounted) return;
-
-    if (ok) {
-      Navigator.of(context).pushNamed('/active-navigation');
-    } else {
-      // Still allow viewing map if GPS lock takes a few seconds
-      Navigator.of(context).pushNamed('/active-navigation');
+      if (ok) {
+        Navigator.of(context).pushNamed('/active-navigation');
+      } else {
+        // Still allow viewing map if GPS lock takes a few seconds
+        Navigator.of(context).pushNamed('/active-navigation');
+      }
+    } finally {
+      if (mounted) setState(() => _isStartingRide = false);
     }
   }
 
@@ -497,23 +505,47 @@ class _GoScreenState extends State<GoScreen>
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.navigation_rounded,
-                                size: 22, color: Color(0xFF003915)),
-                            const SizedBox(width: 10),
-                            Text(
-                              'START RIDE',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                                color: const Color(0xFF003915),
+                        child: _isStartingRide
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Color(0xFF003915),
+                                      strokeWidth: 2.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'PREPARING MAP...',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.8,
+                                      color: const Color(0xFF003915),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.navigation_rounded,
+                                      size: 22, color: Color(0xFF003915)),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'START RIDE',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.8,
+                                      color: const Color(0xFF003915),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
                   );

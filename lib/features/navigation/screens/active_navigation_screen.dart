@@ -38,6 +38,7 @@ class ActiveNavigationScreen extends StatefulWidget {
 class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
   GoogleMapController? _mapController;
   bool _isFollowingUser = true;
+  bool _isMapReady = false;
   BitmapDescriptor? _bikeMarkerIcon;
 
   @override
@@ -148,6 +149,11 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _centerOnUser();
+    if (mounted) {
+      setState(() {
+        _isMapReady = true;
+      });
+    }
   }
 
   void _centerOnUser() {
@@ -269,6 +275,64 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                     }
                   },
                 ),
+
+                // Map Loading Screen Overlay until Google Map tiles and camera are ready
+                if (!_isMapReady)
+                  Positioned.fill(
+                    child: Container(
+                      color: _C.bg,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 68,
+                              height: 68,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _C.cardBg,
+                                border: Border.all(
+                                  color: _C.primary.withValues(alpha: 0.5),
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _C.primary.withValues(alpha: 0.25),
+                                    blurRadius: 24,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: _C.primary,
+                                  strokeWidth: 3,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Loading Map & Route...',
+                              style: GoogleFonts.inter(
+                                color: _C.onSurface,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Initializing GPS lock and route telemetry',
+                              style: GoogleFonts.inter(
+                                color: _C.textSec,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // 2. Top Maneuver Banner (HUD Arrow + Distance + Next Street)
                 SafeArea(

@@ -1,22 +1,26 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/models/destination.dart';
 import '../../../core/services/backend_service.dart';
+import '../../../core/services/location_service.dart';
+import '../../../core/services/google_maps_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 
-// ── Colour tokens ─────────────────────────────────────────────────────────────
+// ── Colour tokens matching Master App Theme ──────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const cardBg = Color(0xFF142226);
-  static const cardBorder = Color(0xFF3D4A3D);
-  static const inputBg = Color(0xFF1E2C30);
-  static const primary = Color(0xFF4BE277);
+  static const bg = AppColors.background;
+  static const cardBg = AppColors.surface;
+  static const cardBorder = AppColors.border;
+  static const inputBg = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
   static const onPrimary = Color(0xFF003915);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
 }
-
 
 class AddPlaceScreen extends StatefulWidget {
   const AddPlaceScreen({super.key});
@@ -28,11 +32,18 @@ class AddPlaceScreen extends StatefulWidget {
 class _AddPlaceScreenState extends State<AddPlaceScreen> {
   final _labelController = TextEditingController();
   final _addressController = TextEditingController();
-  final _latController = TextEditingController(text: '17.3850');
-  final _lngController = TextEditingController(text: '78.4867');
+
+  double _selectedLat = 17.3850;
+  double _selectedLng = 78.4867;
+  bool _hasResolvedCoordinates = false;
 
   String _selectedPreset = 'Home';
   bool _isSaving = false;
+  bool _isLocatingCurrent = false;
+
+  List<Destination> _searchSuggestions = [];
+  bool _isSearching = false;
+  Timer? _debounceTimer;
 
   final List<Map<String, dynamic>> _presets = [
     {'label': 'Home', 'icon': Icons.home_rounded},
@@ -52,9 +63,96 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
   void dispose() {
     _labelController.dispose();
     _addressController.dispose();
-    _latController.dispose();
-    _lngController.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
+  }
+
+  void _onAddressChanged(String query) {
+    _debounceTimer?.cancel();
+    final clean = query.trim();
+    if (clean.length < 2) {
+      if (mounted) {
+        setState(() {
+          _searchSuggestions = [];
+          _isSearching = false;
+        });
+      }
+      return;
+    }
+
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      if (!mounted) return;
+      setState(() => _isSearching = true);
+      try {
+        final results = await GoogleMapsService.instance.searchPlaces(clean);
+        if (mounted) {
+          setState(() {
+            _searchSuggestions = results;
+            _isSearching = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) setState(() => _isSearching = false);
+      }
+    });
+  }
+
+  void _selectSuggestion(Destination place) {
+    setState(() {
+      _addressController.text = place.displayTitle;
+      _selectedLat = place.latitude;
+      _selectedLng = place.longitude;
+      _hasResolvedCoordinates = true;
+      _searchSuggestions = [];
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() => _isLocatingCurrent = true);
+    try {
+      final pos = await LocationService.instance.getCurrentPosition();
+      if (pos != null) {
+        setState(() {
+          _selectedLat = pos.latitude;
+          _selectedLng = pos.longitude;
+          _hasResolvedCoordinates = true;
+          _addressController.text =
+              'Current Location (${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)})';
+          _searchSuggestions = [];
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Current GPS coordinates captured!'),
+              backgroundColor: _C.primary,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not obtain current GPS position.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Location error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLocatingCurrent = false);
+    }
   }
 
   Future<void> _handleSavePlace() async {
@@ -65,7 +163,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter a place label (e.g. Home, Work)'),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: AppColors.error,
         ),
       );
       return;
@@ -74,23 +172,20 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
     if (address.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter an address or landmark'),
-          backgroundColor: Colors.redAccent,
+          content: Text('Please enter or search an address or landmark'),
+          backgroundColor: AppColors.error,
         ),
       );
       return;
     }
-
-    final double lat = double.tryParse(_latController.text) ?? 17.3850;
-    final double lng = double.tryParse(_lngController.text) ?? 78.4867;
 
     setState(() => _isSaving = true);
 
     final res = await BackendService.instance.createSavedAddress(
       label: label,
       address: address,
-      latitude: lat,
-      longitude: lng,
+      latitude: _selectedLat,
+      longitude: _selectedLng,
     );
 
     if (mounted) {
@@ -102,12 +197,12 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
             backgroundColor: _C.primary,
           ),
         );
-        Navigator.of(context).pop(true); // return true to refresh
+        Navigator.of(context).pop(true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(res.message),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -216,40 +311,206 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
             ),
             const SizedBox(height: AppConstants.spacingLg),
 
-            // ── Address Input ─────────────────────────────────────────────────
-            _buildInputField(
-              controller: _addressController,
-              label: 'STREET ADDRESS / LANDMARK',
-              hint: 'e.g. Cyber Towers, HITEC City, Hyderabad',
-              icon: Icons.map_outlined,
-              maxLines: 2,
+            // ── Search Address / Street Input ──────────────────────────────────
+            Text(
+              'SEARCH ADDRESS / LOCATION',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+                color: _C.textSec,
+              ),
             ),
-            const SizedBox(height: AppConstants.spacingLg),
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(
+                color: _C.inputBg,
+                border: Border.all(color: _C.cardBorder),
+                borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.search_rounded, color: _C.primary, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _addressController,
+                      onChanged: _onAddressChanged,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: _C.onSurface,
+                      ),
+                      cursorColor: _C.primary,
+                      decoration: InputDecoration(
+                        hintText: 'Type address (e.g. Uppal, HITEC City)...',
+                        hintStyle: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: _C.textSec.withValues(alpha: 0.5),
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        suffixIcon: _isSearching
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: _C.primary,
+                                  ),
+                                ),
+                              )
+                            : _addressController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded, size: 18, color: _C.textSec),
+                                    onPressed: () {
+                                      _addressController.clear();
+                                      setState(() => _searchSuggestions = []);
+                                    },
+                                  )
+                                : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-            // ── Coordinates (Lat/Lng) ─────────────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: _buildInputField(
-                    controller: _latController,
-                    label: 'LATITUDE',
-                    hint: '17.3850',
-                    icon: Icons.explore_outlined,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  ),
+            // Autocomplete suggestions list
+            if (_searchSuggestions.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Container(
+                decoration: BoxDecoration(
+                  color: _C.cardBg,
+                  borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+                  border: Border.all(color: _C.cardBorder),
                 ),
-                const SizedBox(width: AppConstants.spacingMd),
-                Expanded(
-                  child: _buildInputField(
-                    controller: _lngController,
-                    label: 'LONGITUDE',
-                    hint: '78.4867',
-                    icon: Icons.explore_outlined,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _searchSuggestions.length > 5 ? 5 : _searchSuggestions.length,
+                  separatorBuilder: (_, __) => const Divider(color: AppColors.divider, height: 1),
+                  itemBuilder: (context, i) {
+                    final item = _searchSuggestions[i];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.place_rounded, color: _C.primary, size: 18),
+                      title: Text(
+                        item.displayTitle,
+                        style: GoogleFonts.inter(color: _C.onSurface, fontSize: 13, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: item.address != null
+                          ? Text(
+                              item.address!,
+                              style: GoogleFonts.inter(color: _C.textSec, fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : null,
+                      onTap: () => _selectSuggestion(item),
+                    );
+                  },
                 ),
-              ],
+              ),
+            ],
+
+            const SizedBox(height: AppConstants.spacingMd),
+
+            // ── Use Current Location Button ────────────────────────────────────
+            InkWell(
+              onTap: _isLocatingCurrent ? null : _useCurrentLocation,
+              borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _C.cardBg,
+                  border: Border.all(color: _C.primary.withValues(alpha: 0.4)),
+                  borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+                ),
+                child: Row(
+                  children: [
+                    _isLocatingCurrent
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _C.primary,
+                            ),
+                          )
+                        : const Icon(Icons.my_location_rounded, color: _C.primary, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Use Current GPS Location',
+                            style: GoogleFonts.inter(
+                              color: _C.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            'Store current device latitude & longitude automatically',
+                            style: GoogleFonts.inter(
+                              color: _C.textSec,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: _C.textSec, size: 14),
+                  ],
+                ),
+              ),
             ),
+
+            const SizedBox(height: AppConstants.spacingMd),
+
+            // Coordinates Status Pill
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: _hasResolvedCoordinates
+                    ? _C.primary.withValues(alpha: 0.1)
+                    : _C.cardBg,
+                borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+                border: Border.all(
+                  color: _hasResolvedCoordinates
+                      ? _C.primary.withValues(alpha: 0.3)
+                      : _C.cardBorder,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _hasResolvedCoordinates
+                        ? Icons.check_circle_rounded
+                        : Icons.location_searching_rounded,
+                    color: _hasResolvedCoordinates ? _C.primary : _C.textSec,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Coordinates: ${_selectedLat.toStringAsFixed(4)}, ${_selectedLng.toStringAsFixed(4)} ${_hasResolvedCoordinates ? '(Resolved)' : '(Default)'}',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: _hasResolvedCoordinates ? _C.primary : _C.textSec,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: AppConstants.spacingSection),
 
             // ── Save Button ───────────────────────────────────────────────────
@@ -311,7 +572,6 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
     required String hint,
     required IconData icon,
     int maxLines = 1,
-    TextInputType keyboardType = TextInputType.text,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,7 +605,6 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                 child: TextField(
                   controller: controller,
                   maxLines: maxLines,
-                  keyboardType: keyboardType,
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: _C.onSurface,

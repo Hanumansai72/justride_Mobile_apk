@@ -393,6 +393,18 @@ class BleNavigationService {
     }
   }
 
+  /// Sends DIAGNOSTICS self-test request (0x10) to ESP32 via BLE
+  Future<bool> sendDiagnosticsRequest() async {
+    if (!isReady || _dataChar == null) return false;
+    try {
+      debugPrint('[BleNav] Sending DIAGNOSTICS request (0x10) to ESP32...');
+      return await _writeBytes([0x10], withoutResponse: false);
+    } catch (e) {
+      debugPrint('[BleNav] Error sending diagnostics request: $e');
+      return false;
+    }
+  }
+
   /// Sends sliding route window segment (OpCode 0x0B) to ESP32
   Future<bool> sendRouteSegment(RouteWindowSegment segment) async {
     if (!isReady || _dataChar == null || segment.points.isEmpty) return false;

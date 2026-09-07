@@ -43,7 +43,7 @@ class AppLogo extends StatelessWidget {
           if (showTagline) ...[
             const SizedBox(height: 4),
             Text(
-              'Your Journey, Elevated.',
+              'Made for Bikes',
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w500,
