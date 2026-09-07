@@ -13,6 +13,8 @@ import '../../features/trips/screens/trips_screen.dart';
 import '../../features/places/screens/places_screen.dart';
 import '../../features/places/screens/add_place_screen.dart';
 import '../../features/device/screens/device_screen.dart';
+import '../../features/navigation/screens/active_navigation_screen.dart';
+import '../../features/navigation/screens/go_screen.dart';
 
 
 import '../../features/device/screens/device_settings_screen.dart';
@@ -40,6 +42,8 @@ abstract final class AppRoutes {
   static const String places = '/places';
   static const String addPlace = '/add-place';
   static const String trips = '/trips';
+  static const String activeNavigation = '/active-navigation';
+  static const String go = '/go';
 
   
   static const String device = '/device';
@@ -70,6 +74,8 @@ abstract final class AppRoutes {
     places: (context) => const PlacesScreen(),
     addPlace: (context) => const AddPlaceScreen(),
     trips: (context) => const TripsScreen(),
+    activeNavigation: (context) => const ActiveNavigationScreen(),
+    go: (context) => const GoScreen(),
 
 
     

@@ -3,9 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
+import '../../../core/models/destination.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
+import '../../navigation/widgets/destination_confirm_sheet.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
@@ -213,9 +215,14 @@ class _PlacesScreenState extends State<PlacesScreen> {
               child: _PlaceCard(
                 place: item,
                 onNavigate: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Navigating to ${item.name}...')),
+                  final dest = Destination(
+                    name: item.name,
+                    address: item.address,
+                    latitude: 0,
+                    longitude: 0,
+                    rawQuery: item.address.isNotEmpty ? item.address : item.name,
                   );
+                  DestinationConfirmSheet.show(context, dest);
                 },
                 onEdit: () {},
                 onDelete: () async {

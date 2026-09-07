@@ -40,4 +40,7 @@ abstract final class AppConstants {
   static const String workTime = '24 min';
   static const int favCount = 3;
   static const int recentCount = 5;
+
+  // ── Google OAuth ──────────────────────────────────────────────────────────
+  static const String googleClientId = '445835744041-sst8cp392ski2jtbkno6p16438kq8r0d.apps.googleusercontent.com';
 }

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
-
 import '../../../core/models/app_models.dart';
+import '../../../core/services/bluetooth_service.dart';
 
-/// Three side-by-side stat mini-cards: Device Battery, This Trip, Device Status.
+/// Two side-by-side stat cards: Device Battery and live Device Status.
 class StatsRow extends StatelessWidget {
   final DeviceModel? device;
 
@@ -18,16 +19,13 @@ class StatsRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(child: _BatteryStatCard(batteryLevel: device?.batteryLevel)),
-          const SizedBox(width: AppConstants.spacingSm),
-          const Expanded(child: _TripStatCard()),
-          const SizedBox(width: AppConstants.spacingSm),
+          const SizedBox(width: AppConstants.spacingMd),
           Expanded(child: _DeviceStatusCard(device: device)),
         ],
       ),
     );
   }
 }
-
 
 // ── Shared card shell ─────────────────────────────────────────────────────────
 
@@ -48,8 +46,6 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
-
-// ── Battery stat ──────────────────────────────────────────────────────────────
 
 // ── Battery stat ──────────────────────────────────────────────────────────────
 
@@ -79,7 +75,8 @@ class _BatteryStatCard extends StatelessWidget {
             style: AppTextStyles.displayMedium.copyWith(fontSize: 28),
           ),
           const SizedBox(height: 4),
-          Text('${(percent * 0.1).toStringAsFixed(1)}h remaining', style: AppTextStyles.labelSmall),
+          Text('${(percent * 0.1).toStringAsFixed(1)}h remaining',
+              style: AppTextStyles.labelSmall),
           const SizedBox(height: 8),
           // Progress bar
           ClipRRect(
@@ -87,7 +84,8 @@ class _BatteryStatCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: percent / 100,
               backgroundColor: AppColors.border,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(AppColors.primary),
               minHeight: 5,
             ),
           ),
@@ -97,55 +95,7 @@ class _BatteryStatCard extends StatelessWidget {
   }
 }
 
-// ── Trip stat ─────────────────────────────────────────────────────────────────
-
-class _TripStatCard extends StatelessWidget {
-  const _TripStatCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return _StatCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('THIS TRIP', style: AppTextStyles.labelSmall),
-              const Spacer(),
-              const Icon(Icons.show_chart_rounded, size: 14, color: AppColors.textMuted),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(AppConstants.tripDistance,
-              style: AppTextStyles.displayMedium.copyWith(fontSize: 22)),
-          const SizedBox(height: 6),
-          const _TripRow(icon: Icons.timer_outlined, value: AppConstants.tripTime),
-          const SizedBox(height: 3),
-          const _TripRow(icon: Icons.speed_rounded, value: AppConstants.tripSpeed),
-        ],
-      ),
-    );
-  }
-}
-
-class _TripRow extends StatelessWidget {
-  const _TripRow({required this.icon, required this.value});
-  final IconData icon;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 12, color: AppColors.textMuted),
-        const SizedBox(width: 4),
-        Text(value, style: AppTextStyles.labelSmall),
-      ],
-    );
-  }
-}
-
-// ── Device status ─────────────────────────────────────────────────────────────
+// ── Live Device status ────────────────────────────────────────────────────────
 
 class _DeviceStatusCard extends StatelessWidget {
   final DeviceModel? device;
@@ -154,53 +104,72 @@ class _DeviceStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isConnected = device != null ? device!.isOnline : true;
-    final fw = device?.firmwareVersion ?? AppConstants.firmwareVersion;
+    return ValueListenableBuilder<BluetoothConnectionState>(
+      valueListenable: JustRideBleService.instance.connectionStateNotifier,
+      builder: (context, connState, _) {
+        final isConnected = connState == BluetoothConnectionState.connected ||
+            JustRideBleService.instance.isDeviceConnected;
+        final fw = device?.firmwareVersion ?? AppConstants.firmwareVersion;
 
-
-    return _StatCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        return _StatCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('DEVICE STATUS', style: AppTextStyles.labelSmall),
-              const Spacer(),
-              const Icon(Icons.bluetooth_rounded, size: 14, color: AppColors.textMuted),
+              Row(
+                children: [
+                  Text('DEVICE STATUS', style: AppTextStyles.labelSmall),
+                  const Spacer(),
+                  Icon(
+                    isConnected
+                        ? Icons.bluetooth_connected_rounded
+                        : Icons.bluetooth_disabled_rounded,
+                    size: 14,
+                    color: isConnected ? AppColors.primary : AppColors.textMuted,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Connected badge
+              Row(
+                children: [
+                  Icon(
+                    isConnected
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_outlined,
+                    size: 14,
+                    color: isConnected
+                        ? AppColors.connected
+                        : AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isConnected ? 'Connected' : 'Disconnected',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: isConnected
+                          ? AppColors.connected
+                          : AppColors.textMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _StatusRow(
+                label: 'Signal',
+                child: _SignalBars(strength: isConnected ? 3 : 0),
+              ),
+              const SizedBox(height: 3),
+              _StatusRow(
+                label: 'Firmware',
+                child: Text(fw, style: AppTextStyles.labelSmall),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
-          // Connected badge
-          Row(
-            children: [
-              Icon(
-                isConnected ? Icons.check_circle_rounded : Icons.cancel_outlined,
-                size: 14,
-                color: isConnected ? AppColors.connected : AppColors.textMuted,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                isConnected ? 'Connected' : 'Offline',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: isConnected ? AppColors.connected : AppColors.textMuted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const _StatusRow(label: 'Signal', child: _SignalBars(strength: 3)),
-          const SizedBox(height: 3),
-          _StatusRow(
-            label: 'Firmware',
-            child: Text(fw, style: AppTextStyles.labelSmall),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
-
 
 class _StatusRow extends StatelessWidget {
   const _StatusRow({required this.label, required this.child});
@@ -219,7 +188,7 @@ class _StatusRow extends StatelessWidget {
   }
 }
 
-/// Minimal signal bars icon (3 bars filled green).
+/// Minimal signal bars icon.
 class _SignalBars extends StatelessWidget {
   const _SignalBars({required this.strength});
   final int strength; // 0–4

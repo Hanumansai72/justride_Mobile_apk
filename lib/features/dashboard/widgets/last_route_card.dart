@@ -6,7 +6,9 @@ import '../../../core/constants/app_constants.dart';
 /// Card showing the last route with a stylised map placeholder,
 /// route stats, and a "Start Ride" CTA button.
 class LastRouteCard extends StatelessWidget {
-  const LastRouteCard({super.key});
+  const LastRouteCard({super.key, required this.onStartRide});
+
+  final VoidCallback onStartRide;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +43,8 @@ class LastRouteCard extends StatelessWidget {
                 const SizedBox(height: 6),
 
                 // Route name
-                Text(AppConstants.lastRouteName, style: AppTextStyles.displayMedium),
+                Text(AppConstants.lastRouteName,
+                    style: AppTextStyles.displayMedium),
                 const SizedBox(height: 3),
 
                 // Via row
@@ -56,7 +59,8 @@ class LastRouteCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(AppConstants.lastRouteVia, style: AppTextStyles.bodyMedium),
+                    Text(AppConstants.lastRouteVia,
+                        style: AppTextStyles.bodyMedium),
                   ],
                 ),
                 const SizedBox(height: AppConstants.spacingXl),
@@ -85,14 +89,15 @@ class LastRouteCard extends StatelessWidget {
                     // Start Ride button
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {},
+                        onPressed: onStartRide,
                         icon: const Icon(Icons.chevron_right_rounded,
                             color: AppColors.background, size: 22),
                         label: Text('START RIDE', style: AppTextStyles.button),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                            borderRadius:
+                                BorderRadius.circular(AppConstants.radiusMd),
                           ),
                         ),
                       ),
@@ -114,7 +119,8 @@ class LastRouteCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 14),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusMd),
                         ),
                       ),
                     ),

@@ -1,4 +1,5 @@
-﻿import '../../../core/services/backend_service.dart';
+import '../../../core/services/backend_service.dart';
+import '../../../core/models/app_models.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -25,7 +26,7 @@ class AboutScreen extends StatefulWidget {
 }
 
 class _AboutScreenState extends State<AboutScreen> {
-  Map<String, dynamic>? _latestApkRelease;
+  AppReleaseModel? _latestApkRelease;
   bool _isChecking = false;
 
   @override
@@ -38,10 +39,10 @@ class _AboutScreenState extends State<AboutScreen> {
     setState(() => _isChecking = true);
     try {
       final res = await BackendService.instance.getLatestAppRelease(currentBuild: 2);
-      if (res.success && res.data != null && res.data!['update_available'] == true) {
+      if (res.success && res.data != null && res.data!.buildNumber > 2) {
         if (mounted) {
           setState(() {
-            _latestApkRelease = res.data!['data'] as Map<String, dynamic>?;
+            _latestApkRelease = res.data;
           });
         }
       }
@@ -195,12 +196,14 @@ class _AboutScreenState extends State<AboutScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Update Available: v${_latestApkRelease!['version']} (b${_latestApkRelease!['build_number']})',
+                          'Update Available: v${_latestApkRelease!.version} (b${_latestApkRelease!.buildNumber})',
                           style: AppTextStyles.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _latestApkRelease!['release_notes'] ?? 'New features and stability updates are available.',
+                          _latestApkRelease!.releaseNotes?.isNotEmpty == true
+                              ? _latestApkRelease!.releaseNotes!
+                              : 'New features and stability updates are available.',
                           style: AppTextStyles.bodySmall.copyWith(color: _C.textSec),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -214,12 +217,16 @@ class _AboutScreenState extends State<AboutScreen> {
           ],
           _LinkTile(
             icon: Icons.system_update_alt_rounded,
-            label: _isChecking ? 'Checking for Updates...' : (_latestApkRelease != null ? 'Download Latest APK' : 'Check for App Updates'),
+            label: _isChecking
+                ? 'Checking for Updates...'
+                : (_latestApkRelease != null
+                    ? 'Download Latest APK'
+                    : 'Check for App Updates'),
             onTap: () {
-              if (_latestApkRelease != null && _latestApkRelease!['download_url'] != null) {
+              if (_latestApkRelease != null && _latestApkRelease!.downloadUrl != null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Downloading APK: ${_latestApkRelease!['download_url']}'),
+                    content: Text('Downloading APK: ${_latestApkRelease!.downloadUrl}'),
                     backgroundColor: _C.primary,
                   ),
                 );

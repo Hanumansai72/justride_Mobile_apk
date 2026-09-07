@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../network/api_client.dart';
 import '../network/api_endpoints.dart';
@@ -29,6 +29,30 @@ class BackendService {
       if (res.data is Map && (res.data as dynamic)['token'] != null) {
         await _api.saveAuthToken((res.data as dynamic)['token']);
       }
+      await _api.saveUserData(res.data!.toJson());
+    }
+    return res;
+  }
+
+  Future<ApiResponse<UserModel>> loginWithGoogle({
+    String? idToken,
+    String? accessToken,
+  }) async {
+    final body = <String, dynamic>{};
+    if (idToken != null && idToken.isNotEmpty) {
+      body['id_token'] = idToken;
+    }
+    if (accessToken != null && accessToken.isNotEmpty) {
+      body['token'] = accessToken;
+      body['access_token'] = accessToken;
+    }
+
+    final res = await _api.post<UserModel>(
+      ApiEndpoints.googleAuth,
+      body: body,
+      fromJson: (json) => UserModel.fromJson(json['data'] ?? json['user'] ?? json),
+    );
+    if (res.success && res.data != null) {
       await _api.saveUserData(res.data!.toJson());
     }
     return res;
@@ -133,11 +157,15 @@ class BackendService {
   Future<void> saveLocalDevice(DeviceModel device) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('justride_paired_device', jsonEncode(device.toJson()));
+    if (device.bleAddress != null && device.bleAddress!.isNotEmpty) {
+      await prefs.setString('justride_saved_mac_address', device.bleAddress!);
+    }
   }
 
   Future<void> unpairLocalDevice() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('justride_paired_device');
+    await prefs.remove('justride_saved_mac_address');
   }
 
   Future<ApiResponse<DeviceModel>> getMyDevice() async {
@@ -247,6 +275,9 @@ class BackendService {
         final data = json is Map && json.containsKey('data')
             ? Map<String, dynamic>.from(json['data'] as Map)
             : (json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{});
+        if (data['BLE_ADDRESS'] == null && data['bleAddress'] == null) {
+          data['BLE_ADDRESS'] = bleAddress;
+        }
         return DeviceModel.fromJson(data);
       },
     );
@@ -260,22 +291,6 @@ class BackendService {
   Future<ApiResponse<Map<String, dynamic>>> checkFirmwareUpdate(String deviceId) async {
     return _api.get<Map<String, dynamic>>(
       ApiEndpoints.deviceCheckFirmware(deviceId),
-      fromJson: (json) => json as Map<String, dynamic>,
-    );
-  }
-
-  /// Get the active firmware release selected in Admin panel for device OTA
-  Future<ApiResponse<Map<String, dynamic>>> getLatestFirmwareRelease() async {
-    return _api.get<Map<String, dynamic>>(
-      ApiEndpoints.latestFirmware,
-      fromJson: (json) => json is Map && json.containsKey('data') ? json['data'] as Map<String, dynamic> : json as Map<String, dynamic>,
-    );
-  }
-
-  /// Check for new mobile app APK updates published in Admin panel
-  Future<ApiResponse<Map<String, dynamic>>> getLatestAppRelease({int currentBuild = 2}) async {
-    return _api.get<Map<String, dynamic>>(
-      '\?platform=android&current_build=\',
       fromJson: (json) => json as Map<String, dynamic>,
     );
   }
@@ -327,8 +342,8 @@ class BackendService {
     return _api.get<List<NotificationModel>>(
       ApiEndpoints.notifications,
       fromJson: (json) {
-        final list = (json is List) ? json : (json['notifications'] as List? ?? []);
-        return list.map((e) => NotificationModel.fromJson(e)).toList();
+        final list = (json is List) ? json : (json['notifications'] as List? ?? json['data'] as List? ?? []);
+        return list.map((e) => NotificationModel.fromJson(e as Map<String, dynamic>)).toList();
       },
     );
   }
@@ -336,6 +351,33 @@ class BackendService {
   Future<ApiResponse<void>> markNotificationAsRead(String id) async {
     return _api.patch<void>(ApiEndpoints.markNotificationAsRead(id));
   }
+
+  // â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+  // 4b. FIRMWARE & APP UPDATES
+  // â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+
+  /// Fetches the latest published firmware release directly from database/CDN
+  Future<ApiResponse<FirmwareReleaseModel>> getLatestFirmwareRelease() async {
+    return _api.get<FirmwareReleaseModel>(
+      ApiEndpoints.latestFirmware,
+      fromJson: (json) {
+        final data = (json is Map && json.containsKey('data')) ? json['data'] : json;
+        return FirmwareReleaseModel.fromJson(data as Map<String, dynamic>);
+      },
+    );
+  }
+
+  /// Checks if a newer mobile app APK release is available in the database
+  Future<ApiResponse<AppReleaseModel>> getLatestAppRelease({int currentBuild = 2}) async {
+    return _api.get<AppReleaseModel>(
+      '${ApiEndpoints.appReleaseLatest}?platform=android&current_build=$currentBuild',
+      fromJson: (json) {
+        final data = (json is Map && json.containsKey('data')) ? json['data'] : json;
+        return AppReleaseModel.fromJson(data as Map<String, dynamic>);
+      },
+    );
+  }
+
 
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 5. SUPPORT & TICKETS (/api/support & /api/chat)
@@ -416,6 +458,27 @@ class BackendService {
         }
         return ChatMessageModel.fromJson(json is Map && json.containsKey('data') ? json['data'] : json);
       },
+    );
+  }
+
+  // ─── 6. MEDIA & DISPLAY CUSTOMIZATION (/api/upload) ───────────────────────
+
+  /// Uploads custom image to backend Cloudinary storage (e.g. for cloud sync / backup)
+  Future<ApiResponse<Map<String, dynamic>>> uploadCustomDisplayImage({
+    required List<int> imageBytes,
+    required String filename,
+  }) async {
+    return _api.uploadMultipart<Map<String, dynamic>>(
+      ApiEndpoints.uploadImage,
+      fileBytes: imageBytes,
+      filename: filename,
+      fieldName: 'image',
+      fields: {
+        'folder': 'justride/display_customization',
+        'width': '320',
+        'height': '240',
+      },
+      fromJson: (json) => (json is Map ? Map<String, dynamic>.from(json) : {}),
     );
   }
 }

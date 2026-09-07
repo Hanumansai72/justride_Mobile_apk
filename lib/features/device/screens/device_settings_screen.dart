@@ -1,13 +1,14 @@
-﻿import 'dart:typed_data';
 import 'package:flutter/services.dart' show rootBundle;
 import '../../../core/services/ota_service.dart';
 import '../../../core/services/backend_service.dart';
+import '../../../core/models/app_models.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/bluetooth_service.dart';
+import '../../../core/services/ble_navigation_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 
@@ -36,6 +37,19 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
 
   String get _brightnessLabel => '${(_brightness * 100).round()}%';
 
+  Future<void> _setBrightness(double value) async {
+    setState(() => _brightness = value);
+    final ok = await BleNavigationService.instance
+        .sendSetBrightness((value * 100).round());
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content:
+                Text('Display is not connected. Reconnect and try again.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -58,7 +72,6 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
           }
         },
       ),
-
     );
   }
 
@@ -99,7 +112,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
                 isCentered: true,
               ),
               IconButton(
-                onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/profile-settings'),
                 icon: const Icon(Icons.settings_outlined,
                     color: _SC.primary, size: 24),
               ),
@@ -134,16 +148,39 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
 
           // Device Identity & Status Card
           GestureDetector(
-            onTap: () => Navigator.of(context).pushNamed('/display-customization'),
+            onTap: () =>
+                Navigator.of(context).pushNamed('/display-customization'),
             child: _DeviceIdentityCard(),
           ),
           const SizedBox(height: AppConstants.spacingMd),
 
-          // Brightness
+          // Brightness Control (Syncs directly to ESP32 Display Backlight)
           _BrightnessCard(
             value: _brightness,
             label: _brightnessLabel,
-            onChanged: (v) => setState(() => _brightness = v),
+            onChanged: _setBrightness,
+          ),
+          const SizedBox(height: AppConstants.spacingMd),
+
+          // 2-col Device Hardware Controls: Restart & Factory Reset
+          Row(
+            children: [
+              Expanded(
+                child: _SettingsTile(
+                  icon: Icons.restart_alt_rounded,
+                  title: 'Restart\nDevice',
+                  onTap: () => _confirmRestartDevice(context),
+                ),
+              ),
+              const SizedBox(width: AppConstants.spacingMd),
+              Expanded(
+                child: _SettingsTile(
+                  icon: Icons.restore_rounded,
+                  title: 'Reset to\nDefaults',
+                  onTap: () => _confirmResetDevice(context),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppConstants.spacingMd),
 
@@ -153,15 +190,16 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
               Expanded(
                 child: _SettingsTile(
                   icon: Icons.display_settings_rounded,
-                  title: 'DisplaynCustomization',
-                  onTap: () => Navigator.of(context).pushNamed('/display-customization'),
+                  title: 'Display\nCustomization',
+                  onTap: () =>
+                      Navigator.of(context).pushNamed('/display-customization'),
                 ),
               ),
               const SizedBox(width: AppConstants.spacingMd),
               Expanded(
                 child: _SettingsTile(
                   icon: Icons.bluetooth_searching_rounded,
-                  title: 'Pair NewnDevice',
+                  title: 'Pair New\nDevice',
                   onTap: () => Navigator.of(context).pushNamed('/pair-device'),
                 ),
               ),
@@ -173,7 +211,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
           _SettingsTile(
             icon: Icons.dashboard_rounded,
             title: 'Telemetry & HUD Overlay',
-            onTap: () => Navigator.of(context).pushNamed('/display-customization'),
+            onTap: () =>
+                Navigator.of(context).pushNamed('/display-customization'),
             fullWidth: true,
           ),
           const SizedBox(height: AppConstants.spacingMd),
@@ -194,6 +233,130 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
     );
   }
 
+  void _confirmRestartDevice(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _SC.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: _SC.cardBorder),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.restart_alt_rounded, color: _SC.primary, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'Restart Device?',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'This will restart the JustRide motorcycle cockpit HUD display.',
+          style: GoogleFonts.inter(color: _SC.textSec, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('CANCEL', style: GoogleFonts.inter(color: _SC.textSec)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              final ok =
+                  await BleNavigationService.instance.sendRestartDevice();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Restart command sent to JustRide HUD'
+                        : 'Device not connected via Bluetooth'),
+                    backgroundColor: ok ? _SC.primary : _SC.errorRed,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _SC.primary,
+              foregroundColor: _SC.onPrimary,
+            ),
+            child: Text(
+              'RESTART',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmResetDevice(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _SC.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: _SC.cardBorder),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: _SC.errorRed, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'Reset to Defaults?',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'This will reset the HUD display brightness (70%), recenter navigation camera, and return to Home screen.',
+          style: GoogleFonts.inter(color: _SC.textSec, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('CANCEL', style: GoogleFonts.inter(color: _SC.textSec)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              final ok = await BleNavigationService.instance.sendResetDevice();
+              setState(() => _brightness = 0.70);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Reset command sent to JustRide HUD'
+                        : 'Device not connected via Bluetooth'),
+                    backgroundColor: ok ? _SC.primary : _SC.errorRed,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _SC.errorRed,
+              foregroundColor: Colors.black,
+            ),
+            child: Text(
+              'RESET',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // â”€â”€ Device Identity Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -329,8 +492,10 @@ class _BrightnessCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(
-          AppConstants.spacingMd, AppConstants.spacingMd,
-          AppConstants.spacingMd, AppConstants.spacingSm),
+          AppConstants.spacingMd,
+          AppConstants.spacingMd,
+          AppConstants.spacingMd,
+          AppConstants.spacingSm),
       decoration: BoxDecoration(
         color: _SC.cardBg,
         border: Border.all(color: _SC.cardBorder),
@@ -455,19 +620,50 @@ class _SettingsTileState extends State<_SettingsTile> {
   }
 }
 
-// â”€â”€ Firmware Update Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-class _FirmwareUpdateCard extends StatelessWidget {
+// ── Firmware Update Card ─────────────────────────────────────────────────────
+class _FirmwareUpdateCard extends StatefulWidget {
+  @override
+  State<_FirmwareUpdateCard> createState() => _FirmwareUpdateCardState();
+}
+
+class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
+  FirmwareReleaseModel? _latestRelease;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLatestRelease();
+  }
+
+  Future<void> _fetchLatestRelease() async {
+    try {
+      final res = await BackendService.instance.getLatestFirmwareRelease();
+      if (mounted && res.success && res.data != null) {
+        setState(() {
+          _latestRelease = res.data;
+          _isLoading = false;
+        });
+        return;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
   void _showOtaModal(BuildContext context) {
     final dev = JustRideBleService.instance.connectedDevice;
     if (dev == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please connect to JustRide device over Bluetooth first.'),
+          content:
+              Text('Please connect to JustRide device over Bluetooth first.'),
           backgroundColor: _SC.errorRed,
         ),
       );
       return;
     }
+
+    final targetVer = _latestRelease?.version ?? '2.2.0';
 
     showDialog(
       context: context,
@@ -481,10 +677,12 @@ class _FirmwareUpdateCard extends StatelessWidget {
 
             return AlertDialog(
               backgroundColor: _SC.cardBg,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               title: Text(
-                'Firmware Update (v2.2.0)',
-                style: AppTextStyles.headingMedium.copyWith(color: Colors.white),
+                'Firmware Update (v$targetVer)',
+                style:
+                    AppTextStyles.headingMedium.copyWith(color: Colors.white),
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -492,7 +690,8 @@ class _FirmwareUpdateCard extends StatelessWidget {
                 children: [
                   Text(
                     progress.statusMessage,
-                    style: AppTextStyles.bodyMedium.copyWith(color: _SC.textSec),
+                    style:
+                        AppTextStyles.bodyMedium.copyWith(color: _SC.textSec),
                   ),
                   const SizedBox(height: 16),
                   LinearProgressIndicator(
@@ -524,7 +723,8 @@ class _FirmwareUpdateCard extends StatelessWidget {
                 if (isDone || isFailed)
                   TextButton(
                     onPressed: () => Navigator.of(ctx).pop(),
-                    child: Text('Close', style: TextStyle(color: _SC.primary)),
+                    child: const Text('Close',
+                        style: TextStyle(color: _SC.primary)),
                   )
                 else
                   TextButton(
@@ -532,7 +732,8 @@ class _FirmwareUpdateCard extends StatelessWidget {
                       JustRideOtaService.instance.cancelUpdate();
                       Navigator.of(ctx).pop();
                     },
-                    child: const Text('Cancel', style: TextStyle(color: _SC.textSec)),
+                    child: const Text('Cancel',
+                        style: TextStyle(color: _SC.textSec)),
                   ),
               ],
             );
@@ -541,24 +742,35 @@ class _FirmwareUpdateCard extends StatelessWidget {
       },
     );
 
-    // Load genuine compiled firmware binary (.bin with 0xE9 magic byte)
-    // Priority: assets/firmware/justride_firmware.bin
+    // If download_url exists from backend, download & flash. Otherwise fallback to bundled binary.
     () async {
       try {
-        final byteData = await rootBundle.load('assets/firmware/justride_firmware.bin');
-        final realFirmwareBytes = byteData.buffer.asUint8List();
-        debugPrint('[OTA] Loaded genuine firmware binary: ${realFirmwareBytes.length} bytes, magic: 0x${realFirmwareBytes[0].toRadixString(16)}');
-        JustRideOtaService.instance.flashFirmware(
-          device: dev,
-          firmwareBytes: realFirmwareBytes,
-        );
+        final downloadUrl = _latestRelease?.fileUrl;
+        if (downloadUrl != null && downloadUrl.startsWith('http')) {
+          await JustRideOtaService.instance.downloadAndFlashFirmware(
+            device: dev,
+            downloadUrl: downloadUrl,
+            deviceId: dev.remoteId.str,
+            targetVersion: targetVer,
+          );
+        } else {
+          final byteData =
+              await rootBundle.load('assets/firmware/justride_firmware.bin');
+          final realFirmwareBytes = byteData.buffer.asUint8List();
+          debugPrint(
+              '[OTA] Loaded bundled firmware binary: ${realFirmwareBytes.length} bytes, magic: 0x${realFirmwareBytes[0].toRadixString(16)}');
+          await JustRideOtaService.instance.flashFirmware(
+            device: dev,
+            firmwareBytes: realFirmwareBytes,
+          );
+        }
       } catch (err) {
-        debugPrint('[OTA] Error loading bundled firmware asset: $err');
+        debugPrint('[OTA] Error starting firmware flash: $err');
         JustRideOtaService.instance.progressNotifier.value = OtaProgress(
           state: OtaState.failed,
           progress: 0.0,
           statusMessage: 'Firmware file missing',
-          error: 'Could not load firmware binary asset: $err',
+          error: 'Could not load firmware binary: $err',
         );
       }
     }();
@@ -566,6 +778,11 @@ class _FirmwareUpdateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final versionStr = _latestRelease?.version ?? '2.2.0';
+    final notes = _latestRelease?.releaseNotes?.isNotEmpty == true
+        ? _latestRelease!.releaseNotes!
+        : 'Performance & Stability Fixes';
+
     return Container(
       decoration: BoxDecoration(
         color: _SC.cardBg,
@@ -601,14 +818,15 @@ class _FirmwareUpdateCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         _LabelCaps(
-                            text: 'v2.2.0 â€” Performance & Stability Fixes'),
+                          text: 'v$versionStr — $notes',
+                        ),
                       ],
                     ),
                   ],
                 ),
                 const SizedBox(height: AppConstants.spacingMd),
                 _GlowButton(
-                  label: 'Update Device',
+                  label: _isLoading ? 'Checking Updates...' : 'Update Device',
                   onTap: () => _showOtaModal(context),
                 ),
               ],
@@ -638,7 +856,8 @@ class _DisconnectButton extends StatelessWidget {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Bluetooth disconnected. Device remains paired to your account.'),
+                      content: Text(
+                          'Bluetooth disconnected. Device remains paired to your account.'),
                       duration: Duration(seconds: 3),
                       backgroundColor: _SC.surfCont,
                     ),
@@ -659,13 +878,16 @@ class _DisconnectButton extends StatelessWidget {
                 final ok = await JustRideBleService.instance
                     .reconnect(targetBleAddress: bleAddress);
                 if (context.mounted) {
+                  final err =
+                      JustRideBleService.instance.lastBleErrorNotifier.value;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(ok
                           ? 'Reconnected & real-time clock synced!'
-                          : (bleAddress != null
-                              ? 'Could not find device ($bleAddress). Is it powered on?'
-                              : 'No paired device found. Please pair first.')),
+                          : (err ??
+                              (bleAddress != null
+                                  ? 'Could not find device ($bleAddress). Ensure it is nearby.'
+                                  : 'No paired device found. Please pair first.'))),
                       duration: const Duration(seconds: 3),
                       backgroundColor: ok ? _SC.primary : _SC.errorRed,
                     ),
@@ -692,7 +914,8 @@ class _DisconnectButton extends StatelessWidget {
                 color: isConnected ? _SC.cardBorder : _SC.primary,
                 width: 1.5,
               ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(
                 horizontal: AppConstants.spacingLg,
                 vertical: AppConstants.spacingSm,
@@ -712,8 +935,7 @@ class _UnlinkButton extends StatelessWidget {
     return Center(
       child: TextButton.icon(
         onPressed: () {},
-        icon: const Icon(Icons.link_off_rounded,
-            color: _SC.errorRed, size: 20),
+        icon: const Icon(Icons.link_off_rounded, color: _SC.errorRed, size: 20),
         label: Text(
           'Unlink Device',
           style: AppTextStyles.bodyLarge.copyWith(

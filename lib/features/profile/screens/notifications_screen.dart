@@ -1,11 +1,12 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
+import '../../../core/services/ble_navigation_service.dart';
+import '../../../core/services/notification_listener_service.dart';
 import '../../../shared/widgets/app_logo.dart';
-
 
 // â”€â”€ Colour tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _C {
@@ -43,7 +44,6 @@ class _Notif {
 
 const _chips = ['ALL', 'APP & APK', 'FIRMWARE', 'DEVICE', 'SECURITY'];
 
-
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -56,7 +56,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   int _selectedChip = 0;
   List<NotificationModel> _backendNotifications = [];
   bool _isLoading = true;
-
 
   @override
   void initState() {
@@ -92,8 +91,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
     );
   }
-
-
 
   // â”€â”€ App Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   PreferredSizeWidget _buildAppBar() {
@@ -131,7 +128,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 isCentered: true,
               ),
               IconButton(
-                onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/profile-settings'),
                 icon: const Icon(Icons.settings_outlined,
                     color: _C.textSec, size: 24),
               ),
@@ -141,7 +139,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
     );
   }
-
 
   // â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildBody() {
@@ -168,17 +165,67 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              GestureDetector(
-                onTap: () {},
-                child: Text(
-                  'MARK ALL READ',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: _C.primary,
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      final granted = await NotificationListenerService.instance
+                          .isAccessGranted();
+                      if (!granted) {
+                        await NotificationListenerService.instance
+                            .openNotificationSettings();
+                      } else if (_backendNotifications.isNotEmpty) {
+                        final latest = _backendNotifications.first;
+                        BleNavigationService.instance.sendLatestNotification(
+                            latest.title, latest.message);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text('Latest notification sent to HUD')),
+                          );
+                        }
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _C.surfCont,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _C.primary.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.send_to_mobile_rounded,
+                              size: 12, color: _C.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'HUD ACCESS',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: _C.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: () {},
+                    child: Text(
+                      'MARK ALL READ',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: _C.primary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -208,61 +255,92 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
         // Notifications list
         Expanded(
-          child: _backendNotifications.isEmpty
-              ? Center(
+          child: Builder(
+            builder: (context) {
+              final filtered = _backendNotifications.where((n) {
+                if (_selectedChip == 0) return true; // ALL
+                final type = n.type.toUpperCase();
+                if (_selectedChip == 1)
+                  return type.contains('APK') || type.contains('APP');
+                if (_selectedChip == 2) return type.contains('FIRMWARE');
+                if (_selectedChip == 3) return type.contains('DEVICE');
+                if (_selectedChip == 4) return type.contains('SECURITY');
+                return true;
+              }).toList();
+
+              if (filtered.isEmpty) {
+                return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.notifications_off_outlined, color: _C.textSec, size: 48),
+                      const Icon(Icons.notifications_off_outlined,
+                          color: _C.textSec, size: 48),
                       const SizedBox(height: 12),
                       Text(
-                        'No notifications at the moment',
-                        style: GoogleFonts.inter(color: _C.textSec, fontSize: 14),
+                        'No ${_chips[_selectedChip]} notifications at the moment',
+                        style:
+                            GoogleFonts.inter(color: _C.textSec, fontSize: 14),
                       ),
                     ],
                   ),
-                )
-              : ListView.separated(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.pagePadding,
-                    vertical: AppConstants.spacingMd,
-                  ),
-                  itemCount: _backendNotifications.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(height: AppConstants.spacingMd),
-                  itemBuilder: (_, i) {
-                    final n = _backendNotifications[i];
-                    IconData icon = Icons.notifications_outlined;
-                    if (n.type.toUpperCase().contains('FIRMWARE')) {
-                      icon = Icons.system_update_alt_rounded;
-                    } else if (n.type.toUpperCase().contains('DEVICE') ||
-                        n.type.toUpperCase().contains('SECURITY')) {
-                      icon = Icons.security_rounded;
-                    }
+                );
+              }
 
-                    final notifItem = _Notif(
-                      icon: icon,
-                      title: n.title,
-                      body: n.message,
-                      timestamp: 'RECENT',
-                      state: n.isRead ? _NotifState.read : _NotifState.unreadHigh,
-                    );
-
-                    return _NotificationCard(
-                      notif: notifItem,
-                      onTap: () async {
-                        await BackendService.instance.markNotificationAsRead(n.id);
-                        _fetchNotifications();
-                      },
-                    );
-                  },
+              return ListView.separated(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.pagePadding,
+                  vertical: AppConstants.spacingMd,
                 ),
+                itemCount: filtered.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(height: AppConstants.spacingMd),
+                itemBuilder: (_, i) {
+                  final n = filtered[i];
+                  IconData icon = Icons.notifications_outlined;
+                  final type = n.type.toUpperCase();
+                  if (type.contains('FIRMWARE')) {
+                    icon = Icons.system_update_alt_rounded;
+                  } else if (type.contains('APK') || type.contains('APP')) {
+                    icon = Icons.install_mobile_rounded;
+                  } else if (type.contains('DEVICE') ||
+                      type.contains('SECURITY')) {
+                    icon = Icons.security_rounded;
+                  }
+
+                  final notifItem = _Notif(
+                    icon: icon,
+                    title: n.title,
+                    body: n.message,
+                    timestamp: 'RECENT',
+                    state: n.isRead ? _NotifState.read : _NotifState.unreadHigh,
+                  );
+
+                  return _NotificationCard(
+                    notif: notifItem,
+                    onTap: () async {
+                      // Send strictly latest notification to ESP32 HUD display over BLE
+                      if (BleNavigationService.instance.isReady) {
+                        BleNavigationService.instance
+                            .sendLatestNotification(n.title, n.message);
+                      }
+                      await BackendService.instance
+                          .markNotificationAsRead(n.id);
+                      if (!context.mounted) return;
+                      if (type.contains('FIRMWARE')) {
+                        Navigator.of(context).pushNamed('/device-settings');
+                      }
+                      _fetchNotifications();
+                    },
+                  );
+                },
+              );
+            },
+          ),
         ),
       ],
     );
   }
-
 }
 
 // â”€â”€ Filter Chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -347,7 +425,6 @@ class _NotificationCardState extends State<_NotificationCard> {
       onTapDown: (_) => setState(() => _hovered = true),
       onTapUp: (_) => setState(() => _hovered = false),
       onTapCancel: () => setState(() => _hovered = false),
-
       child: AnimatedOpacity(
         duration: AppConstants.animNormal,
         opacity: isRead && !_hovered ? 0.7 : 1.0,
@@ -359,9 +436,7 @@ class _NotificationCardState extends State<_NotificationCard> {
             color: _C.surfContLow,
             border: Border.all(
               color: isUnreadHigh
-                  ? (_hovered
-                      ? _C.primary
-                      : _C.primary.withValues(alpha: 0.4))
+                  ? (_hovered ? _C.primary : _C.primary.withValues(alpha: 0.4))
                   : (_hovered ? _C.outline : _C.outlineVariant),
             ),
             borderRadius: BorderRadius.circular(AppConstants.radiusMd),
@@ -394,9 +469,7 @@ class _NotificationCardState extends State<_NotificationCard> {
                         shape: BoxShape.circle,
                         color: isUnreadHigh
                             ? _C.primaryCont.withValues(alpha: 0.2)
-                            : (isRead
-                                ? _C.surfContHighest
-                                : _C.surfVariant),
+                            : (isRead ? _C.surfContHighest : _C.surfVariant),
                       ),
                       child: Icon(
                         n.icon,
@@ -435,9 +508,7 @@ class _NotificationCardState extends State<_NotificationCard> {
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.5,
-                                  color: isUnreadHigh
-                                      ? _C.primary
-                                      : _C.textSec,
+                                  color: isUnreadHigh ? _C.primary : _C.textSec,
                                 ),
                                 textAlign: TextAlign.right,
                               ),

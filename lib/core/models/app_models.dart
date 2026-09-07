@@ -330,3 +330,90 @@ class SupportTicketModel {
   }
 }
 
+class FirmwareReleaseModel {
+  final String id;
+  final String version;
+  final String? deviceType;
+  final String? channel;
+  final String? releaseNotes;
+  final String? fileUrl;
+  final String? checksum;
+  final DateTime? releaseDate;
+
+  const FirmwareReleaseModel({
+    required this.id,
+    required this.version,
+    this.deviceType,
+    this.channel,
+    this.releaseNotes,
+    this.fileUrl,
+    this.checksum,
+    this.releaseDate,
+  });
+
+  factory FirmwareReleaseModel.fromJson(Map<String, dynamic> json) {
+    return FirmwareReleaseModel(
+      id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
+      version: json['version']?.toString() ?? '2.2.0',
+      deviceType: json['device_type']?.toString(),
+      channel: json['channel']?.toString() ?? 'stable',
+      releaseNotes: json['release_notes']?.toString() ?? '',
+      fileUrl: json['file_url']?.toString(),
+      checksum: json['checksum']?.toString(),
+      releaseDate: json['release_date'] != null
+          ? DateTime.tryParse(json['release_date'].toString())
+          : null,
+    );
+  }
+}
+
+class AppReleaseModel {
+  final String id;
+  final String version;
+  final int buildNumber;
+  final String platform;
+  final String? channel;
+  final bool isMandatory;
+  final bool isFeatured;
+  final String? releaseNotes;
+  final String? downloadUrl;
+  final int? fileSizeBytes;
+  final String? checksumSha256;
+  final DateTime? releaseDate;
+
+  const AppReleaseModel({
+    required this.id,
+    required this.version,
+    required this.buildNumber,
+    required this.platform,
+    this.channel,
+    this.isMandatory = false,
+    this.isFeatured = false,
+    this.releaseNotes,
+    this.downloadUrl,
+    this.fileSizeBytes,
+    this.checksumSha256,
+    this.releaseDate,
+  });
+
+  factory AppReleaseModel.fromJson(Map<String, dynamic> json) {
+    return AppReleaseModel(
+      id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
+      version: json['version']?.toString() ?? '1.1.0',
+      buildNumber: (json['build_number'] as num?)?.toInt() ?? 1,
+      platform: json['platform']?.toString() ?? 'android',
+      channel: json['channel']?.toString() ?? 'stable',
+      isMandatory: json['is_mandatory'] == true,
+      isFeatured: json['is_featured'] == true,
+      releaseNotes: json['release_notes']?.toString() ?? '',
+      downloadUrl: json['download_url']?.toString() ?? json['file_url']?.toString(),
+      fileSizeBytes: (json['file_size_bytes'] as num?)?.toInt(),
+      checksumSha256: json['checksum_sha256']?.toString(),
+      releaseDate: json['release_date'] != null
+          ? DateTime.tryParse(json['release_date'].toString())
+          : null,
+    );
+  }
+}
+
+

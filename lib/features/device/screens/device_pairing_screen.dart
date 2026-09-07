@@ -6,6 +6,8 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../core/services/bluetooth_service.dart';
+import 'package:geolocator/geolocator.dart';
+import '../../../shared/widgets/hardware_prompt_sheet.dart';
 import '../../../shared/widgets/app_logo.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 
@@ -77,6 +79,24 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     // Initialize BLE and start real-time scan for JustRide devices
     _bleService.init();
     _startScanning();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkHardwareIfOff();
+    });
+  }
+
+  Future<void> _checkHardwareIfOff() async {
+    final btState = _bleService.adapterStateNotifier.value;
+    final isGpsOn = await Geolocator.isLocationServiceEnabled();
+    if (btState == BluetoothAdapterState.off || !isGpsOn) {
+      if (mounted) {
+        HardwarePromptSheet.show(
+          context,
+          btOff: btState != BluetoothAdapterState.on,
+          gpsOff: !isGpsOn,
+        );
+      }
+    }
   }
 
   void _startScanning() {
@@ -89,7 +109,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     _ring1Ctrl.dispose();
     _ring2Ctrl.dispose();
     _ring3Ctrl.dispose();
-    _bleService.dispose();
+    // Do NOT dispose _bleService singleton here!
+    // Disposing the singleton drops active BLE connections app-wide when navigating away.
     super.dispose();
   }
 

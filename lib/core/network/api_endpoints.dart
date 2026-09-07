@@ -1,4 +1,4 @@
-﻿/// Endpoint constants matching JustRide Express Backend routes
+/// Endpoint constants matching JustRide Express Backend routes
 abstract final class ApiEndpoints {
   // â”€â”€ Auth & Users (/api/users) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   static const String register = '/users/register';
@@ -42,4 +42,7 @@ abstract final class ApiEndpoints {
   static const String reportConnectionIssue = '/support/connection-issue';
   static const String contactSupport = '/support/contact';
   static const String submitFeedback = '/support/feedback';
+
+  // ── Media & Uploads (/api/upload) ──────────────────────────────────────────
+  static const String uploadImage = '/upload/image';
 }

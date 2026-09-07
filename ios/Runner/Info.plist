@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>JustRide requires location access to provide turn-by-turn motorcycle navigation.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>JustRide requires continuous background location to update motorcycle navigation on your TFT display while riding.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>JustRide requires background location access to keep your handlebar display updated.</string>
 </dict>
 </plist>

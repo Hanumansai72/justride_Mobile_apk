@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -199,6 +199,46 @@ class ApiClient {
             body: body != null ? jsonEncode(body) : null,
           )
           .timeout(timeoutDuration);
+      return _handleResponse<T>(response, fromJson);
+    } catch (e) {
+      return ApiResponse.error(e.toString());
+    }
+  }
+
+  // ── MULTIPART UPLOAD ────────────────────────────────────────────────
+  Future<ApiResponse<T>> uploadMultipart<T>(
+    String path, {
+    required List<int> fileBytes,
+    required String filename,
+    String fieldName = 'image',
+    Map<String, String>? fields,
+    Map<String, String>? headers,
+    T Function(dynamic data)? fromJson,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final request = http.MultipartRequest('POST', uri);
+
+      if (_authToken != null && _authToken!.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $_authToken';
+      }
+      if (headers != null) {
+        request.headers.addAll(headers);
+      }
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          fieldName,
+          fileBytes,
+          filename: filename,
+        ),
+      );
+
+      final streamedResponse = await request.send().timeout(timeoutDuration);
+      final response = await http.Response.fromStream(streamedResponse);
       return _handleResponse<T>(response, fromJson);
     } catch (e) {
       return ApiResponse.error(e.toString());

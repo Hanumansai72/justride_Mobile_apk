@@ -3,6 +3,8 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 
+import '../../navigation/widgets/voice_assistant_sheet.dart';
+
 class DeviceShortcuts extends StatelessWidget {
   const DeviceShortcuts({super.key});
 
@@ -34,15 +36,23 @@ class DeviceShortcuts extends StatelessWidget {
             physics: const BouncingScrollPhysics(),
             child: Row(
               children: [
-                _ShortcutItem(icon: Icons.light_mode_outlined, title: 'Brightness', subtitle: '80%'),
+                _ShortcutItem(
+                  icon: Icons.mic_rounded,
+                  title: 'Voice Assistant',
+                  subtitle: 'Speak Place',
+                  isHighlighted: true,
+                  onTap: () => VoiceAssistantSheet.show(context),
+                ),
                 const SizedBox(width: AppConstants.spacingMd),
-                _ShortcutItem(icon: Icons.volume_up_outlined, title: 'Volume', subtitle: 'Medium'),
+                const _ShortcutItem(icon: Icons.light_mode_outlined, title: 'Brightness', subtitle: '80%'),
                 const SizedBox(width: AppConstants.spacingMd),
-                _ShortcutItem(icon: Icons.screenshot_monitor_rounded, title: 'Auto Screen', subtitle: '30 sec'),
+                const _ShortcutItem(icon: Icons.volume_up_outlined, title: 'Volume', subtitle: 'Medium'),
                 const SizedBox(width: AppConstants.spacingMd),
-                _ShortcutItem(icon: Icons.translate_rounded, title: 'Language', subtitle: 'English'),
+                const _ShortcutItem(icon: Icons.screenshot_monitor_rounded, title: 'Auto Screen', subtitle: '30 sec'),
                 const SizedBox(width: AppConstants.spacingMd),
-                _ShortcutItem(icon: Icons.info_outline_rounded, title: 'About', subtitle: 'Device'),
+                const _ShortcutItem(icon: Icons.translate_rounded, title: 'Language', subtitle: 'English'),
+                const SizedBox(width: AppConstants.spacingMd),
+                const _ShortcutItem(icon: Icons.info_outline_rounded, title: 'About', subtitle: 'Device'),
               ],
             ),
           ),
@@ -57,42 +67,60 @@ class _ShortcutItem extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.onTap,
+    this.isHighlighted = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
+  final bool isHighlighted;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 76,
-      padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingMd, horizontal: 4),
-      decoration: BoxDecoration(
-        color: AppColors.background, // slightly darker inset
-        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: AppColors.primary, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: AppTextStyles.labelMedium.copyWith(fontSize: 10),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 76,
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingMd, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isHighlighted
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : AppColors.background,
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+          border: Border.all(
+            color: isHighlighted
+                ? AppColors.primary.withValues(alpha: 0.5)
+                : AppColors.border,
+            width: isHighlighted ? 1.5 : 1,
           ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: AppTextStyles.labelSmall.copyWith(fontSize: 9),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: AppColors.primary, size: 24),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: AppTextStyles.labelMedium.copyWith(
+                fontSize: 10,
+                color: isHighlighted ? AppColors.primary : null,
+                fontWeight: isHighlighted ? FontWeight.bold : null,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: AppTextStyles.labelSmall.copyWith(fontSize: 9),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

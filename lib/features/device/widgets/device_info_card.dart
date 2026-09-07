@@ -130,13 +130,15 @@ class DeviceInfoCard extends StatelessWidget {
                               final ok = await JustRideBleService.instance
                                   .reconnect(targetBleAddress: bleAddress);
                               if (context.mounted) {
+                                final err = JustRideBleService.instance.lastBleErrorNotifier.value;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(ok
                                         ? 'Reconnected & synced to JustRide!'
-                                        : (bleAddress != null
-                                            ? 'Could not find device ($bleAddress). Is it powered on?'
-                                            : 'No paired device found. Please pair first.')),
+                                        : (err ??
+                                            (bleAddress != null
+                                                ? 'Could not find device ($bleAddress). Ensure it is nearby.'
+                                                : 'No paired device found. Please pair first.'))),
                                     duration: const Duration(seconds: 3),
                                     backgroundColor: ok ? AppColors.primary : AppColors.error,
                                   ),
