@@ -1,3 +1,4 @@
+import 'help_support_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
@@ -430,9 +431,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(
             icon: Icons.headset_mic_outlined,
-            title: 'Help & Support',
+            title: 'Help Center',
             subtitle: 'FAQs, report problems and connect with support',
-            onTap: () => Navigator.of(context).pushNamed('/help'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) =>
+                    const HelpSupportScreen(initialCategory: 'Account'))),
           ),
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(

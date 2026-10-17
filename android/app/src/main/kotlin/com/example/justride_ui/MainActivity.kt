@@ -85,6 +85,15 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.justride.app/diagnostics")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "deviceInfo") {
+                    result.success(mapOf(
+                        "phone_model" to "${Build.MANUFACTURER} ${Build.MODEL}",
+                        "os_version" to Build.VERSION.RELEASE
+                    ))
+                } else result.notImplemented()
+            }
         requestPostNotificationsPermission()
 
         val shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_INTENT_CHANNEL)

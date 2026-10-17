@@ -1,3 +1,4 @@
+import '../../../shared/widgets/contextual_help_button.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -321,6 +322,7 @@ class _GoScreenState extends State<GoScreen>
           ),
         ),
         actions: [
+          const ContextualHelpButton(category: 'Navigation'),
           IconButton(
             tooltip: 'Voice Assistant',
             icon: Container(
@@ -636,8 +638,8 @@ class _GoScreenState extends State<GoScreen>
                   const SizedBox(width: 12),
                   Text(
                     'Calculating fastest motorcycle route...',
-                    style:
-                        GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
+                    style: GoogleFonts.inter(
+                        color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -684,8 +686,8 @@ class _GoScreenState extends State<GoScreen>
                   const SizedBox(height: 8),
                   Text(
                     'Approx. ${(_previewRoute!.totalDurationSeconds / 60).round()} mins • ${_previewRoute!.steps.length} turns',
-                    style:
-                        GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
+                    style: GoogleFonts.inter(
+                        color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -751,8 +753,8 @@ class _GoScreenState extends State<GoScreen>
                 Expanded(
                   child: Text(
                     'Tip: You can also tap the mic icon in the header to speak any destination.',
-                    style:
-                        GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12),
+                    style: GoogleFonts.inter(
+                        color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ),
               ],

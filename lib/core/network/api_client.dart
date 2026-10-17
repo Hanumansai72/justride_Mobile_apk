@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/app.dart';
 import '../routes/app_routes.dart';
@@ -213,6 +214,7 @@ class ApiClient {
     required List<int> fileBytes,
     required String filename,
     String fieldName = 'image',
+    String? fileContentType,
     Map<String, String>? fields,
     Map<String, String>? headers,
     T Function(dynamic data)? fromJson,
@@ -236,6 +238,8 @@ class ApiClient {
           fieldName,
           fileBytes,
           filename: filename,
+          contentType:
+              fileContentType == null ? null : MediaType.parse(fileContentType),
         ),
       );
 

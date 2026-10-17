@@ -1,0 +1,314 @@
+[
+  {
+    "id": "pair-first",
+    "category": "Getting started",
+    "question": "How do I connect JustRide for the first time?",
+    "steps": [
+      "Turn on Bluetooth and keep the powered device close to your phone.",
+      "Sign in, open Device, and choose the pairing option. Allow the requested Bluetooth permissions.",
+      "Select your JustRide device and finish the pairing prompts. Check the connection status before starting navigation."
+    ],
+    "keywords": "pair bluetooth permission first setup",
+    "route": "/device",
+    "supportCategory": "connection_issue"
+  },
+  {
+    "id": "permissions",
+    "category": "Getting started",
+    "question": "Which phone permissions do I need?",
+    "steps": [
+      "Allow Nearby devices or Bluetooth when pairing. Older Android versions may also require location for scanning.",
+      "Allow precise location for navigation and turn on the phone’s location services.",
+      "Call or notification features need their own permissions. Review the app’s permission prompts and Android settings; only enable what you intend to use."
+    ],
+    "keywords": "permission denied nearby location notifications gps",
+    "route": "/device",
+    "supportCategory": "connection_issue"
+  },
+  {
+    "id": "first-ride",
+    "category": "Getting started",
+    "question": "How do I start my first ride?",
+    "steps": [
+      "Safely stop before setting a route. Open Go from the destination search on Home.",
+      "Choose a start and destination, review the route and start navigation.",
+      "Confirm the device is connected and receiving directions. Use the phone route to check instructions before moving."
+    ],
+    "keywords": "start ride route go destination",
+    "route": "/go",
+    "supportCategory": "navigation_issue"
+  },
+  {
+    "id": "destination",
+    "category": "Getting started",
+    "question": "How do I set or change a destination?",
+    "steps": [
+      "Open Go and enter the destination or select a saved place.",
+      "Review the selected place and route before starting.",
+      "Stop safely before changing an active route or destination."
+    ],
+    "keywords": "search destination address places route",
+    "route": "/go",
+    "supportCategory": "navigation_issue"
+  },
+  {
+    "id": "not-found",
+    "category": "Connectivity",
+    "question": "Why is my JustRide not appearing in Bluetooth search?",
+    "steps": [
+      "Check that the device is powered on and close to the phone, and that Bluetooth is enabled.",
+      "Allow the requested Nearby devices and location permissions. Return to Device and scan again.",
+      "If the device belongs to another account, release it from that account first. If it still does not appear, create a connection ticket."
+    ],
+    "keywords": "not found scan search bluetooth pairing no device",
+    "route": "/device",
+    "supportCategory": "connection_issue"
+  },
+  {
+    "id": "disconnects",
+    "category": "Connectivity",
+    "question": "Why does Bluetooth keep disconnecting?",
+    "steps": [
+      "Stop safely and check the phone’s Bluetooth status and device power. Keep them close together.",
+      "Check whether Android battery restrictions are stopping JustRide in the background. Review permissions in the phone’s app settings.",
+      "Reconnect from Device. If it repeats, note when it happens and include those details in a support ticket."
+    ],
+    "keywords": "disconnect range pocket background battery unstable",
+    "route": "/device",
+    "supportCategory": "connection_issue"
+  },
+  {
+    "id": "connected-no-data",
+    "category": "Connectivity",
+    "question": "Why is the device connected but not receiving directions?",
+    "steps": [
+      "Confirm that a route is active in the JustRide phone app; a Bluetooth connection alone does not start navigation.",
+      "Check the phone’s GPS location and the route shown in the app.",
+      "Return to Device to confirm the JustRide connection. If instructions still do not arrive, stop navigation safely and report the issue."
+    ],
+    "keywords": "connected no data sync synchronize directions empty",
+    "route": "/device",
+    "supportCategory": "connection_issue"
+  },
+  {
+    "id": "reconnect",
+    "category": "Connectivity",
+    "question": "How do I reconnect after a restart or lost connection?",
+    "steps": [
+      "Keep the powered device near the phone and open JustRide.",
+      "Check Device for a connected status. If it remains disconnected, use the connection or pairing controls for your registered device.",
+      "Return to navigation and verify the destination and next direction. Do not assume a restarted device has restored the full route."
+    ],
+    "keywords": "restart lost reconnect resume automatic out of range",
+    "route": "/device",
+    "supportCategory": "connection_issue"
+  },
+  {
+    "id": "switch-phone",
+    "category": "Connectivity",
+    "question": "Can I switch to another phone?",
+    "steps": [
+      "For the same account, sign in on the new phone and connect from Device. Avoid maintaining competing Bluetooth connections.",
+      "For a different account, first unlink the device from the current account using its registered email verification code.",
+      "Only after the device is released should the new account pair it."
+    ],
+    "keywords": "new phone transfer switch account pairing",
+    "route": "/device-settings",
+    "supportCategory": "connection_issue"
+  },
+  {
+    "id": "unlink",
+    "category": "Connectivity",
+    "question": "How do I remove a linked device?",
+    "steps": [
+      "Open Device Settings and choose Unlink Device.",
+      "Request the unlink code, then enter the code sent to your registered email.",
+      "Wait for the backend to confirm the unlink. This releases the device for another account; deleting only a phone Bluetooth entry does not release account ownership."
+    ],
+    "keywords": "unlink remove unpair release email otp",
+    "route": "/device-settings",
+    "supportCategory": "connection_issue"
+  },
+  {
+    "id": "map-missing",
+    "category": "Navigation",
+    "question": "Why is the map not showing on the device?",
+    "steps": [
+      "Check that the phone app has loaded a route and has an internet connection for its map and route services.",
+      "Confirm the hardware is connected in Device and the phone has a current GPS fix.",
+      "If the phone shows a route but the device does not, note the app and firmware versions and create a navigation ticket. A static product image is not a guarantee of every firmware layout."
+    ],
+    "keywords": "map not showing blank black display loading",
+    "route": "/go",
+    "supportCategory": "navigation_issue"
+  },
+  {
+    "id": "gps-accuracy",
+    "category": "Navigation",
+    "question": "Why is my location inaccurate?",
+    "steps": [
+      "Allow precise location for JustRide and turn on location services.",
+      "Move to a place with a clearer view of the sky when safe; buildings and tunnels can affect GPS.",
+      "Wait for the phone’s location to settle before starting. Report repeated jumps with the time and circumstances, without sharing private locations unnecessarily."
+    ],
+    "keywords": "gps inaccurate location jump tunnel weak signal",
+    "route": "/go",
+    "supportCategory": "navigation_issue"
+  },
+  {
+    "id": "route-mismatch",
+    "category": "Navigation",
+    "question": "Why does the device show a different route from my phone?",
+    "steps": [
+      "Check that the route is active in JustRide rather than only in another maps app.",
+      "Verify the destination and Bluetooth connection. Allow time for a route update after a deviation.",
+      "If the mismatch continues, stop safely and create a navigation ticket describing what the phone and device each show."
+    ],
+    "keywords": "different wrong route mismatch reroute",
+    "route": "/go",
+    "supportCategory": "navigation_issue"
+  },
+  {
+    "id": "wrong-arrow",
+    "category": "Navigation",
+    "question": "Why is the navigation arrow pointing the wrong way?",
+    "steps": [
+      "Check the destination and next maneuver on the phone before moving.",
+      "GPS heading may be less reliable while stationary or moving slowly. Wait for a stable location fix.",
+      "If the maneuver remains wrong during normal travel, stop safely and report it. Do not follow an instruction that conflicts with the road."
+    ],
+    "keywords": "arrow direction heading turn wrong compass",
+    "route": "/go",
+    "supportCategory": "navigation_issue"
+  },
+  {
+    "id": "frozen-map",
+    "category": "Navigation",
+    "question": "What should I do if navigation freezes or keeps refreshing?",
+    "steps": [
+      "Stop safely. Check whether the phone location and route are still updating.",
+      "Check internet, location permission and the Bluetooth connection. A network interruption can delay a fresh route request.",
+      "Reopen navigation and review the route. If the issue repeats, record the error text and approximate time for a support ticket."
+    ],
+    "keywords": "frozen freeze refreshing repeated refresh internet offline stops",
+    "route": "/go",
+    "supportCategory": "navigation_issue"
+  },
+  {
+    "id": "screen-lock",
+    "category": "Navigation",
+    "question": "What if navigation stops when my phone screen locks?",
+    "steps": [
+      "Stop safely and reopen JustRide to check whether the route and device connection are active.",
+      "Review JustRide’s location permissions and Android battery/background restrictions in phone settings.",
+      "Keep the app open while troubleshooting. Background behavior varies by Android phone; report the phone model and software version if it still stops."
+    ],
+    "keywords": "screen locked background stops battery optimization other apps",
+    "route": "/go",
+    "supportCategory": "navigation_issue"
+  },
+  {
+    "id": "firmware-version",
+    "category": "Firmware",
+    "question": "How do I check my firmware version?",
+    "steps": [
+      "Open Device and Device Settings for the connected device’s firmware information.",
+      "Use the version reported by the device when available. A cached version may not describe a device that has just been updated.",
+      "Include the reported version and app version in a firmware support ticket."
+    ],
+    "keywords": "firmware version installed current software",
+    "route": "/device",
+    "supportCategory": "firmware_problem"
+  },
+  {
+    "id": "firmware-update",
+    "category": "Firmware",
+    "question": "How do I update device firmware?",
+    "steps": [
+      "Park safely and open the firmware update controls in Device.",
+      "Check the release details, a stable Bluetooth connection and adequate power before starting.",
+      "Follow the on-screen update flow. Do not ride, disconnect Bluetooth or power off during installation. Confirm the reported version after reconnecting."
+    ],
+    "keywords": "ota firmware upgrade update install download",
+    "route": "/device",
+    "supportCategory": "firmware_problem"
+  },
+  {
+    "id": "firmware-failed",
+    "category": "Firmware",
+    "question": "What should I do if a firmware update fails?",
+    "steps": [
+      "Keep the phone and device close together and record the displayed error.",
+      "Check device power and Bluetooth before retrying from the app’s firmware update screen.",
+      "Do not install an unknown firmware file or repeatedly interrupt the device. If it cannot reconnect or the update fails again, contact support."
+    ],
+    "keywords": "ota failed update error interrupted recovery",
+    "route": "/device",
+    "supportCategory": "firmware_problem"
+  },
+  {
+    "id": "ride-history",
+    "category": "Account",
+    "question": "Where can I view previous rides?",
+    "steps": [
+      "Open Recent on Home or the ride history screen to view rides stored for your account.",
+      "The latest saved ride is also shown on Home. Refresh after ending a ride.",
+      "Sign in with the same account on another phone to view its backend-stored rides. Unsynced local rides are not available on the new phone."
+    ],
+    "keywords": "history previous rides recent latest new phone",
+    "route": "/trips",
+    "supportCategory": "account_problem"
+  },
+  {
+    "id": "history-missing",
+    "category": "Account",
+    "question": "Why is my ride history missing?",
+    "steps": [
+      "Confirm you are signed in to the account that recorded the ride.",
+      "Reconnect to the internet and reopen ride history so pending uploads can retry.",
+      "Older app versions did not store all rides on the backend. An interrupted or unsaved ride may be unavailable; support cannot promise recovery of records that were never saved."
+    ],
+    "keywords": "missing history lost ride recover pending sync restart",
+    "route": "/trips",
+    "supportCategory": "account_problem"
+  },
+  {
+    "id": "edit-account",
+    "category": "Account",
+    "question": "How do I edit my account information?",
+    "steps": [
+      "Open Profile and choose Edit Profile.",
+      "Review your name and phone number, save the changes and wait for confirmation.",
+      "If a phone number is already reserved by another or deleted account, use your own eligible number or contact support."
+    ],
+    "keywords": "edit profile name phone account information",
+    "route": "/profile",
+    "supportCategory": "account_problem"
+  },
+  {
+    "id": "password",
+    "category": "Account",
+    "question": "How do I change or reset my password?",
+    "steps": [
+      "For an email/password account, use Change Password in Profile and enter the current password.",
+      "If you cannot sign in, use Forgot Password on the login screen and follow the email instructions.",
+      "Google sign-in uses your Google account. Never send a password or email verification code in a support ticket."
+    ],
+    "keywords": "forgot password reset change login google",
+    "route": "/profile",
+    "supportCategory": "account_problem"
+  },
+  {
+    "id": "delete-account",
+    "category": "Account",
+    "question": "How do I delete my account and ride data?",
+    "steps": [
+      "Open Profile and choose Delete Account. A linked device must be unlinked with its own email code first.",
+      "Request the separate account deletion OTP, enter your current password for a local account and confirm permanent deletion.",
+      "Profile content, rides, saved places and support records are removed. Email and phone remain reserved and cannot register again. The deletion OTP expires after 10 minutes and permits five attempts."
+    ],
+    "keywords": "delete account privacy data email phone otp permanently",
+    "route": "/delete-account",
+    "supportCategory": "account_problem"
+  }
+]

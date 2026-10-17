@@ -1,3 +1,4 @@
+import '../../../shared/widgets/contextual_help_button.dart';
 import '../../../app/theme/app_colors.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../../../core/services/ota_service.dart';
@@ -113,6 +114,7 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
                 showTagline: false,
                 isCentered: true,
               ),
+              const ContextualHelpButton(category: 'Connectivity'),
               IconButton(
                 onPressed: () =>
                     Navigator.of(context).pushNamed('/profile-settings'),

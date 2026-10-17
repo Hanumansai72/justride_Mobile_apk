@@ -502,44 +502,43 @@ class BackendService {
     required String subject,
     required String message,
     String category = 'contact_support',
-    String priority = 'medium',
     String? deviceId,
+    List<String> attachments = const [],
+    String? helpArticleId,
+    Map<String, String>? diagnostics,
   }) async {
-    if (category == 'device_problem') {
-      return _api.post<SupportTicketModel>(
-        ApiEndpoints.reportDeviceProblem,
+    return _api.post<SupportTicketModel>('/support/tickets',
         body: {
           'subject': subject,
           'description': message,
-          'priority': priority,
+          'category': category,
           if (deviceId != null) 'device_id': deviceId,
+          if (helpArticleId != null) 'help_article_id': helpArticleId,
+          'attachments': attachments,
+          if (diagnostics != null) ...{
+            'diagnostics_consent': true,
+            'diagnostics': diagnostics
+          },
         },
-        fromJson: (json) => SupportTicketModel.fromJson(
-            json is Map && json.containsKey('data') ? json['data'] : json),
-      );
-    } else if (category == 'connection_issue') {
-      return _api.post<SupportTicketModel>(
-        ApiEndpoints.reportConnectionIssue,
-        body: {
-          'description': message,
-          if (deviceId != null) 'device_id': deviceId,
-        },
-        fromJson: (json) => SupportTicketModel.fromJson(
-            json is Map && json.containsKey('data') ? json['data'] : json),
-      );
-    } else {
-      return _api.post<SupportTicketModel>(
-        ApiEndpoints.contactSupport,
-        body: {
-          'subject': subject,
-          'message': message,
-          'priority': priority,
-        },
-        fromJson: (json) => SupportTicketModel.fromJson(
-            json is Map && json.containsKey('data') ? json['data'] : json),
-      );
-    }
+        fromJson: (json) =>
+            SupportTicketModel.fromJson(Map<String, dynamic>.from(json)));
   }
+
+  Future<ApiResponse<void>> submitHelpFeedback(
+          String articleId, bool helpful) =>
+      _api.post<void>('/support/help-feedback',
+          body: {'article_id': articleId, 'helpful': helpful});
+
+  Future<ApiResponse<Map<String, dynamic>>> uploadSupportScreenshot({
+    required List<int> bytes,
+    required String filename,
+    required String contentType,
+  }) =>
+      _api.uploadMultipart<Map<String, dynamic>>('/support/attachments',
+          fileBytes: bytes,
+          filename: filename,
+          fileContentType: contentType,
+          fromJson: (json) => Map<String, dynamic>.from(json));
 
   Future<ApiResponse<ChatMessageModel>> sendTicketMessage({
     required String ticketId,

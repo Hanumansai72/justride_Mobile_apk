@@ -28,6 +28,16 @@ Deletion removes profile content, rides, saved places and support records; the b
 
 Run the isolated flow tests with `flutter test test/account_deletion_test.dart`.
 
+## Help Center
+
+Profile opens a searchable Help Center with 24 bundled troubleshooting articles and categories for Getting started, Connectivity, Navigation, Firmware and Account. Device Settings and Go have contextual help buttons. Answers and guided checklists work offline; feedback and support tickets require internet. Product marketing FAQs are maintained separately in the customer website.
+
+The support form sends a real ticket to `/api/support/tickets`, with its category, description, optional article reference and up to three screenshots (5 MB each). Screenshot selection is local; upload starts only when the user sends the ticket after agreeing to share. Cloudinary screenshot URLs are accessible to anyone with the link, so remove private details first. The app preserves the draft on failed submission. My Tickets shows backend status and replies; pull to refresh or use Refresh in a thread.
+
+Diagnostics are optional. The checkbox enables app/platform version, a labelled cached firmware version, Android phone/OS information where available, and an optional error code. Users can preview or copy the report. GPS, passwords, OTPs, notification contents and account/device credentials are excluded. Feedback is saved per user/article and is visible in admin Support Management > Help feedback.
+
+Run `flutter test test/help_center_test.dart` for offline search, compact layout, support handoff, feedback retry, draft preservation, backend replies, diagnostic fields and screenshot MIME checks. Deploy the matching backend first; configure Cloudinary in that environment. Keep `assets/help/app_faqs.json` IDs/questions aligned with the backend catalog.
+
 ## Browser app
 
 The same Flutter app runs on the web, with a centered phone-width layout on desktop and the existing emerald theme. It uses `https://backend.justride.cc/api`; it is separate from the customer landing page.

@@ -1,713 +1,453 @@
-import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../app/theme/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
-
-// ── Colour tokens ─────────────────────────────────────────────────────────────
-class _C {
-  static const bg = AppColors.background;
-  static const surfCont = AppColors.surface;
-  static const surfContLowest = AppColors.background;
-  static const surfContLow = AppColors.backgroundInset;
-  static const surfContHigh = AppColors.surfaceElevated;
-  static const primary = AppColors.primary;
-  static const onPrimary = AppColors.onPrimary;
-  static const primaryCont = AppColors.primary;
-  static const onPrimaryCont = AppColors.primaryContainer;
-  static const secondary = AppColors.primary;
-  static const onSurface = AppColors.textPrimary;
-  static const textSec = AppColors.textSecondary;
-  static const outlineVariant = AppColors.border;
-  static const tertiary = AppColors.primary;
-}
+import '../../../core/services/help_service.dart';
 
 class SupportTicketScreen extends StatefulWidget {
-  final String? initialCategory;
-  final String? ticketId;
-
-  const SupportTicketScreen({
-    super.key,
-    this.initialCategory,
-    this.ticketId,
-  });
-
+  const SupportTicketScreen(
+      {super.key,
+      this.initialCategory,
+      this.ticketId,
+      this.initialSubject,
+      this.helpArticleId});
+  final String? initialCategory, ticketId, initialSubject, helpArticleId;
   @override
   State<SupportTicketScreen> createState() => _SupportTicketScreenState();
 }
 
 class _SupportTicketScreenState extends State<SupportTicketScreen> {
-  final _msgController = TextEditingController();
-  final _scrollController = ScrollController();
-
+  final _form = GlobalKey<FormState>();
+  final _subject = TextEditingController();
+  final _description = TextEditingController();
+  final _reply = TextEditingController();
+  final _errorCode = TextEditingController();
+  final _screenshots = <_Screenshot>[];
   SupportTicketModel? _ticket;
-  bool _isLoading = true;
-  bool _isSending = false;
-
-  // Bot guided questionnaire state (when creating a new ticket)
-  int _questionStep = 0; // 0: Asking main problem summary, 1: Asking details, 2: Ticket created
-  String _selectedCategory = 'contact_support';
-  String _problemTitle = '';
-  final List<_ChatMessageItem> _chatItems = [];
-
+  String? _error;
+  bool _busy = false,
+      _loading = false,
+      _diagnosticsConsent = false,
+      _screenshotsConsent = false;
+  late String _category;
+  static const categories = {
+    'device_problem': 'Device',
+    'connection_issue': 'Connectivity',
+    'navigation_issue': 'Navigation',
+    'firmware_problem': 'Firmware',
+    'account_problem': 'Account',
+    'general': 'Other',
+    'contact_support': 'General support',
+    'feedback': 'Feedback',
+  };
+  bool get _existing => widget.ticketId != null;
   @override
   void initState() {
     super.initState();
-    _selectedCategory = widget.initialCategory ?? 'contact_support';
-    _initChat();
-  }
-
-  Future<void> _initChat() async {
-    if (widget.ticketId != null && widget.ticketId!.isNotEmpty) {
-      // Existing Ticket Mode: Load from backend
-      setState(() => _isLoading = true);
-      final res = await BackendService.instance.getTicketDetails(widget.ticketId!);
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          if (res.success && res.data != null) {
-            _ticket = res.data;
-            _chatItems.clear();
-            for (final msg in _ticket!.messages) {
-              _chatItems.add(
-                _ChatMessageItem(
-                  isUser: msg.senderRole == 'USER',
-                  sender: msg.senderName,
-                  time: _formatTime(msg.createdAt),
-                  text: msg.body,
-                ),
-              );
-            }
-          }
-        });
-      }
-    } else {
-      // Guided Interactive Assistant Mode: Start conversational ticket creation
-      setState(() {
-        _isLoading = false;
-        _chatItems.add(
-          _ChatMessageItem(
-            isUser: false,
-            sender: 'JustRide Assistant',
-            time: 'Just now',
-            text: _getWelcomeQuestion(_selectedCategory),
-          ),
-        );
-      });
-    }
-  }
-
-  String _getWelcomeQuestion(String category) {
-    if (category == 'device_problem') {
-      return "Hello! I am your JustRide Support Assistant 🤖.\n\nCould you briefly tell me what issue you are experiencing with your JustRide hardware device?";
-    } else if (category == 'connection_issue') {
-      return "Hello! I am your JustRide Support Assistant 🤖.\n\nCould you describe what happens when attempting to pair or connect with Bluetooth/Cloud?";
-    } else if (category == 'firmware_problem') {
-      return "Hello! I am your JustRide Support Assistant 🤖.\n\nAre you having issues updating firmware or seeing a version mismatch error?";
-    } else {
-      return "Hello! I am your JustRide Support Assistant 🤖.\n\nHow can we assist you today? Please describe the problem or question you have.";
-    }
-  }
-
-  String _formatTime(DateTime dt) {
-    final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final minute = dt.minute.toString().padLeft(2, '0');
-    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
-    return '$hour:$minute $ampm';
-  }
-
-  Future<void> _handleSendMessage() async {
-    final text = _msgController.text.trim();
-    if (text.isEmpty || _isSending) return;
-
-    _msgController.clear();
-
-    // 1. If in existing ticket mode -> Call backend /api/support/tickets/:id/messages
-    if (_ticket != null) {
-      setState(() {
-        _isSending = true;
-        _chatItems.add(
-          _ChatMessageItem(
-            isUser: true,
-            sender: 'You',
-            time: 'Just now',
-            text: text,
-          ),
-        );
-      });
-      _scrollToBottom();
-
-      final res = await BackendService.instance.sendTicketMessage(
-        ticketId: _ticket!.id,
-        message: text,
-      );
-
-      if (mounted) {
-        setState(() => _isSending = false);
-        if (!res.success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(res.message),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
-      }
-      return;
-    }
-
-    // 2. Interactive Guided Flow: Collect answers and create ticket in backend
-    setState(() {
-      _chatItems.add(
-        _ChatMessageItem(
-          isUser: true,
-          sender: 'You',
-          time: 'Just now',
-          text: text,
-        ),
-      );
-      _isSending = true;
-    });
-    _scrollToBottom();
-
-    if (_questionStep == 0) {
-      _problemTitle = text;
-      _questionStep = 1;
-      await Future.delayed(const Duration(milliseconds: 600));
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-          _chatItems.add(
-            const _ChatMessageItem(
-              isUser: false,
-              sender: 'JustRide Assistant',
-              time: 'Just now',
-              text: "Got it. Can you provide any extra details or steps you've already tried? Once you reply, I will generate a formal support ticket for our engineering team.",
-            ),
-          );
-
-        });
-        _scrollToBottom();
-      }
-    } else if (_questionStep == 1) {
-      final description = 'Summary: $_problemTitle\nDetails: $text';
-
-      // Call Backend API to create official ticket
-      final res = await BackendService.instance.createSupportTicket(
-        subject: _problemTitle,
-        message: description,
-        category: _selectedCategory,
-        priority: 'high',
-      );
-
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-          if (res.success && res.data != null) {
-            _ticket = res.data;
-            _questionStep = 2;
-            _chatItems.add(
-              _ChatMessageItem(
-                isUser: false,
-                sender: 'JustRide Support',
-                time: 'Just now',
-                text: "✅ Support Ticket #${_ticket!.ticketNumber} created successfully!\n\nOur team has received your logs and is investigating. You can reply directly in this chat anytime for updates.",
-              ),
-            );
-          } else {
-            _chatItems.add(
-              _ChatMessageItem(
-                isUser: false,
-                sender: 'JustRide Assistant',
-                time: 'Just now',
-                text: "Failed to create ticket: ${res.message}. Please try typing your message again.",
-              ),
-            );
-          }
-        });
-        _scrollToBottom();
-      }
-    }
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 80,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    _category = categories.containsKey(widget.initialCategory)
+        ? widget.initialCategory!
+        : 'general';
+    _subject.text = widget.initialSubject ?? '';
+    if (_existing) _load();
   }
 
   @override
   void dispose() {
-    _msgController.dispose();
-    _scrollController.dispose();
+    for (final controller in [_subject, _description, _reply, _errorCode]) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.bg,
-      appBar: _buildAppBar(context),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _C.primary))
-          : Stack(
-              children: [
-                // ── Messages ─────────────────────────────────────────────────
-                ListView(
-                  controller: _scrollController,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(
-                    AppConstants.spacingMd,
-                    AppConstants.spacingMd,
-                    AppConstants.spacingMd,
-                    120, // room for sticky input
-                  ),
-                  children: [
-                    // Diagnostic context card
-                    _DiagnosticCard(
-                      category: _selectedCategory,
-                      ticketNumber: _ticket?.ticketNumber ?? 'PENDING',
-                    ),
-                    const SizedBox(height: AppConstants.spacingLg),
-
-                    // Date divider
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.spacingMd,
-                          vertical: AppConstants.spacingXs,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _C.surfContLow,
-                          border: Border.all(color: _C.outlineVariant),
-                          borderRadius:
-                              BorderRadius.circular(AppConstants.radiusCircle),
-                        ),
-                        child: Text(
-                          'Today',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.8,
-                            color: _C.textSec,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppConstants.spacingLg),
-
-                    // Chat messages
-                    ..._chatItems.map((msg) => Padding(
-                          padding: const EdgeInsets.only(
-                              bottom: AppConstants.spacingLg),
-                          child: _ChatBubble(message: msg),
-                        )),
-                  ],
-                ),
-
-                // ── Sticky input bar ─────────────────────────────────────────
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: _StickyInputBar(
-                    controller: _msgController,
-                    isSending: _isSending,
-                    onSend: _handleSendMessage,
-                  ),
-                ),
-              ],
-            ),
-    );
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final result = await BackendService.instance
+        .getTicketDetails(_ticket?.id ?? widget.ticketId!);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (result.success) {
+        _ticket = result.data;
+      } else {
+        _error = result.message;
+      }
+    });
   }
 
-  // ── App Bar ────────────────────────────────────────────────────────────────
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    final ticketNum = _ticket != null ? '#${_ticket!.ticketNumber}' : 'New Ticket';
-    final status = _ticket != null ? _ticket!.status : 'CHATBOT ACTIVE';
-
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(64),
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 64,
-          color: _C.surfContLowest,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_rounded, color: _C.onSurface),
-              ),
-              const SizedBox(width: AppConstants.spacingSm),
-              Expanded(
-                child: Row(
-                  children: [
-                    Text(
-                      'Ticket $ticketNum',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: _C.onSurface,
-                      ),
-                    ),
-                    const SizedBox(width: AppConstants.spacingSm),
-                    // Status badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: _C.secondary.withValues(alpha: 0.1),
-                        border: Border.all(
-                            color: _C.secondary.withValues(alpha: 0.4)),
-                        borderRadius: BorderRadius.circular(
-                            AppConstants.radiusCircle),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _C.secondary,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            status,
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.8,
-                              color: _C.secondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pushNamed('/my-tickets'),
-                icon: const Icon(Icons.confirmation_number_outlined, color: _C.textSec),
-                tooltip: 'My Tickets',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _failure(String message) {
+    if (mounted) setState(() => _error = message);
   }
-}
 
-// ── Diagnostic Context Card ────────────────────────────────────────────────────
-class _DiagnosticCard extends StatelessWidget {
-  final String category;
-  final String ticketNumber;
+  Future<void> _pickScreenshot() async {
+    if (_screenshots.length >= 3 || _busy) return;
+    try {
+      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (file == null || !mounted) return;
+      final extension = file.name.toLowerCase().split('.').last;
+      if (!['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
+        _failure('Choose a JPEG, PNG or WebP screenshot.');
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        _failure('Each screenshot must be 5 MB or smaller.');
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _screenshots.add(_Screenshot(file.name, bytes,
+            extension == 'jpg' ? 'image/jpeg' : 'image/$extension'));
+        _error = null;
+      });
+    } on PlatformException {
+      _failure('Unable to open photos. Check photo access and try again.');
+    }
+  }
 
-  const _DiagnosticCard({
-    required this.category,
-    required this.ticketNumber,
-  });
+  Future<List<String>?> _uploadScreenshots() async {
+    final urls = <String>[];
+    for (final file in _screenshots) {
+      if (file.url == null) {
+        final result = await BackendService.instance.uploadSupportScreenshot(
+            bytes: file.bytes,
+            filename: file.name,
+            contentType: file.contentType);
+        if (!result.success || result.data?['url'] is! String) {
+          _failure(
+              'Screenshot upload failed. Your ticket has not been sent. Please retry.');
+          return null;
+        }
+        file.url = result.data!['url'] as String;
+      }
+      urls.add(file.url!);
+    }
+    return urls;
+  }
+
+  Future<void> _diagnosticPreview() async {
+    if (!_diagnosticsConsent) return;
+    final report =
+        await HelpService.collectDiagnostics(errorCode: _errorCode.text);
+    if (!mounted) return;
+    await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+                title: const Text('Diagnostic report'),
+                content: SingleChildScrollView(
+                    child:
+                        SelectableText(HelpService.formatDiagnostics(report))),
+                actions: [
+                  TextButton(
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(
+                            text: HelpService.formatDiagnostics(report)));
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      },
+                      child: const Text('Copy report')),
+                  TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Close'))
+                ]));
+  }
+
+  Future<void> _submit() async {
+    if (_busy || !_form.currentState!.validate()) return;
+    if (_screenshots.isNotEmpty && !_screenshotsConsent) {
+      _failure('Confirm screenshot sharing before sending.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final attachments = await _uploadScreenshots();
+      if (attachments == null) return;
+      final diagnostics = _diagnosticsConsent
+          ? await HelpService.collectDiagnostics(errorCode: _errorCode.text)
+          : null;
+      final result = await BackendService.instance.createSupportTicket(
+          subject: _subject.text.trim(),
+          message: _description.text.trim(),
+          category: _category,
+          attachments: attachments,
+          helpArticleId: widget.helpArticleId,
+          diagnostics: diagnostics);
+      if (!mounted) return;
+      if (result.success && result.data != null) {
+        setState(() {
+          _ticket = result.data;
+          _screenshots.clear();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Ticket saved. Follow replies in My Tickets.')));
+      } else {
+        _failure(result.message);
+      }
+    } catch (_) {
+      _failure(
+          'Unable to send your ticket. Your description is still here; please retry.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _sendReply() async {
+    if (_busy || _reply.text.trim().isEmpty || _ticket == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final result = await BackendService.instance
+        .sendTicketMessage(ticketId: _ticket!.id, message: _reply.text.trim());
+    if (!mounted) return;
+    if (result.success) {
+      _reply.clear();
+      await _load();
+    } else {
+      _failure(result.message);
+    }
+    if (mounted) setState(() => _busy = false);
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacingMd),
-      decoration: BoxDecoration(
-        color: _C.surfCont.withValues(alpha: 0.6),
-        border: Border.all(color: _C.outlineVariant),
-        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'LIVE SUPPORT CHAT',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                  color: _C.primary,
-                ),
-              ),
-              Text(
-                ticketNumber,
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: _C.textSec,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Category',
-                      style: AppTextStyles.bodySmall.copyWith(
-                          color: _C.textSec, fontSize: 11),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      category.replaceAll('_', ' ').toUpperCase(),
-                      style: AppTextStyles.bodyMedium.copyWith(
-                          color: _C.onSurface,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Service Channel',
-                      style: AppTextStyles.bodySmall.copyWith(
-                          color: _C.textSec, fontSize: 11),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Real-time Chat',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                          color: _C.tertiary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) => PopScope(
+      canPop: !_busy,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+            title: Text(_ticket == null
+                ? 'Create support ticket'
+                : _ticket!.ticketNumber),
+            actions: [
+              if (_ticket != null)
+                IconButton(
+                    tooltip: 'Refresh replies',
+                    onPressed: _busy || _loading ? null : _load,
+                    icon: const Icon(Icons.refresh)),
+              IconButton(
+                  tooltip: 'My Tickets',
+                  onPressed: _busy
+                      ? null
+                      : () => Navigator.pushNamed(context, '/my-tickets'),
+                  icon: const Icon(Icons.confirmation_number_outlined))
+            ]),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _ticket == null && _existing
+                ? Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(_error ?? 'Ticket unavailable.'),
+                    TextButton(onPressed: _load, child: const Text('Retry'))
+                  ]))
+                : _ticket != null
+                    ? _thread()
+                    : _createForm(),
+      ));
+
+  Widget _createForm() => Form(
+      key: _form,
+      child: ListView(padding: const EdgeInsets.all(16), children: [
+        const Text('Tell us what happened.',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        const Text(
+            'Include the error and steps you tried. Never share passwords or OTP codes.',
+            style: TextStyle(color: AppColors.textSecondary)),
+        const SizedBox(height: 24),
+        DropdownButtonFormField<String>(
+            initialValue: _category,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Issue category'),
+            items: categories.entries
+                .map((entry) => DropdownMenuItem(
+                    value: entry.key, child: Text(entry.value)))
+                .toList(),
+            onChanged:
+                _busy ? null : (value) => setState(() => _category = value!)),
+        const SizedBox(height: 16),
+        TextFormField(
+            controller: _subject,
+            enabled: !_busy,
+            maxLength: 160,
+            decoration: const InputDecoration(labelText: 'Subject'),
+            validator: (value) => (value?.trim().length ?? 0) < 3
+                ? 'Enter at least 3 characters.'
+                : null),
+        const SizedBox(height: 12),
+        TextFormField(
+            controller: _description,
+            enabled: !_busy,
+            minLines: 5,
+            maxLines: 10,
+            maxLength: 6000,
+            decoration: const InputDecoration(
+                labelText: 'Description', alignLabelWithHint: true),
+            validator: (value) => (value?.trim().length ?? 0) < 10
+                ? 'Describe the issue in at least 10 characters.'
+                : null),
+        const SizedBox(height: 12),
+        Text('Screenshots (optional)',
+            style: Theme.of(context).textTheme.titleMedium),
+        const Text(
+            'Up to 3 images, 5 MB each. Screenshots use Cloudinary storage and can be viewed by anyone with their link. Remove private information before sharing.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        for (final file in _screenshots)
+          ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Image.memory(file.bytes,
+                  width: 48, height: 48, fit: BoxFit.cover),
+              title:
+                  Text(file.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                  tooltip: 'Remove screenshot',
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() => _screenshots.remove(file)),
+                  icon: const Icon(Icons.close))),
+        OutlinedButton.icon(
+            onPressed:
+                _busy || _screenshots.length >= 3 ? null : _pickScreenshot,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: const Text('Add screenshot')),
+        if (_screenshots.isNotEmpty)
+          CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _screenshotsConsent,
+              controlAffinity: ListTileControlAffinity.leading,
+              onChanged: _busy
+                  ? null
+                  : (value) =>
+                      setState(() => _screenshotsConsent = value == true),
+              title: const Text(
+                  'I agree to upload these screenshots for support.',
+                  style: TextStyle(fontSize: 13))),
+        const SizedBox(height: 16),
+        CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _diagnosticsConsent,
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: _busy
+                ? null
+                : (value) =>
+                    setState(() => _diagnosticsConsent = value == true),
+            title: const Text('Include a diagnostic report (optional)',
+                style: TextStyle(fontSize: 14)),
+            subtitle: const Text(
+                'App version, cached firmware version, platform, and Android phone model/OS when available. No location, passwords or notification contents.',
+                style: TextStyle(fontSize: 12))),
+        if (_diagnosticsConsent) ...[
+          TextField(
+              controller: _errorCode,
+              enabled: !_busy,
+              maxLength: 160,
+              decoration:
+                  const InputDecoration(labelText: 'Error code (optional)')),
+          TextButton.icon(
+              onPressed: _busy ? null : _diagnosticPreview,
+              icon: const Icon(Icons.copy_outlined),
+              label: const Text('Preview / copy diagnostic report')),
         ],
-      ),
-    );
-  }
-}
+        if (_error != null)
+          Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(_error!,
+                  style: const TextStyle(color: AppColors.errorText))),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+            onPressed: _busy ? null : _submit,
+            icon: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.send_outlined),
+            label: Text(_busy ? 'Sending ticket…' : 'Send support ticket')),
+        const SizedBox(height: 24),
+      ]));
 
-// ── Chat Bubble ────────────────────────────────────────────────────────────────
-class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message});
-  final _ChatMessageItem message;
-
-  @override
-  Widget build(BuildContext context) {
-    final isUser = message.isUser;
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.82,
-        ),
-        child: Column(
-          crossAxisAlignment:
-              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+  Widget _thread() => RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
           children: [
-            // Sender + time
-            Padding(
-              padding: EdgeInsets.only(
-                left: isUser ? 0 : 4,
-                right: isUser ? 4 : 0,
-                bottom: 4,
-              ),
-              child: Text(
-                '${message.sender} • ${message.time}',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                  color: _C.textSec,
-                ),
-              ),
-            ),
-            // Bubble
-            Container(
-              padding: const EdgeInsets.all(AppConstants.spacingMd),
-              decoration: BoxDecoration(
-                color: isUser ? _C.primaryCont : _C.surfCont,
-                border: Border.all(
-                  color: isUser
-                      ? _C.primary.withValues(alpha: 0.3)
-                      : _C.outlineVariant,
-                ),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isUser ? 16 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 16),
-                ),
-                boxShadow: isUser
-                    ? [
-                        BoxShadow(
-                          color: _C.primary.withValues(alpha: 0.12),
-                          blurRadius: 12,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Text(
-                message.text,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: isUser ? _C.onPrimaryCont : _C.onSurface,
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+            Text(_ticket!.title,
+                style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, children: [
+              Chip(label: Text(_ticket!.status.replaceAll('_', ' '))),
+              Chip(
+                  label:
+                      Text(categories[_ticket!.category] ?? _ticket!.category))
+            ]),
+            const SizedBox(height: 12),
+            if (_ticket!.messages.isEmpty) Text(_ticket!.description),
+            for (final message in _ticket!.messages)
+              Card(
+                  color: message.senderRole == 'USER'
+                      ? AppColors.surface
+                      : AppColors.surfaceElevated,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                                message.senderRole == 'USER'
+                                    ? 'You'
+                                    : 'JustRide support',
+                                style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600)),
+                            Text(
+                                message.createdAt
+                                    .toLocal()
+                                    .toString()
+                                    .split('.')
+                                    .first,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary)),
+                            const SizedBox(height: 10),
+                            SelectableText(message.body),
+                            for (final url in message.attachments.where(
+                                (url) => Uri.tryParse(url)?.scheme == 'https'))
+                              Padding(
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: Image.network(url,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) => const Text(
+                                          'Screenshot unavailable. Pull to refresh and try again.'))),
+                          ]))),
+            const SizedBox(height: 16),
+            TextField(
+                controller: _reply,
+                enabled: !_busy,
+                minLines: 2,
+                maxLines: 6,
+                maxLength: 6000,
+                decoration:
+                    const InputDecoration(labelText: 'Reply to support')),
+            if (_error != null)
+              Text(_error!, style: const TextStyle(color: AppColors.errorText)),
+            FilledButton.icon(
+                onPressed: _busy ? null : _sendReply,
+                icon: const Icon(Icons.send_outlined),
+                label: Text(_busy ? 'Sending…' : 'Send reply')),
+            const SizedBox(height: 24),
+          ]));
 }
 
-// ── Sticky Input Bar ──────────────────────────────────────────────────────────
-class _StickyInputBar extends StatefulWidget {
-  final TextEditingController controller;
-  final bool isSending;
-  final VoidCallback onSend;
-
-  const _StickyInputBar({
-    required this.controller,
-    required this.isSending,
-    required this.onSend,
-  });
-
-  @override
-  State<_StickyInputBar> createState() => _StickyInputBarState();
-}
-
-class _StickyInputBarState extends State<_StickyInputBar> {
-  bool _focused = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRect(
-      child: Container(
-        decoration: BoxDecoration(
-          color: _C.surfCont.withValues(alpha: 0.95),
-          border: const Border(
-            top: BorderSide(color: _C.outlineVariant, width: 1),
-          ),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          AppConstants.spacingMd,
-          AppConstants.spacingMd,
-          AppConstants.spacingMd,
-          MediaQuery.of(context).padding.bottom + AppConstants.spacingMd,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            // Text input
-            Expanded(
-              child: Focus(
-                onFocusChange: (v) => setState(() => _focused = v),
-                child: AnimatedContainer(
-                  duration: AppConstants.animFast,
-                  constraints:
-                      const BoxConstraints(minHeight: 48, maxHeight: 120),
-                  decoration: BoxDecoration(
-                    color: _C.surfContHigh,
-                    border: Border.all(
-                      color: _focused ? _C.primary : _C.outlineVariant,
-                      width: _focused ? 1.5 : 1,
-                    ),
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.radiusLg),
-                  ),
-                  child: TextField(
-                    controller: widget.controller,
-                    maxLines: null,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => widget.onSend(),
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: _C.onSurface, fontSize: 15),
-                    cursorColor: _C.primary,
-                    decoration: InputDecoration(
-                      hintText: 'Answer questions or type message...',
-                      hintStyle: AppTextStyles.bodyMedium.copyWith(
-                          color: _C.textSec.withValues(alpha: 0.5),
-                          fontSize: 14),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppConstants.spacingMd,
-                        vertical: AppConstants.spacingMd,
-                      ),
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacingSm),
-
-            // Send button
-            GestureDetector(
-              onTap: widget.isSending ? null : widget.onSend,
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _C.primary,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _C.primary.withValues(alpha: 0.3),
-                      blurRadius: 15,
-                    ),
-                  ],
-                ),
-                child: widget.isSending
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: CircularProgressIndicator(
-                          color: _C.onPrimary,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                    : const Icon(Icons.send_rounded, color: _C.onPrimary, size: 22),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Data model ────────────────────────────────────────────────────────────────
-class _ChatMessageItem {
-  final bool isUser;
-  final String sender;
-  final String time;
-  final String text;
-
-  const _ChatMessageItem({
-    required this.isUser,
-    required this.sender,
-    required this.time,
-    required this.text,
-  });
+class _Screenshot {
+  _Screenshot(this.name, this.bytes, this.contentType);
+  final String name, contentType;
+  final Uint8List bytes;
+  String? url;
 }

@@ -1,431 +1,296 @@
-import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../app/theme/app_text_styles.dart';
+import '../../../app/theme/app_colors.dart';
+import '../../../core/services/help_service.dart';
+import '../../../core/services/backend_service.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../shared/widgets/app_logo.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 import 'support_ticket_screen.dart';
 
-// ── Colour tokens ─────────────────────────────────────────────────────────────
-class _C {
-  static const bg = AppColors.background;
-  static const surfCont = AppColors.surface;
-  static const surfContHigh = AppColors.surfaceElevated;
-  static const primary = AppColors.primary;
-  static const onPrimary = AppColors.onPrimary;
-  static const onSurface = AppColors.textPrimary;
-  static const textSec = AppColors.textSecondary;
-  static const outlineVariant = AppColors.border;
-  static const tertiary = AppColors.primary;
-  static const secondary = AppColors.primary;
-}
-
 class HelpSupportScreen extends StatefulWidget {
-  const HelpSupportScreen({super.key});
-
+  const HelpSupportScreen({super.key, this.initialCategory = 'All'});
+  final String initialCategory;
   @override
   State<HelpSupportScreen> createState() => _HelpSupportScreenState();
 }
 
 class _HelpSupportScreenState extends State<HelpSupportScreen> {
-  final int _navIndex = 3; // Profile tab active
+  late Future<List<HelpArticle>> _articles;
+  final _search = TextEditingController();
+  late String _category;
+  static const categories = [
+    'All',
+    'Getting started',
+    'Connectivity',
+    'Navigation',
+    'Firmware',
+    'Account'
+  ];
+  @override
+  void initState() {
+    super.initState();
+    _articles = HelpService.loadArticles();
+    _category = categories.contains(widget.initialCategory)
+        ? widget.initialCategory
+        : 'All';
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text('Help Center'), actions: [
+          IconButton(
+              tooltip: 'My Tickets',
+              onPressed: () => Navigator.pushNamed(context, '/my-tickets'),
+              icon: const Icon(Icons.confirmation_number_outlined))
+        ]),
+        body: FutureBuilder<List<HelpArticle>>(
+            future: _articles,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                    child: TextButton(
+                        onPressed: () => setState(
+                            () => _articles = HelpService.loadArticles()),
+                        child: const Text('Reload help articles')));
+              }
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final articles = snapshot.data!
+                  .where((article) =>
+                      (_category == 'All' || article.category == _category) &&
+                      article.matches(_search.text))
+                  .toList();
+              return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                  children: [
+                    Text('Get back to the ride.',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Text(
+                        'Find answers, check your connection, and get help.',
+                        style: TextStyle(color: AppColors.textSecondary)),
+                    const SizedBox(height: 16),
+                    TextField(
+                        controller: _search,
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                            hintText: 'Search symptoms, errors or keywords',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _search.text.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear search',
+                                    icon: const Icon(Icons.close),
+                                    onPressed: () => setState(_search.clear)))),
+                    const SizedBox(height: 14),
+                    Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: categories
+                            .map((category) => ChoiceChip(
+                                label: Text(category),
+                                selected: _category == category,
+                                onSelected: (_) =>
+                                    setState(() => _category = category)))
+                            .toList()),
+                    const SizedBox(height: 20),
+                    const Row(children: [
+                      Icon(Icons.offline_bolt_outlined,
+                          size: 18, color: AppColors.primary),
+                      SizedBox(width: 8),
+                      Expanded(
+                          child: Text(
+                              'Answers are available offline. Tickets and feedback need internet.',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary)))
+                    ]),
+                    const SizedBox(height: 12),
+                    const Text(
+                        'Stop safely before troubleshooting or changing device settings.',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary)),
+                    const SizedBox(height: 20),
+                    Text('${articles.length} answers',
+                        style: const TextStyle(color: AppColors.textSecondary)),
+                    const SizedBox(height: 8),
+                    if (articles.isEmpty) ...[
+                      const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Text(
+                              'No matching answers. Try “Bluetooth”, “GPS”, “OTP” or describe the issue in a ticket.')),
+                      TextButton(
+                          onPressed: () => setState(() {
+                                _category = 'All';
+                                _search.clear();
+                              }),
+                          child: const Text('Clear filters')),
+                    ],
+                    for (final article in articles)
+                      _HelpArticleCard(
+                          key: ValueKey(article.id), article: article),
+                    const SizedBox(height: 24),
+                    Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.border)),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text('Still need help?',
+                                  style:
+                                      Theme.of(context).textTheme.titleLarge),
+                              const SizedBox(height: 8),
+                              const Text(
+                                  'Send a description and optional screenshots. Follow staff replies and ticket status in My Tickets.',
+                                  style: TextStyle(
+                                      color: AppColors.textSecondary)),
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                  onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) =>
+                                              const SupportTicketScreen())),
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Create support ticket')),
+                              OutlinedButton(
+                                  onPressed: () => Navigator.pushNamed(
+                                      context, '/my-tickets'),
+                                  child: const Text('My Tickets')),
+                            ])),
+                    TextButton(
+                        onPressed: () => showLicensePage(
+                            context: context,
+                            applicationName: 'JustRide',
+                            applicationVersion: AppConstants.appVersion),
+                        child: const Text('Third-party notices')),
+                  ]);
+            }),
+      );
+}
+
+class _HelpArticleCard extends StatefulWidget {
+  const _HelpArticleCard({super.key, required this.article});
+  final HelpArticle article;
+  @override
+  State<_HelpArticleCard> createState() => _HelpArticleCardState();
+}
+
+class _HelpArticleCardState extends State<_HelpArticleCard> {
+  final _completed = <int>{};
+  bool _sending = false;
+  bool? _vote;
+  Future<void> _feedback(bool helpful) async {
+    setState(() => _sending = true);
+    final result = await BackendService.instance
+        .submitHelpFeedback(widget.article.id, helpful);
+    if (!mounted) return;
+    setState(() {
+      _sending = false;
+      if (result.success) _vote = helpful;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.success
+            ? 'Thank you for your feedback.'
+            : 'Feedback could not be sent. Check your connection and try again.')));
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.bg,
-      appBar: _buildAppBar(),
-      body: _buildBody(),
-      bottomNavigationBar: JustRideBottomNavBar(
-        currentIndex: _navIndex,
-        onTap: (i) {
-          if (i == 3) return;
-          if (i == 0) {
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          } else if (i == 1) {
-            Navigator.of(context).pushReplacementNamed('/places');
-          } else if (i == 2) {
-            Navigator.of(context).pushReplacementNamed('/device');
-          }
-        },
-      ),
-    );
-  }
-
-  // ── App Bar ────────────────────────────────────────────────────────────────
-  PreferredSizeWidget _buildAppBar() {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56),
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 56,
-          decoration: const BoxDecoration(
-            color: _C.bg,
-            border: Border(
-              bottom: BorderSide(color: _C.outlineVariant, width: 1),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_rounded,
-                    color: _C.primary, size: 24),
-              ),
-              const AppLogo(
-                iconSize: 16,
-                fontSize: 20,
-                showTagline: false,
-                isCentered: true,
-              ),
-              IconButton(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed('/profile-settings'),
-                icon: const Icon(Icons.settings_outlined,
-                    color: _C.primary, size: 24),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Body ───────────────────────────────────────────────────────────────────
-  Widget _buildBody() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: AppConstants.spacingLg),
-
-          // Title & subtitle
-          Text(
-            'Help & Support',
-            style: AppTextStyles.headingLarge.copyWith(
-              fontSize: 24,
-              color: _C.onSurface,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingSm),
-          Text(
-            'Select a category below or submit a new ticket for assistance.',
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: _C.textSec,
-              fontSize: 15,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingXl),
-
-          // Bento grid (2-col with last spanning full width)
-          Expanded(
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _CategoryCard(
-                        icon: Icons.devices_rounded,
-                        label: 'Device Problem',
-                        iconColor: _C.primary,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const SupportTicketScreen(
-                              initialCategory: 'device_problem',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppConstants.spacingMd),
-                    Expanded(
-                      child: _CategoryCard(
-                        icon: Icons.wifi_off_rounded,
-                        label: 'Connection Issue',
-                        iconColor: _C.tertiary,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const SupportTicketScreen(
-                              initialCategory: 'connection_issue',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppConstants.spacingMd),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _CategoryCard(
-                        icon: Icons.system_update_alt_rounded,
-                        label: 'Firmware Problem',
-                        iconColor: _C.secondary,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const SupportTicketScreen(
-                              initialCategory: 'firmware_problem',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppConstants.spacingMd),
-                    Expanded(
-                      child: _CategoryCard(
-                        icon: Icons.manage_accounts_rounded,
-                        label: 'Account Problem',
-                        iconColor: _C.textSec,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const SupportTicketScreen(
-                              initialCategory: 'account_problem',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppConstants.spacingMd),
-                // Full-width "Other" card
-                _CategoryCard(
-                  icon: Icons.help_outline_rounded,
-                  label: 'Other',
-                  iconColor: _C.textSec,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const SupportTicketScreen(
-                        initialCategory: 'general',
-                      ),
-                    ),
-                  ),
-                  fullWidth: true,
-                ),
-
-                const Spacer(),
-              ],
-            ),
-          ),
-
-          // Action buttons
-          TextButton.icon(
-            onPressed: () => showLicensePage(
-              context: context,
-              applicationName: 'JustRide',
-              applicationVersion: AppConstants.appVersion,
-            ),
-            icon: const Icon(Icons.code_rounded),
-            label: const Text('Third-party notices'),
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-          _ActionButton(
-            icon: Icons.report_rounded,
-            label: 'REPORT A PROBLEM',
-            filled: true,
-            onTap: () => Navigator.of(context).pushNamed('/support-ticket'),
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-          _ActionButton(
-            icon: Icons.confirmation_number_outlined,
-            label: 'MY TICKETS',
-            filled: false,
-            onTap: () => Navigator.of(context).pushNamed('/my-tickets'),
-          ),
-
-          const SizedBox(height: AppConstants.spacingLg),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Category Card ─────────────────────────────────────────────────────────────
-class _CategoryCard extends StatefulWidget {
-  const _CategoryCard({
-    required this.icon,
-    required this.label,
-    required this.iconColor,
-    required this.onTap,
-    this.fullWidth = false,
-  });
-  final IconData icon;
-  final String label;
-  final Color iconColor;
-  final VoidCallback onTap;
-  final bool fullWidth;
-
-  @override
-  State<_CategoryCard> createState() => _CategoryCardState();
-}
-
-class _CategoryCardState extends State<_CategoryCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _hovered = true),
-      onTapUp: (_) {
-        setState(() => _hovered = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: AppConstants.animNormal,
-        height: widget.fullWidth ? 100 : 120,
-        padding: const EdgeInsets.all(AppConstants.spacingMd),
-        decoration: BoxDecoration(
-          color: _C.surfCont,
-          border: Border.all(
-            color: _hovered ? _C.primary : _C.outlineVariant,
-            width: _hovered ? 1.5 : 1,
-          ),
-          borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
+    final article = widget.article;
+    return Card(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        color: AppColors.surface,
+        child: ExpansionTile(
+          key: PageStorageKey(article.id),
+          shape: const Border(),
+          collapsedShape: const Border(),
+          title: Text(article.question,
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          subtitle: Text(article.category,
+              style: const TextStyle(
+                  fontSize: 12, color: AppColors.textSecondary)),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
-            // Hover gradient overlay
-            AnimatedOpacity(
-              opacity: _hovered ? 1.0 : 0.0,
-              duration: AppConstants.animNormal,
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      _C.surfContHigh,
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // Content
-            widget.fullWidth
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        AnimatedScale(
-                          scale: _hovered ? 1.1 : 1.0,
-                          duration: AppConstants.animNormal,
-                          child: Icon(widget.icon,
-                              color: widget.iconColor, size: 32),
-                        ),
-                        const SizedBox(height: AppConstants.spacingSm),
-                        Text(
-                          widget.label,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: _hovered ? _C.primary : _C.onSurface,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedScale(
-                        scale: _hovered ? 1.1 : 1.0,
-                        duration: AppConstants.animNormal,
-                        child: Icon(widget.icon,
-                            color: widget.iconColor, size: 32),
-                      ),
-                      const SizedBox(height: AppConstants.spacingSm),
-                      Text(
-                        widget.label,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: _hovered ? _C.primary : _C.onSurface,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
+            const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Try these checks',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600))),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+                value: _completed.length / article.steps.length),
+            for (var i = 0; i < article.steps.length; i++)
+              CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _completed.contains(i),
+                  title: Text('${i + 1}. ${article.steps[i]}',
+                      style: const TextStyle(fontSize: 14, height: 1.5)),
+                  onChanged: (done) => setState(() {
+                        if (done == true) {
+                          _completed.add(i);
+                        } else {
+                          _completed.remove(i);
+                        }
+                      })),
+            Wrap(spacing: 8, runSpacing: 4, children: [
+              TextButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, article.route),
+                  icon: const Icon(Icons.open_in_new, size: 17),
+                  label: Text(article.category == 'Account'
+                      ? 'Open account screen'
+                      : article.category == 'Navigation' ||
+                              article.id == 'first-ride' ||
+                              article.id == 'destination'
+                          ? 'Open navigation'
+                          : 'Open device screen')),
+              TextButton(
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => SupportTicketScreen(
+                              initialCategory: article.supportCategory,
+                              initialSubject: article.question,
+                              helpArticleId: article.id))),
+                  child: const Text('Still need help')),
+            ]),
+            const Divider(),
+            const Align(
+                alignment: Alignment.centerLeft,
+                child:
+                    Text('Was this helpful?', style: TextStyle(fontSize: 13))),
+            Wrap(spacing: 8, children: [
+              TextButton.icon(
+                  onPressed: _sending ? null : () => _feedback(true),
+                  icon: Icon(
+                      _vote == true ? Icons.thumb_up : Icons.thumb_up_outlined,
+                      size: 18),
+                  label: const Text('Helpful')),
+              TextButton.icon(
+                  onPressed: _sending ? null : () => _feedback(false),
+                  icon: Icon(
+                      _vote == false
+                          ? Icons.thumb_down
+                          : Icons.thumb_down_outlined,
+                      size: 18),
+                  label: const Text('Not helpful')),
+            ]),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Action Button ─────────────────────────────────────────────────────────────
-class _ActionButton extends StatefulWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.filled,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final bool filled;
-  final VoidCallback onTap;
-
-  @override
-  State<_ActionButton> createState() => _ActionButtonState();
-}
-
-class _ActionButtonState extends State<_ActionButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: AppConstants.animFast,
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            color: widget.filled ? _C.primary : Colors.transparent,
-            border: Border.all(
-              color: widget.filled ? _C.primary : _C.outlineVariant,
-            ),
-            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                widget.icon,
-                color: widget.filled ? _C.onPrimary : _C.primary,
-                size: 20,
-              ),
-              const SizedBox(width: AppConstants.spacingSm),
-              Text(
-                widget.label,
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                  color: widget.filled ? _C.onPrimary : _C.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+        ));
   }
 }
