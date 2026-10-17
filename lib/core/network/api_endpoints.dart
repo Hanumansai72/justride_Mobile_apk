@@ -12,6 +12,8 @@ abstract final class ApiEndpoints {
   static const String updateProfile = '/users/profile';
   static const String changePassword = '/users/change-password';
   static const String deleteAccount = '/users/delete-account';
+  static const String deletionStatus = '/users/deletion-status';
+  static const String deletionOtp = '/users/delete-account/otp';
 
   // â”€â”€ Devices & Firmware (/api/devices) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   static const String myDevice = '/devices/my-device';
@@ -21,9 +23,12 @@ abstract final class ApiEndpoints {
   static const String requestUnlinkOtp = '/devices/request-unlink-otp';
   static const String latestFirmware = '/firmware/latest';
   static const String appReleaseLatest = '/app-releases/latest';
-  static String deviceCheckFirmware(String deviceId) => '/devices/$deviceId/firmware/check';
-  static String deviceFirmwareHistory(String deviceId) => '/devices/$deviceId/firmware/history';
-  static String deviceRecordFirmwareUpdate(String deviceId) => '/devices/$deviceId/firmware/update';
+  static String deviceCheckFirmware(String deviceId) =>
+      '/devices/$deviceId/firmware/check';
+  static String deviceFirmwareHistory(String deviceId) =>
+      '/devices/$deviceId/firmware/history';
+  static String deviceRecordFirmwareUpdate(String deviceId) =>
+      '/devices/$deviceId/firmware/update';
 
   // â”€â”€ Saved Addresses / Places (/api/addresses) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   static const String addresses = '/addresses';
@@ -33,7 +38,8 @@ abstract final class ApiEndpoints {
   static const String notifications = '/notifications';
   static String markNotificationAsRead(String id) => '/notifications/$id/read';
   // Existing backend accepts "read-all" through its /:id/read action.
-  static const String markAllNotificationsAsRead = '/notifications/read-all/read';
+  static const String markAllNotificationsAsRead =
+      '/notifications/read-all/read';
   static String deleteNotification(String id) => '/notifications/$id';
 
   // â”€â”€ Support & Tickets (/api/support) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

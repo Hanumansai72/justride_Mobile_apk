@@ -147,12 +147,41 @@ class BackendService {
     );
   }
 
-  Future<ApiResponse<void>> deleteAccount([String? password]) async {
+  Future<ApiResponse<Map<String, dynamic>>> getAccountDeletionStatus() =>
+      _api.get<Map<String, dynamic>>(ApiEndpoints.deletionStatus,
+          fromJson: (json) => Map<String, dynamic>.from(json as Map));
+
+  Future<ApiResponse<void>> requestAccountDeletionOtp({String? password}) =>
+      _api.post<void>(ApiEndpoints.deletionOtp,
+          body: {if (password != null) 'password': password});
+
+  Future<ApiResponse<void>> requestDeviceUnlinkOtp(String deviceId) => _api
+      .post<void>(ApiEndpoints.requestUnlinkOtp, body: {'device_id': deviceId});
+
+  Future<ApiResponse<void>> unlinkDeviceWithOtp(
+      String deviceId, String otp) async {
+    final result = await _api.post<void>(ApiEndpoints.unlinkDevice,
+        body: {'device_id': deviceId, 'otp_code': otp});
+    if (result.success) {
+      await JustRideBleService.instance.disconnectDevice(restartScan: false);
+      await unpairLocalDevice();
+    }
+    return result;
+  }
+
+  Future<ApiResponse<void>> deleteAccount(
+      {String? password, required String otp}) async {
+    final user = await _api.getSavedUserData();
     final res = await _api.delete<void>(
       ApiEndpoints.deleteAccount,
-      body: password != null ? {'password': password} : null,
+      body: {'otp': otp, if (password != null) 'password': password},
     );
     if (res.success) {
+      await JustRideBleService.instance.disconnectDevice(restartScan: false);
+      await unpairLocalDevice();
+      final prefs = await SharedPreferences.getInstance();
+      if (user?['_id'] != null)
+        await prefs.remove('pending_rides_${user!['_id']}');
       await _api.clearAuth();
     }
     return res;
@@ -261,9 +290,13 @@ class BackendService {
         final dev =
             DeviceModel.fromJson(jsonDecode(raw) as Map<String, dynamic>);
         if (!dev.isBlocked && dev.isActive && !dev.isRetired) {
-          return ApiResponse<DeviceModel>(success: false, data: dev,
-            message: res.message, statusCode: res.statusCode,
-            errors: res.errors, retryAfterSeconds: res.retryAfterSeconds);
+          return ApiResponse<DeviceModel>(
+              success: false,
+              data: dev,
+              message: res.message,
+              statusCode: res.statusCode,
+              errors: res.errors,
+              retryAfterSeconds: res.retryAfterSeconds);
         } else {
           await unpairLocalDevice();
           await JustRideBleService.instance.disconnectDevice();

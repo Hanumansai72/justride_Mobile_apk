@@ -118,7 +118,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
+              child:
+                  Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
             ),
             ElevatedButton(
               onPressed: isSaving
@@ -157,9 +158,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: _C.bg),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: _C.bg),
                     )
-                  : Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                  : Text('SAVE',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -232,7 +235,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
+              child:
+                  Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
             ),
             ElevatedButton(
               onPressed: isSaving
@@ -240,7 +244,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   : () async {
                       if (currentCtrl.text.isEmpty || newCtrl.text.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please fill all fields')),
+                          const SnackBar(
+                              content: Text('Please fill all fields')),
                         );
                         return;
                       }
@@ -276,9 +281,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: _C.bg),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: _C.bg),
                     )
-                  : Text('UPDATE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                  : Text('UPDATE',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -287,96 +294,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   void _showDeleteAccountDialog() {
-    final pwdCtrl = TextEditingController();
-    bool isDeleting = false;
-
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: _C.cardBg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-            side: const BorderSide(color: AppColors.errorText),
-          ),
-          title: Text(
-            'Delete Account',
-            style: GoogleFonts.inter(
-              color: AppColors.errorText,
-              fontWeight: FontWeight.w700,
-              fontSize: 18,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'This action cannot be undone. All your trips, saved places, and linked devices will be permanently deleted.',
-                style: GoogleFonts.inter(color: _C.textSec, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: pwdCtrl,
-                obscureText: true,
-                style: GoogleFonts.inter(color: _C.onSurface, fontSize: 14),
-                cursorColor: AppColors.errorText,
-                decoration: InputDecoration(
-                  labelText: 'Confirm Password',
-                  labelStyle: GoogleFonts.inter(color: _C.textSec),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: _C.outlineVariant),
-                  ),
-                  focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.errorText),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
-            ),
-            ElevatedButton(
-              onPressed: isDeleting
-                  ? null
-                  : () async {
-                      setDialogState(() => isDeleting = true);
-                      final res = await BackendService.instance.deleteAccount(
-                        pwdCtrl.text.trim().isNotEmpty ? pwdCtrl.text.trim() : null,
-                      );
-                      if (mounted) {
-                        Navigator.of(dialogCtx).pop();
-                        if (res.success) {
-                          Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(res.message),
-                              backgroundColor: AppColors.error,
-                            ),
-                          );
-                        }
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
-                foregroundColor: AppColors.textPrimary,
-              ),
-              child: isDeleting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textPrimary),
-                    )
-                  : Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
-      ),
-    );
+    Navigator.of(context).pushNamed('/delete-account');
   }
 
   @override
@@ -541,10 +459,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   // ── Profile Header ─────────────────────────────────────────────────────────
   Widget _buildProfileHeader() {
     final name = _user?.fullName.isNotEmpty == true ? _user!.fullName : 'Rider';
-    final email = _user?.email.isNotEmpty == true ? _user!.email : 'user@justride.io';
+    final email =
+        _user?.email.isNotEmpty == true ? _user!.email : 'user@justride.io';
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'R';
     final shortId = _user?.id.isNotEmpty == true
-        ? (_user!.id.length > 8 ? _user!.id.substring(_user!.id.length - 8).toUpperCase() : _user!.id)
+        ? (_user!.id.length > 8
+            ? _user!.id.substring(_user!.id.length - 8).toUpperCase()
+            : _user!.id)
         : 'ACTIVE';
 
     return Container(
@@ -626,7 +547,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         onPressed: () async {
           await BackendService.instance.logout();
           if (mounted) {
-            Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
+            Navigator.of(context)
+                .pushNamedAndRemoveUntil('/login', (r) => false);
           }
         },
         style: OutlinedButton.styleFrom(

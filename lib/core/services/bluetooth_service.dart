@@ -565,7 +565,7 @@ class JustRideBleService {
 
   /// Disconnects the currently connected BLE device WITHOUT unpairing.
   /// Sets _userInitiatedDisconnect = true so auto-reconnect is suppressed.
-  Future<void> disconnectDevice() async {
+  Future<void> disconnectDevice({bool restartScan = true}) async {
     _userInitiatedDisconnect = true; // suppress auto-reconnect
     _isReconnecting = false;
     try {
@@ -588,7 +588,7 @@ class JustRideBleService {
       _connectedDevice = null;
       connectionStateNotifier.value = BluetoothConnectionState.disconnected;
       // Restart scan so paired device shows in the Available list again
-      if (!kIsWeb && !_disposed) startJustRideScan();
+      if (restartScan && !kIsWeb && !_disposed) startJustRideScan();
     }
   }
 

@@ -1,445 +1,250 @@
-import '../../../app/theme/app_colors.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../shared/widgets/app_logo.dart';
-
-// ── Colour tokens ─────────────────────────────────────────────────────────────
-class _C {
-  static const bg = AppColors.background;
-  static const surfCont = AppColors.surface;
-  static const surfContLow = AppColors.backgroundInset;
-  static const primary = AppColors.primary;
-  static const onSurface = AppColors.textPrimary;
-  static const textSec = AppColors.textSecondary;
-  static const outlineVariant = AppColors.border;
-  static const surfaceVariant = AppColors.surfaceElevated;
-  static const outline = AppColors.textMuted;
-  // Error palette
-  static const error = AppColors.errorLight;
-  static const onError = AppColors.onPrimary;
-  static const errorContainer = AppColors.errorSurface;
-}
+import '../../../core/services/backend_service.dart';
+import '../../../shared/widgets/device_unlink_dialog.dart';
 
 class DeleteAccountScreen extends StatefulWidget {
   const DeleteAccountScreen({super.key});
-
   @override
   State<DeleteAccountScreen> createState() => _DeleteAccountScreenState();
 }
 
 class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
-  final _passwordController = TextEditingController();
-  bool _obscure = true;
+  final _password = TextEditingController();
+  final _otp = TextEditingController();
+  final _backend = BackendService.instance;
+  Map<String, dynamic>? _status;
+  bool _loading = true, _busy = false, _sent = false;
+  String? _error;
+  int _cooldown = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   void dispose() {
-    _passwordController.dispose();
+    _password.dispose();
+    _otp.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
+  Future<void> _load() async {
+    final result = await _backend.getAccountDeletionStatus();
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _status = result.success ? result.data : null;
+      _error = result.success ? null : result.message;
+    });
+  }
+
+  Future<bool> _ensureUnlinked() async {
+    final result = await _backend.getAccountDeletionStatus();
+    if (!mounted) return false;
+    if (!result.success || result.data == null) {
+      setState(() => _error = result.message);
+      return false;
+    }
+    setState(() => _status = result.data);
+    final linked = result.data!['linkedDevice'];
+    if (linked == null) return true;
+    final unlinked = await showDeviceUnlinkDialog(context,
+        deviceId: linked['_id'].toString(),
+        deviceName: linked['devicename']?.toString() ?? 'JustRide device');
+    if (!unlinked || !mounted) return false;
+    final refreshed = await _backend.getAccountDeletionStatus();
+    if (!mounted) return false;
+    setState(() => _status = refreshed.data);
+    if (!refreshed.success || refreshed.data?['linkedDevice'] != null) {
+      setState(() =>
+          _error = 'A device is still linked. Unlink it before continuing.');
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _sendCode() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (!await _ensureUnlinked() || !mounted) return;
+      if (_status?['requiresPassword'] == true && _password.text.isEmpty) {
+        setState(() => _error = 'Enter your current password.');
+        return;
+      }
+      final result =
+          await _backend.requestAccountDeletionOtp(password: _password.text);
+      if (!mounted) return;
+      if (!result.success) {
+        setState(() => _error = result.message);
+        return;
+      }
+      setState(() {
+        _sent = true;
+        _otp.clear();
+        _cooldown = 60;
+      });
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted || _cooldown <= 1) timer.cancel();
+        if (mounted) setState(() => _cooldown = (_cooldown - 1).clamp(0, 60));
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    if (_otp.text.length != 6) {
+      setState(() => _error = 'Enter the six-digit deletion code.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (!await _ensureUnlinked() || !mounted) return;
+      final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+                title: const Text('Delete account permanently?'),
+                content: const Text(
+                    'Your profile and ride data will be removed. You cannot create another account with this email or phone number.'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: const Text('Cancel')),
+                  TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(true),
+                      child: const Text('Delete permanently')),
+                ],
+              ));
+      if (confirmed != true || !mounted) return;
+      final result = await _backend.deleteAccount(
+          password: _password.text, otp: _otp.text);
+      if (!mounted) return;
+      if (result.success) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+      } else {
+        setState(() => _error = result.message);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.bg,
-      appBar: _buildAppBar(context),
-      body: _buildBody(context),
-    );
-  }
-
-  // ── App Bar ────────────────────────────────────────────────────────────────
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56),
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 56,
-          decoration: const BoxDecoration(
-            color: _C.bg,
-            border: Border(
-              bottom: BorderSide(color: _C.outlineVariant, width: 1),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Green back arrow (matches HTML: text-primary)
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_rounded,
-                    color: _C.primary, size: 24),
-              ),
-              const AppLogo(
-                iconSize: 16,
-                fontSize: 20,
-                showTagline: false,
-                isCentered: true,
-              ),
-              const SizedBox(width: 48), // balance spacer
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Body ───────────────────────────────────────────────────────────────────
-  Widget _buildBody(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppConstants.pagePadding,
-          vertical: AppConstants.spacingXl,
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Container(
-            decoration: BoxDecoration(
-              color: _C.surfCont,
-              border: Border.all(color: _C.outlineVariant),
-              borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                // Red accent bar at top
-                Container(
-                  height: 4,
-                  color: _C.error,
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.all(AppConstants.spacingLg),
-                  child: Column(
-                    children: [
-                      // ── Icon + Title ────────────────────────────────
-                      const SizedBox(height: AppConstants.spacingMd),
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _C.errorContainer,
-                          border: Border.all(
-                              color: _C.error.withValues(alpha: 0.3)),
-                        ),
-                        child: const Icon(Icons.warning_rounded,
-                            color: _C.error, size: 32),
-                      ),
-                      const SizedBox(height: AppConstants.spacingMd),
-                      Text(
-                        'Delete Account',
-                        style: AppTextStyles.headingLarge.copyWith(
-                          fontSize: 24,
-                          color: _C.error,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: AppConstants.spacingSm),
-                      Text(
-                        'This action is permanent and cannot be undone.',
-                        style: AppTextStyles.bodyLarge.copyWith(
-                          color: _C.textSec,
-                          fontSize: 16,
-                          height: 1.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: AppConstants.spacingXl),
-
-                      // ── What happens next ───────────────────────────
-                      Container(
-                        padding: const EdgeInsets.all(AppConstants.spacingMd),
-                        decoration: BoxDecoration(
-                          color: _C.surfContLow,
-                          border: Border.all(color: _C.outlineVariant),
-                          borderRadius:
-                              BorderRadius.circular(AppConstants.radiusMd),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'WHAT HAPPENS NEXT',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8,
-                                color: _C.textSec,
-                              ),
-                            ),
-                            const SizedBox(height: AppConstants.spacingMd),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 2),
-                                  child: Icon(Icons.delete_forever_rounded,
-                                      color: _C.error, size: 18),
-                                ),
-                                const SizedBox(width: AppConstants.spacingSm),
-                                Expanded(
-                                  child: Text(
-                                    'Deleting your account will remove all saved places, device associations, and support history.',
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: _C.onSurface,
-                                      fontSize: 14,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppConstants.spacingXl),
-
-                      // ── Password Field ──────────────────────────────
-                      _buildPasswordLabel(),
-                      const SizedBox(height: AppConstants.spacingSm),
-                      _PasswordField(
-                        controller: _passwordController,
-                        obscure: _obscure,
-                        onToggle: () => setState(() => _obscure = !_obscure),
-                      ),
-                      const SizedBox(height: AppConstants.spacingXl),
-
-                      // ── Delete Button ───────────────────────────────
-                      _DeleteButton(onTap: _onDelete),
-                      const SizedBox(height: AppConstants.spacingMd),
-
-                      // ── Cancel Button ───────────────────────────────
-                      _CancelButton(
-                          onTap: () => Navigator.of(context).pop()),
-                      const SizedBox(height: AppConstants.spacingMd),
+  Widget build(BuildContext context) => PopScope(
+        canPop: !_busy,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(title: const Text('Delete account')),
+          body: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    const Icon(Icons.delete_forever_outlined,
+                        color: AppColors.errorText, size: 44),
+                    const SizedBox(height: 20),
+                    Text('Before you delete your account',
+                        style: AppTextStyles.headingMedium),
+                    const SizedBox(height: 12),
+                    Text(
+                        '1. Unlink your device so it is released for another account.\n2. Verify the deletion code sent to your registered email.\n3. Confirm permanent deletion.',
+                        style: AppTextStyles.bodyMedium),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                          color: AppColors.errorSurface,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: const Text(
+                          'Your profile, rides, saved places and support records will be removed. Your email and phone number stay reserved and cannot be used to create a new account.'),
+                    ),
+                    const SizedBox(height: 20),
+                    if (_status?['linkedDevice'] != null) ...[
+                      const Text(
+                          'A device is linked. You will be asked to unlink it before a deletion code can be sent.'),
+                      const SizedBox(height: 16),
                     ],
-                  ),
+                    if (_status?['requiresPassword'] == true) ...[
+                      TextField(
+                          controller: _password,
+                          obscureText: true,
+                          enabled: !_busy,
+                          decoration: const InputDecoration(
+                              labelText: 'Current password')),
+                      const SizedBox(height: 16),
+                    ],
+                    if (_status != null)
+                      Text(
+                          'Deletion code will be sent to ${_status!['email']}.',
+                          style: AppTextStyles.bodySmall),
+                    const SizedBox(height: 16),
+                    if (_sent) ...[
+                      TextField(
+                          controller: _otp,
+                          enabled: !_busy,
+                          maxLength: 6,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly
+                          ],
+                          decoration: const InputDecoration(
+                              labelText: 'Account deletion OTP')),
+                      const Text(
+                          'This code expires in 10 minutes. The device unlink code cannot be used here.'),
+                      const SizedBox(height: 16),
+                    ],
+                    if (_error != null)
+                      Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(_error!,
+                              style:
+                                  const TextStyle(color: AppColors.errorText))),
+                    if (_busy)
+                      const Center(
+                          child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: CircularProgressIndicator())),
+                    OutlinedButton(
+                        onPressed: _busy || _status == null || _cooldown > 0
+                            ? null
+                            : _sendCode,
+                        child: Text(_cooldown > 0
+                            ? 'Resend in ${_cooldown}s'
+                            : (_sent
+                                ? 'Resend deletion code'
+                                : 'Send deletion code'))),
+                    if (_status == null)
+                      TextButton(
+                          onPressed: _busy ? null : _load,
+                          child: const Text('Try again')),
+                    if (_sent)
+                      FilledButton(
+                          onPressed: _busy ? null : _delete,
+                          style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.errorText,
+                              foregroundColor: AppColors.background),
+                          child: const Text('Delete account')),
+                    TextButton(
+                        onPressed:
+                            _busy ? null : () => Navigator.of(context).pop(),
+                        child: const Text('Cancel')),
+                  ],
                 ),
-              ],
-            ),
-          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildPasswordLabel() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        'SECURITY VERIFICATION',
-        style: GoogleFonts.jetBrainsMono(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.8,
-          color: _C.textSec,
-        ),
-      ),
-    );
-  }
-
-  void _onDelete() {
-    // TODO: implement actual deletion
-  }
-}
-
-// ── Password Field ─────────────────────────────────────────────────────────────
-class _PasswordField extends StatefulWidget {
-  const _PasswordField({
-    required this.controller,
-    required this.obscure,
-    required this.onToggle,
-  });
-  final TextEditingController controller;
-  final bool obscure;
-  final VoidCallback onToggle;
-
-  @override
-  State<_PasswordField> createState() => _PasswordFieldState();
-}
-
-class _PasswordFieldState extends State<_PasswordField> {
-  bool _focused = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      onFocusChange: (v) => setState(() => _focused = v),
-      child: AnimatedContainer(
-        duration: AppConstants.animFast,
-        height: 56,
-        decoration: BoxDecoration(
-          color: _C.bg,
-          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-          border: Border.all(
-            color: _focused
-                ? _C.error.withValues(alpha: 0.8)
-                : _C.outlineVariant,
-            width: _focused ? 1.5 : 1,
-          ),
-          boxShadow: _focused
-              ? [
-                  BoxShadow(
-                    color: _C.error.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                  ),
-                ]
-              : [],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: AppConstants.spacingMd),
-            Icon(
-              Icons.lock_outline_rounded,
-              color: _focused ? _C.error : _C.outline,
-              size: 22,
-            ),
-            const SizedBox(width: AppConstants.spacingMd),
-            Expanded(
-              child: TextField(
-                controller: widget.controller,
-                obscureText: widget.obscure,
-                style: GoogleFonts.inter(
-                    fontSize: 15, color: _C.onSurface),
-                cursorColor: _C.error,
-                decoration: InputDecoration(
-                  hintText: 'Enter your password to confirm',
-                  hintStyle: GoogleFonts.inter(
-                    fontSize: 15,
-                    color: _C.outline.withValues(alpha: 0.5),
-                  ),
-                  border: InputBorder.none,
-                  isDense: true,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Delete Button ─────────────────────────────────────────────────────────────
-class _DeleteButton extends StatefulWidget {
-  const _DeleteButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  State<_DeleteButton> createState() => _DeleteButtonState();
-}
-
-class _DeleteButtonState extends State<_DeleteButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: AppConstants.animFast,
-        child: Container(
-          width: double.infinity,
-          height: 56,
-          decoration: BoxDecoration(
-            color: _C.error,
-            border: Border.all(color: _C.errorContainer),
-            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-            boxShadow: [
-              BoxShadow(
-                color: _C.error.withValues(alpha: 0.2),
-                blurRadius: 15,
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.delete_outline_rounded,
-                  color: _C.onError, size: 18),
-              const SizedBox(width: AppConstants.spacingSm),
-              Text(
-                'DELETE ACCOUNT',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                  color: _C.onError,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Cancel Button ─────────────────────────────────────────────────────────────
-class _CancelButton extends StatefulWidget {
-  const _CancelButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  State<_CancelButton> createState() => _CancelButtonState();
-}
-
-class _CancelButtonState extends State<_CancelButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: AppConstants.animFast,
-        child: Container(
-          width: double.infinity,
-          height: 56,
-          decoration: BoxDecoration(
-            color: _pressed
-                ? _C.surfaceVariant
-                : Colors.transparent,
-            border: Border.all(color: _C.outlineVariant),
-            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            'CANCEL',
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-              color: _C.onSurface,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+      );
 }

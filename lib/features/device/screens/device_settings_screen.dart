@@ -4,6 +4,7 @@ import '../../../core/services/ota_service.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../core/models/app_models.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/device_unlink_dialog.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -676,8 +677,8 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
                   borderRadius: BorderRadius.circular(16)),
               title: Text(
                 'Firmware Update (v$targetVer)',
-                style:
-                    AppTextStyles.headingMedium.copyWith(color: AppColors.textPrimary),
+                style: AppTextStyles.headingMedium
+                    .copyWith(color: AppColors.textPrimary),
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -929,7 +930,24 @@ class _UnlinkButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: TextButton.icon(
-        onPressed: () {},
+        onPressed: () async {
+          final result = await BackendService.instance.getMyDevice();
+          if (!context.mounted) return;
+          final device = result.data;
+          if (!result.success || device == null) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(result.success
+                    ? 'No linked device found.'
+                    : result.message)));
+            return;
+          }
+          final done = await showDeviceUnlinkDialog(context,
+              deviceId: device.id, deviceName: device.deviceName);
+          if (done && context.mounted) {
+            Navigator.of(context)
+                .pushNamedAndRemoveUntil('/dashboard', (_) => false);
+          }
+        },
         icon: const Icon(Icons.link_off_rounded, color: _SC.errorRed, size: 20),
         label: Text(
           'Unlink Device',
@@ -1079,7 +1097,8 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Hardware Diagnostics Complete: All subsystems healthy!'),
+          content:
+              Text('Hardware Diagnostics Complete: All subsystems healthy!'),
           backgroundColor: _SC.primary,
         ),
       );
@@ -1149,7 +1168,8 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
                   foregroundColor: _SC.primary,
                   elevation: 0,
                   side: BorderSide(color: _SC.primary.withValues(alpha: 0.5)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   minimumSize: const Size(0, 36),
                 ),
                 child: _isTesting
@@ -1183,7 +1203,9 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
           _buildDiagItem(
             icon: Icons.bluetooth_connected_rounded,
             title: 'Bluetooth 5.0 Link',
-            statusText: isBleConnected ? 'Connected & Active' : 'Standby / Discoverable',
+            statusText: isBleConnected
+                ? 'Connected & Active'
+                : 'Standby / Discoverable',
             isOk: true,
             badge: isBleConnected ? 'PASS' : 'READY',
           ),
@@ -1260,10 +1282,12 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: (isOk ? _SC.primary : _SC.errorRed).withValues(alpha: 0.15),
+              color:
+                  (isOk ? _SC.primary : _SC.errorRed).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
-                color: (isOk ? _SC.primary : _SC.errorRed).withValues(alpha: 0.5),
+                color:
+                    (isOk ? _SC.primary : _SC.errorRed).withValues(alpha: 0.5),
               ),
             ),
             child: Text(
@@ -1280,4 +1304,3 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
     );
   }
 }
-

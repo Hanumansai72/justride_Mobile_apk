@@ -70,11 +70,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 TextField(
                   controller: nameCtrl,
-                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: AppColors.textPrimary, fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Full Name',
-                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                    labelStyle:
+                        GoogleFonts.inter(color: AppColors.textSecondary),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: AppColors.border),
                     ),
@@ -86,11 +88,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: phoneCtrl,
-                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: AppColors.textPrimary, fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Phone Number',
-                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                    labelStyle:
+                        GoogleFonts.inter(color: AppColors.textSecondary),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: AppColors.border),
                     ),
@@ -105,7 +109,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+              child: Text('CANCEL',
+                  style: GoogleFonts.inter(color: AppColors.textSecondary)),
             ),
             ElevatedButton(
               onPressed: isSaving
@@ -150,7 +155,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: AppColors.onPrimary,
                       ),
                     )
-                  : Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                  : Text('SAVE',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -187,11 +193,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextField(
                   controller: currentCtrl,
                   obscureText: true,
-                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: AppColors.textPrimary, fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Current Password',
-                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                    labelStyle:
+                        GoogleFonts.inter(color: AppColors.textSecondary),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: AppColors.border),
                     ),
@@ -204,11 +212,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextField(
                   controller: newCtrl,
                   obscureText: true,
-                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: AppColors.textPrimary, fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'New Password',
-                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
+                    labelStyle:
+                        GoogleFonts.inter(color: AppColors.textSecondary),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: AppColors.border),
                     ),
@@ -223,7 +233,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+              child: Text('CANCEL',
+                  style: GoogleFonts.inter(color: AppColors.textSecondary)),
             ),
             ElevatedButton(
               onPressed: isSaving
@@ -231,7 +242,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : () async {
                       if (currentCtrl.text.isEmpty || newCtrl.text.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please fill all fields')),
+                          const SnackBar(
+                              content: Text('Please fill all fields')),
                         );
                         return;
                       }
@@ -273,7 +285,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: AppColors.onPrimary,
                       ),
                     )
-                  : Text('UPDATE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                  : Text('UPDATE',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -282,103 +295,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showDeleteAccountDialog() {
-    final pwdCtrl = TextEditingController();
-    bool isDeleting = false;
-
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-            side: const BorderSide(color: AppColors.errorText),
-          ),
-          title: Text(
-            'Delete Account',
-            style: GoogleFonts.inter(
-              color: AppColors.errorText,
-              fontWeight: FontWeight.w700,
-              fontSize: 18,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'This action cannot be undone. All your saved places, trips, and settings will be permanently removed.',
-                style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: pwdCtrl,
-                obscureText: true,
-                style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
-                cursorColor: AppColors.errorText,
-                decoration: InputDecoration(
-                  labelText: 'Confirm Password',
-                  labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.errorText),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL', style: GoogleFonts.inter(color: AppColors.textSecondary)),
-            ),
-            ElevatedButton(
-              onPressed: isDeleting
-                  ? null
-                  : () async {
-                      setDialogState(() => isDeleting = true);
-                      final res = await BackendService.instance.deleteAccount(
-                        pwdCtrl.text.trim().isNotEmpty ? pwdCtrl.text.trim() : null,
-                      );
-                      if (dialogCtx.mounted) {
-                        Navigator.of(dialogCtx).pop();
-                      }
-                      if (!mounted) return;
-                      if (res.success) {
-                        Navigator.of(context).pushNamedAndRemoveUntil(
-                          '/login',
-                          (route) => false,
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(res.message),
-                            backgroundColor: AppColors.error,
-                          ),
-                        );
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
-                foregroundColor: AppColors.textPrimary,
-              ),
-              child: isDeleting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.textPrimary,
-                      ),
-                    )
-                  : Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
-      ),
-    );
+    Navigator.of(context).pushNamed('/delete-account');
   }
 
   @override
@@ -392,7 +309,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Expanded(
               child: _isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
                     )
                   : RefreshIndicator(
                       onRefresh: _fetchProfile,
@@ -421,7 +339,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
-
       bottomNavigationBar: JustRideBottomNavBar(
         currentIndex: _navIndex,
         onTap: (i) {
@@ -522,14 +439,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.info_outline_rounded,
             title: 'About JustRide',
             subtitle: 'App version, terms and privacy policy',
-            trailing: Text(AppConstants.appVersion, style: AppTextStyles.bodySmall),
+            trailing:
+                Text(AppConstants.appVersion, style: AppTextStyles.bodySmall),
             onTap: () => Navigator.of(context).pushNamed('/about'),
           ),
         ],
       ),
     );
   }
-
 
   Widget _buildLogoutButton() {
     return Padding(
@@ -542,7 +459,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           foregroundColor: AppColors.errorText,
           side: const BorderSide(color: AppColors.errorSurface),
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMd)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppConstants.radiusMd)),
           backgroundColor: AppColors.errorSurface,
         ),
         child: Row(
@@ -550,7 +468,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const Icon(Icons.logout_rounded, size: 20),
             const SizedBox(width: 8),
-            Text('Log Out', style: AppTextStyles.labelLarge.copyWith(color: AppColors.errorText)),
+            Text('Log Out',
+                style: AppTextStyles.labelLarge
+                    .copyWith(color: AppColors.errorText)),
           ],
         ),
       ),

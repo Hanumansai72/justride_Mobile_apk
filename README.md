@@ -20,6 +20,14 @@ Uploads are persisted in a per-user SharedPreferences queue before sending. Fail
 - **Version**: `v1.2.0+3`
 - **SDK**: Flutter `>=3.3.0 <4.0.0`
 
+## Account deletion
+
+Profile and Profile Settings open the same deletion flow. Linked devices must be released using an email unlink code first. The user then requests a separate account deletion OTP, enters their current password for a local account, and confirms permanent deletion. Device Settings also supports verified unlinking.
+
+Deletion removes profile content, rides, saved places and support records; the backend retains an email/phone reservation to prevent reuse. The UI explains this before confirmation. Successful deletion clears the local session, device pairing and pending rides for that user. Failed verification keeps the account signed in. Deploy the backend account-deletion endpoints before installing this version.
+
+Run the isolated flow tests with `flutter test test/account_deletion_test.dart`.
+
 ## Browser app
 
 The same Flutter app runs on the web, with a centered phone-width layout on desktop and the existing emerald theme. It uses `https://backend.justride.cc/api`; it is separate from the customer landing page.
