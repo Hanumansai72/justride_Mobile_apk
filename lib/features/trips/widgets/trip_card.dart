@@ -72,7 +72,7 @@ class TripCard extends StatelessWidget {
                           height: 7,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.error.withValues(alpha: 0.8),
+                            color: AppColors.errorText.withValues(alpha: 0.8),
                           ),
                         ),
                         const SizedBox(width: 5),
@@ -191,12 +191,12 @@ class _TripMapPainter extends CustomPainter {
     // Dark background
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = const Color(0xFF1A1A1A),
+      Paint()..color = AppColors.surface,
     );
 
     // Faint grid roads
     final roadPaint = Paint()
-      ..color = const Color(0xFF2A2A2A)
+      ..color = AppColors.surfaceElevated
       ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
     for (double x = 0; x < size.width; x += 16) {
@@ -244,7 +244,7 @@ class _TripMapPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(size.width * 0.8, size.height * 0.15),
       5,
-      Paint()..color = const Color(0xFFD50000),
+      Paint()..color = AppColors.errorText,
     );
     canvas.drawCircle(
       Offset(size.width * 0.8, size.height * 0.15),

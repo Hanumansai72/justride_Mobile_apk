@@ -26,7 +26,7 @@ abstract final class AppConstants {
 
   // ── Dummy data ────────────────────────────────────────────────────────────
   static const String deviceName = 'JustRide Device';
-  static const int batteryPercent = 82;
+  static const int batteryPercent = 0;
   static const String lastRouteName = 'HITEC City';
   static const String lastRouteVia = 'via Gachibowli';
   static const String lastRouteDistance = '12.4 km';
@@ -46,5 +46,6 @@ abstract final class AppConstants {
   static const int appBuildNumber = 3;
 
   // ── Google OAuth ──────────────────────────────────────────────────────────
-  static const String googleClientId = '445835744041-sst8cp392ski2jtbkno6p16438kq8r0d.apps.googleusercontent.com';
+  static const String googleClientId =
+      '445835744041-sst8cp392ski2jtbkno6p16438kq8r0d.apps.googleusercontent.com';
 }

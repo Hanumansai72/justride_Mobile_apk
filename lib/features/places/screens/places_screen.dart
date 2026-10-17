@@ -16,7 +16,7 @@ class _C {
   static const cardBg = AppColors.surface;
   static const iconCircleBg = AppColors.surfaceElevated;
   static const primary = AppColors.primary;
-  static const onPrimary = Color(0xFF003915);
+  static const onPrimary = AppColors.onPrimary;
   static const onSurface = AppColors.textPrimary;
   static const textSec = AppColors.textSecondary;
   static const outlineVariant = AppColors.border;
@@ -37,7 +37,6 @@ class _PlaceItem {
   final String address;
   final bool hasAccentBorder;
 }
-
 
 class PlacesScreen extends StatefulWidget {
   const PlacesScreen({super.key});
@@ -107,9 +106,6 @@ class _PlacesScreenState extends State<PlacesScreen> {
     );
   }
 
-
-
-
   // ── App Bar ────────────────────────────────────────────────────────────────
   PreferredSizeWidget _buildAppBar() {
     return PreferredSize(
@@ -130,8 +126,8 @@ class _PlacesScreenState extends State<PlacesScreen> {
             children: [
               IconButton(
                 onPressed: () {},
-                icon: const Icon(Icons.menu_rounded,
-                    color: _C.textSec, size: 24),
+                icon:
+                    const Icon(Icons.menu_rounded, color: _C.textSec, size: 24),
               ),
               const AppLogo(
                 iconSize: 16,
@@ -140,7 +136,8 @@ class _PlacesScreenState extends State<PlacesScreen> {
                 isCentered: true,
               ),
               IconButton(
-                onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/profile-settings'),
                 icon: const Icon(Icons.settings_outlined,
                     color: _C.textSec, size: 24),
               ),
@@ -161,7 +158,8 @@ class _PlacesScreenState extends State<PlacesScreen> {
     }).toList();
 
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      physics:
+          const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       padding: const EdgeInsets.fromLTRB(
         AppConstants.pagePadding,
         AppConstants.spacingMd,
@@ -179,10 +177,13 @@ class _PlacesScreenState extends State<PlacesScreen> {
             child: Center(
               child: Column(
                 children: [
-                  const Icon(Icons.location_off_outlined, color: _C.textSec, size: 48),
+                  const Icon(Icons.location_off_outlined,
+                      color: _C.textSec, size: 48),
                   const SizedBox(height: 12),
                   Text(
-                    query.isEmpty ? 'No saved places yet' : 'No matching places found',
+                    query.isEmpty
+                        ? 'No saved places yet'
+                        : 'No matching places found',
                     style: GoogleFonts.inter(color: _C.textSec, fontSize: 14),
                   ),
                 ],
@@ -221,7 +222,8 @@ class _PlacesScreenState extends State<PlacesScreen> {
                     address: item.address,
                     latitude: 0,
                     longitude: 0,
-                    rawQuery: item.address.isNotEmpty ? item.address : item.name,
+                    rawQuery:
+                        item.address.isNotEmpty ? item.address : item.name,
                   );
                   DestinationConfirmSheet.show(context, dest);
                 },
@@ -238,32 +240,33 @@ class _PlacesScreenState extends State<PlacesScreen> {
     );
   }
 
-
   Widget _buildSearchBar() {
     return Container(
       height: 52,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(AppConstants.radiusSm),
       ),
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: Color(0xFF6B7280), size: 22),
+          const Icon(Icons.search_rounded,
+              color: AppColors.textMuted, size: 22),
           const SizedBox(width: AppConstants.spacingSm),
           Expanded(
             child: TextField(
               controller: _searchController,
               style: GoogleFonts.inter(
                 fontSize: 15,
-                color: const Color(0xFF111827),
+                color: AppColors.textPrimary,
               ),
               cursorColor: _C.primary,
               decoration: InputDecoration(
                 hintText: 'Search saved places...',
                 hintStyle: GoogleFonts.inter(
                   fontSize: 15,
-                  color: const Color(0xFF6B7280),
+                  color: AppColors.textMuted,
                 ),
                 border: InputBorder.none,
                 isDense: true,
@@ -286,7 +289,6 @@ class _PlacesScreenState extends State<PlacesScreen> {
           }
         },
         child: Container(
-
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
@@ -347,7 +349,6 @@ class _PlaceCard extends StatefulWidget {
 class _PlaceCardState extends State<_PlaceCard> {
   @override
   Widget build(BuildContext context) {
-
     final p = widget.place;
 
     return Container(

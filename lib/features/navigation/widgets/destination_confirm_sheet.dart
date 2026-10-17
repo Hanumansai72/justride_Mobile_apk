@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/destination.dart';
 import '../../../core/services/navigation_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/google_maps_service.dart';
 import '../../../core/services/bluetooth_service.dart';
+import '../../../shared/widgets/require_device_connection.dart';
 
 // ── Colour tokens matching JustRide HUD theme ──────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const cardBg = Color(0xFF142226);
-  static const cardBorder = Color(0xFF27312B);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const blueAccent = Color(0xFF38BDF8);
-  static const amber = Color(0xFFFDA026);
+  static const bg = AppColors.background;
+  static const cardBg = AppColors.surface;
+  static const cardBorder = AppColors.border;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const blueAccent = AppColors.primary;
+  static const amber = AppColors.warning;
 }
 
 /// Confirmation sheet shown when user selects or shares a destination before starting ride.
@@ -32,20 +34,34 @@ class DestinationConfirmSheet extends StatefulWidget {
     this.startLocation,
   });
 
+  static BuildContext? _activeSheetContext;
+
   static Future<bool?> show(
     BuildContext context,
     Destination destination, {
     Destination? startLocation,
   }) {
+    if (_activeSheetContext != null) {
+      try {
+        Navigator.of(_activeSheetContext!).pop();
+      } catch (_) {}
+      _activeSheetContext = null;
+    }
+
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => DestinationConfirmSheet(
-        destination: destination,
-        startLocation: startLocation,
-      ),
-    );
+      builder: (ctx) {
+        _activeSheetContext = ctx;
+        return DestinationConfirmSheet(
+          destination: destination,
+          startLocation: startLocation,
+        );
+      },
+    ).whenComplete(() {
+      _activeSheetContext = null;
+    });
   }
 
   @override
@@ -108,11 +124,16 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
           dest.longitude != 0.0 &&
           (widget.startLocation == null || start != null)) {
         final currentPos = await LocationService.instance.getCurrentPosition();
-        if (currentPos != null) {
+        final effectiveOrigin =
+            (start != null && start.latitude != 0.0 && start.longitude != 0.0)
+                ? LatLng(start.latitude, start.longitude)
+                : (currentPos != null
+                    ? LatLng(currentPos.latitude, currentPos.longitude)
+                    : null);
+
+        if (effectiveOrigin != null) {
           final route = await GoogleMapsService.instance.calculateRoute(
-            origin: start == null
-                ? LatLng(currentPos.latitude, currentPos.longitude)
-                : LatLng(start.latitude, start.longitude),
+            origin: effectiveOrigin,
             destination: LatLng(dest.latitude, dest.longitude),
           );
           _previewRoute = route;
@@ -159,7 +180,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                     width: 44,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppColors.border,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -217,12 +238,12 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                         decoration: BoxDecoration(
                           color: isBleConnected
                               ? _C.blueAccent.withValues(alpha: 0.15)
-                              : Colors.redAccent.withValues(alpha: 0.15),
+                              : AppColors.errorText.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
                             color: isBleConnected
                                 ? _C.blueAccent.withValues(alpha: 0.4)
-                                : Colors.redAccent.withValues(alpha: 0.4),
+                                : AppColors.errorText.withValues(alpha: 0.4),
                           ),
                         ),
                         child: Row(
@@ -235,7 +256,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                               size: 13,
                               color: isBleConnected
                                   ? _C.blueAccent
-                                  : Colors.redAccent,
+                                  : AppColors.errorText,
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -247,7 +268,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                                 fontWeight: FontWeight.w600,
                                 color: isBleConnected
                                     ? _C.blueAccent
-                                    : Colors.redAccent,
+                                    : AppColors.errorText,
                               ),
                             ),
                           ],
@@ -269,21 +290,21 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.15),
+                        color: AppColors.errorText.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: Colors.red.withValues(alpha: 0.5)),
+                            color: AppColors.errorText.withValues(alpha: 0.5)),
                       ),
                       child: Row(
                         children: [
                           const Icon(Icons.warning_amber_rounded,
-                              color: Colors.redAccent, size: 18),
+                              color: AppColors.errorText, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'BLE Notice: $bleErr',
                               style: GoogleFonts.inter(
-                                  fontSize: 12, color: Colors.white),
+                                  fontSize: 12, color: AppColors.textPrimary),
                             ),
                           ),
                         ],
@@ -316,7 +337,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                     borderRadius: BorderRadius.circular(AppConstants.radiusMd),
                     border: Border.all(
                       color: hasZeroCoords
-                          ? Colors.redAccent.withValues(alpha: 0.5)
+                          ? AppColors.errorText.withValues(alpha: 0.5)
                           : _C.cardBorder,
                     ),
                   ),
@@ -327,7 +348,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: hasZeroCoords
-                              ? Colors.redAccent.withValues(alpha: 0.15)
+                              ? AppColors.errorText.withValues(alpha: 0.15)
                               : _C.primary.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
@@ -335,7 +356,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                           hasZeroCoords
                               ? Icons.location_off_rounded
                               : Icons.location_on_rounded,
-                          color: hasZeroCoords ? Colors.redAccent : _C.primary,
+                          color: hasZeroCoords ? AppColors.errorText : _C.primary,
                           size: 24,
                         ),
                       ),
@@ -486,6 +507,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                               _resolvedStart == null)
                       ? null
                       : () async {
+                          if (!await requireDeviceConnection(context) ||
+                              !context.mounted) return;
                           // Start Ride Safety Check (Master Prompt §29)
                           final hasGps =
                               LocationService.instance.isGpsAvailable;
@@ -496,17 +519,18 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                               const SnackBar(
                                 content: Text(
                                     'Waiting for initial GPS fix... Please ensure Location is ON.'),
-                                backgroundColor: Colors.deepOrange,
+                                backgroundColor: AppColors.warning,
                               ),
                             );
                             return;
                           }
-                          if (currentPos != null && currentPos.accuracy > 120.0) {
+                          if (currentPos != null &&
+                              currentPos.accuracy > 120.0) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
                                     'GPS accuracy is low (±${currentPos.accuracy.round()}m). Waiting for better lock...'),
-                                backgroundColor: Colors.deepOrange,
+                                backgroundColor: AppColors.warning,
                               ),
                             );
                             return;

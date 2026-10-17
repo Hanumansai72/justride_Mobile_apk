@@ -59,7 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: Text(
             'Edit Profile',
             style: GoogleFonts.inter(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
@@ -70,7 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 TextField(
                   controller: nameCtrl,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Full Name',
@@ -86,7 +86,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: phoneCtrl,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Phone Number',
@@ -125,7 +125,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Profile updated successfully!'),
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: AppColors.primaryContainer,
                           ),
                         );
                       } else {
@@ -139,7 +139,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                foregroundColor: const Color(0xFF003915),
+                foregroundColor: AppColors.onPrimary,
               ),
               child: isSaving
                   ? const SizedBox(
@@ -147,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Color(0xFF003915),
+                        color: AppColors.onPrimary,
                       ),
                     )
                   : Text('SAVE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
@@ -175,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: Text(
             'Change Password',
             style: GoogleFonts.inter(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
@@ -187,7 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextField(
                   controller: currentCtrl,
                   obscureText: true,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Current Password',
@@ -204,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextField(
                   controller: newCtrl,
                   obscureText: true,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'New Password',
@@ -248,7 +248,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Password changed successfully!'),
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: AppColors.primaryContainer,
                           ),
                         );
                       } else {
@@ -262,7 +262,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                foregroundColor: const Color(0xFF003915),
+                foregroundColor: AppColors.onPrimary,
               ),
               child: isSaving
                   ? const SizedBox(
@@ -270,7 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Color(0xFF003915),
+                        color: AppColors.onPrimary,
                       ),
                     )
                   : Text('UPDATE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
@@ -292,12 +292,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: AppColors.surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-            side: const BorderSide(color: AppColors.error),
+            side: const BorderSide(color: AppColors.errorText),
           ),
           title: Text(
             'Delete Account',
             style: GoogleFonts.inter(
-              color: AppColors.error,
+              color: AppColors.errorText,
               fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
@@ -314,8 +314,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               TextField(
                 controller: pwdCtrl,
                 obscureText: true,
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-                cursorColor: AppColors.error,
+                style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
+                cursorColor: AppColors.errorText,
                 decoration: InputDecoration(
                   labelText: 'Confirm Password',
                   labelStyle: GoogleFonts.inter(color: AppColors.textSecondary),
@@ -323,7 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     borderSide: BorderSide(color: AppColors.border),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.error),
+                    borderSide: BorderSide(color: AppColors.errorText),
                   ),
                 ),
               ),
@@ -362,7 +362,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.error,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
               ),
               child: isDeleting
                   ? const SizedBox(
@@ -370,7 +370,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                       ),
                     )
                   : Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
@@ -539,18 +539,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Navigator.of(context).pushNamed('/login');
         },
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.error,
-          side: const BorderSide(color: Color(0xFF3D1616)),
+          foregroundColor: AppColors.errorText,
+          side: const BorderSide(color: AppColors.errorSurface),
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMd)),
-          backgroundColor: const Color(0xFF1A0A0A),
+          backgroundColor: AppColors.errorSurface,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.logout_rounded, size: 20),
             const SizedBox(width: 8),
-            Text('Log Out', style: AppTextStyles.labelLarge.copyWith(color: AppColors.error)),
+            Text('Log Out', style: AppTextStyles.labelLarge.copyWith(color: AppColors.errorText)),
           ],
         ),
       ),

@@ -9,6 +9,7 @@ import android.media.AudioManager
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.net.Uri
+import android.os.Bundle
 import android.os.Build
 import android.os.SystemClock
 import android.telecom.TelecomManager
@@ -28,18 +29,80 @@ class MainActivity : FlutterActivity() {
     private val CALL_CHANNEL = "com.justride.app/telephony"
     private val NOTIFICATION_CHANNEL = "com.justride.app/system_notifications"
     private val MAPS_CONFIG_CHANNEL = "com.justride.app/maps_config"
+    private val SHARE_INTENT_CHANNEL = "com.justride.app/share_intent"
     private val CALL_PERMISSION_REQUEST = 4101
     private val NOTIFICATION_PERMISSION_REQUEST = 4102
 
     private var callChannel: MethodChannel? = null
     private var notifChannel: MethodChannel? = null
+    private var shareMethodChannel: MethodChannel? = null
+    private var pendingSharedPayload: String? = null
     private var telephonyManager: TelephonyManager? = null
     private var phoneStateListener: PhoneStateListener? = null
     private var telephonyCallback: Any? = null
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleIncomingShareIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingShareIntent(intent)
+    }
+
+    private fun handleIncomingShareIntent(intent: Intent?) {
+        if (intent == null) return
+        var textPayload: String? = null
+
+        when (intent.action) {
+            Intent.ACTION_SEND -> {
+                val extraText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                    ?: intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+                val extraSubject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
+                    ?: intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString()
+
+                textPayload = when {
+                    extraSubject != null && extraText != null -> {
+                        if (extraText.contains(extraSubject)) extraText else "$extraSubject\n$extraText"
+                    }
+                    extraText != null -> extraText
+                    extraSubject != null -> extraSubject
+                    else -> null
+                }
+            }
+            Intent.ACTION_VIEW -> {
+                textPayload = intent.dataString
+            }
+        }
+
+        if (!textPayload.isNullOrBlank()) {
+            pendingSharedPayload = textPayload
+            shareMethodChannel?.invokeMethod("onSharedTextReceived", textPayload)
+        }
+    }
+
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         requestPostNotificationsPermission()
+
+        val shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_INTENT_CHANNEL)
+        shareMethodChannel = shareChannel
+        shareChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getInitialSharedText" -> {
+                    val payload = pendingSharedPayload
+                    pendingSharedPayload = null
+                    result.success(payload)
+                }
+                "reset" -> {
+                    pendingSharedPayload = null
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MAPS_CONFIG_CHANNEL)
             .setMethodCallHandler { call, result ->

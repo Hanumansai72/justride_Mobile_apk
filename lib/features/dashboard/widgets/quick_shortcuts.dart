@@ -58,7 +58,7 @@ class QuickShortcuts extends StatelessWidget {
                 icon: Icons.history_rounded,
                 label: 'Recent',
                 subtitle: 'History',
-                route: '/places',
+                route: '/trips',
               ),
             ),
           ),
@@ -66,7 +66,6 @@ class QuickShortcuts extends StatelessWidget {
       ],
     );
   }
-
 }
 
 // ── Shortcut data model ───────────────────────────────────────────────────────
@@ -83,7 +82,6 @@ class _Shortcut {
   final String subtitle;
   final String route;
 }
-
 
 // ── Individual chip ───────────────────────────────────────────────────────────
 
@@ -108,7 +106,6 @@ class _ShortcutChipState extends State<_ShortcutChip> {
         Navigator.of(context).pushNamed(widget.shortcut.route);
       },
       child: AnimatedContainer(
-
         duration: AppConstants.animFast,
         padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingMd),
         decoration: BoxDecoration(

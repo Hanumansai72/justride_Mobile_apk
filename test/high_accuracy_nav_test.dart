@@ -201,10 +201,11 @@ void main() {
       );
 
       final binary = packet.toBinary();
-      expect(binary.length, 7 + 3 * 4); // 19 bytes
+      expect(binary.length, 8 + 3 * 4); // 20 bytes, including progress
       expect(binary[0], BleNavOpCode.navRouteSegment.value); // 0x0B
       expect(binary[1], 3); // 3 points
       expect(binary[2], 1); // Destination visible flag
+      expect(binary.last, 0); // No completed progress yet
     });
   });
 }

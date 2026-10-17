@@ -1,175 +1,128 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
-import '../models/trip_model.dart';
-import '../widgets/trips_tab_bar.dart';
-import '../widgets/overview_card.dart';
-import '../widgets/streak_banner.dart';
-import '../widgets/trip_card.dart';
-import '../widgets/insights_banner.dart';
+import '../../../core/models/navigation_session.dart';
+import '../../../core/services/ride_history_service.dart';
+import '../widgets/ride_history_card.dart';
 
-/// Trips screen — ride history, overview stats, streak, and insights.
 class TripsScreen extends StatefulWidget {
   const TripsScreen({super.key});
-
   @override
   State<TripsScreen> createState() => _TripsScreenState();
 }
 
 class _TripsScreenState extends State<TripsScreen> {
-  int _navIndex = 1; // Trips is index 1
+  final _history = RideHistoryService.instance;
+  final List<NavigationSession> _rides = [];
+  int _page = 0;
+  bool _hasMore = false;
+  bool _loading = false;
+  bool _reloadAfterLoad = false;
+  String? _error;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: _TripsAppBar(),
-      body: _buildBody(),
-      bottomNavigationBar: JustRideBottomNavBar(
-        currentIndex: _navIndex,
-        onTap: (i) {
-          if (i == 1) return;
-          if (i == 0) {
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          } else if (i == 2) {
-            Navigator.of(context).pushNamed('/pair-device');
-          } else if (i == 3) {
-            Navigator.of(context).pushReplacementNamed('/notifications');
-          } else if (i == 4) {
-            Navigator.of(context).pushReplacementNamed('/profile');
-          }
-        },
-      ),
-
-
-    );
+  void initState() {
+    super.initState();
+    _history.changed.addListener(_historyChanged);
+    unawaited(_history.syncPending());
+    _load(reset: true);
   }
 
-  Widget _buildBody() {
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
+  void _historyChanged() {
+    if (_loading) {
+      _reloadAfterLoad = true;
+    } else {
+      _load(reset: true);
+    }
+  }
 
-        // ── Tab bar ───────────────────────────────────────────────────────────
-        const SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(child: TripsTabBar()),
-        ),
+  @override
+  void dispose() {
+    _history.changed.removeListener(_historyChanged);
+    super.dispose();
+  }
 
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
+  Future<void> _load({bool reset = false}) async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final result = await _history.getPage(page: reset ? 1 : _page + 1);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (result.success && result.data != null) {
+        if (reset) _rides.clear();
+        _rides.addAll(result.data!.items);
+        _page = result.data!.page;
+        _hasMore = result.data!.hasMore;
+      } else {
+        _error = 'Could not load ride history. Please try again.';
+      }
+    });
+    if (_reloadAfterLoad) {
+      _reloadAfterLoad = false;
+      unawaited(_load(reset: true));
+    }
+  }
 
-        // ── Overview stats card ───────────────────────────────────────────────
-        const SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(child: OverviewCard()),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
-
-        // ── Streak banner ─────────────────────────────────────────────────────
-        const SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(child: StreakBanner(streakDays: 7)),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingXl)),
-
-        // ── Recent Trips header ───────────────────────────────────────────────
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Recent Trips', style: AppTextStyles.headingMedium),
-                GestureDetector(
-                  onTap: () {},
-                  child: Text('View all', style: AppTextStyles.accentMedium),
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text('Ride history')),
+        body: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async {
+            unawaited(_history.syncPending());
+            await _load(reset: true);
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text('Your rides, newest first', style: AppTextStyles.bodyMedium),
+              const SizedBox(height: 20),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Column(children: [
+                    Text(_error!, style: AppTextStyles.bodyMedium),
+                    TextButton(
+                        onPressed: () => _load(reset: _rides.isEmpty),
+                        child: const Text('Try again')),
+                  ]),
                 ),
-              ],
-            ),
-          ),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
-
-        // ── Trip cards list ───────────────────────────────────────────────────
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) => TripCard(trip: TripModel.dummyTrips[i]),
-              childCount: TripModel.dummyTrips.length,
-            ),
-          ),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
-
-        // ── Trip Insights banner ──────────────────────────────────────────────
-        const SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(child: InsightsBanner()),
-        ),
-
-        const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingSection)),
-      ],
-    );
-  }
-}
-
-// ── Custom AppBar ─────────────────────────────────────────────────────────────
-
-class _TripsAppBar extends StatelessWidget implements PreferredSizeWidget {
-  @override
-  Size get preferredSize => const Size.fromHeight(64);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.background,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-        left: AppConstants.pagePadding,
-        right: AppConstants.pagePadding,
-        bottom: AppConstants.spacingSm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text('Trips', style: AppTextStyles.headingLarge),
-                Text(
-                  'Your ride history and insights',
-                  style: AppTextStyles.bodyMedium,
+              if (!_loading && _error == null && _rides.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 48),
+                  child: Column(children: [
+                    const Icon(Icons.route_outlined,
+                        color: AppColors.textMuted, size: 40),
+                    const SizedBox(height: 16),
+                    Text('No rides yet', style: AppTextStyles.headingSmall),
+                    const SizedBox(height: 8),
+                    Text('Your rides appear here when navigation ends.',
+                        style: AppTextStyles.bodyMedium,
+                        textAlign: TextAlign.center),
+                  ]),
                 ),
-              ],
-            ),
+              for (final ride in _rides)
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: RideHistoryCard(ride: ride)),
+              if (_loading)
+                const Center(
+                    child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                )),
+              if (_hasMore && !_loading && _error == null)
+                OutlinedButton(
+                    onPressed: _load, child: const Text('Load more')),
+            ],
           ),
-          // Filter icon button
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: IconButton(
-              onPressed: () {},
-              icon: const Icon(Icons.filter_list_rounded,
-                  color: AppColors.textSecondary, size: 20),
-              padding: EdgeInsets.zero,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      );
 }

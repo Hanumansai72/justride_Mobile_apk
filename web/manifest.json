@@ -1,11 +1,11 @@
 {
-    "name": "justride_ui",
-    "short_name": "justride_ui",
+    "name": "JustRide",
+    "short_name": "JustRide",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0B100D",
+    "theme_color": "#0B100D",
+    "description": "Your JustRide rides, places, navigation and connected device.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

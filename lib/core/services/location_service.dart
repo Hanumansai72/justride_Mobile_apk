@@ -150,15 +150,22 @@ class LocationService {
         _onPositionUpdate(pos);
         return pos;
       }
-      debugPrint('[LocationService] Current GPS fix is stale or inaccurate.');
+      debugPrint('[LocationService] Current GPS fix is stale or inaccurate. Falling back to last known.');
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null && _isFreshUsableFix(lastKnown, maxAgeSeconds: 1800)) {
+        _onPositionUpdate(lastKnown);
+        return lastKnown;
+      }
+      if (_currentPosition != null) return _currentPosition;
       return null;
     } catch (e) {
       debugPrint('[LocationService] getCurrentPosition error: $e');
       final lastKnown = await Geolocator.getLastKnownPosition();
-      if (lastKnown != null && _isFreshUsableFix(lastKnown)) {
+      if (lastKnown != null && _isFreshUsableFix(lastKnown, maxAgeSeconds: 1800)) {
         _onPositionUpdate(lastKnown);
         return lastKnown;
       }
+      if (_currentPosition != null) return _currentPosition;
       return null;
     }
   }
@@ -424,9 +431,9 @@ class LocationService {
     return speedMs.isFinite && speedMs <= 70.0 ? speedMs : null;
   }
 
-  bool _isFreshUsableFix(Position pos) {
+  bool _isFreshUsableFix(Position pos, {int maxAgeSeconds = 120}) {
     final age = DateTime.now().toUtc().difference(pos.timestamp.toUtc()).abs();
-    return age.inSeconds <= 120 &&
+    return age.inSeconds <= maxAgeSeconds &&
         pos.accuracy.isFinite &&
         pos.accuracy <= 200.0;
   }

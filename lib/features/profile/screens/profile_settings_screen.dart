@@ -10,15 +10,15 @@ import '../../../shared/widgets/bottom_nav_bar.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const cardBg = Color(0xFF142226);
-  static const cardBorder = Color(0xFF27312B);
-  static const itemBg = Color(0xFF1B211E);
-  static const surfContLow = Color(0xFF101E22);
-  static const primary = Color(0xFF4BE277);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outlineVariant = Color(0xFF3D4A3D);
+  static const bg = AppColors.background;
+  static const cardBg = AppColors.surface;
+  static const cardBorder = AppColors.border;
+  static const itemBg = AppColors.surfaceElevated;
+  static const surfContLow = AppColors.backgroundInset;
+  static const primary = AppColors.primary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outlineVariant = AppColors.border;
 }
 
 class ProfileSettingsScreen extends StatefulWidget {
@@ -136,14 +136,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Profile updated successfully!'),
-                              backgroundColor: _C.primary,
+                              backgroundColor: AppColors.primaryContainer,
                             ),
                           );
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(res.message),
-                              backgroundColor: Colors.redAccent,
+                              backgroundColor: AppColors.error,
                             ),
                           );
                         }
@@ -255,14 +255,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Password changed successfully!'),
-                              backgroundColor: _C.primary,
+                              backgroundColor: AppColors.primaryContainer,
                             ),
                           );
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(res.message),
-                              backgroundColor: Colors.redAccent,
+                              backgroundColor: AppColors.error,
                             ),
                           );
                         }
@@ -297,12 +297,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           backgroundColor: _C.cardBg,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-            side: const BorderSide(color: AppColors.error),
+            side: const BorderSide(color: AppColors.errorText),
           ),
           title: Text(
             'Delete Account',
             style: GoogleFonts.inter(
-              color: AppColors.error,
+              color: AppColors.errorText,
               fontWeight: FontWeight.w700,
               fontSize: 18,
             ),
@@ -320,7 +320,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 controller: pwdCtrl,
                 obscureText: true,
                 style: GoogleFonts.inter(color: _C.onSurface, fontSize: 14),
-                cursorColor: AppColors.error,
+                cursorColor: AppColors.errorText,
                 decoration: InputDecoration(
                   labelText: 'Confirm Password',
                   labelStyle: GoogleFonts.inter(color: _C.textSec),
@@ -328,7 +328,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     borderSide: BorderSide(color: _C.outlineVariant),
                   ),
                   focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppColors.error),
+                    borderSide: BorderSide(color: AppColors.errorText),
                   ),
                 ),
               ),
@@ -355,7 +355,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(res.message),
-                              backgroundColor: Colors.redAccent,
+                              backgroundColor: AppColors.error,
                             ),
                           );
                         }
@@ -363,13 +363,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.error,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
               ),
               child: isDeleting
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textPrimary),
                     )
                   : Text('DELETE', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
             ),
@@ -630,8 +630,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           }
         },
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.error,
-          side: const BorderSide(color: AppColors.error, width: 1.5),
+          foregroundColor: AppColors.errorText,
+          side: const BorderSide(color: AppColors.errorText, width: 1.5),
           padding: const EdgeInsets.symmetric(
             horizontal: AppConstants.spacingXl,
             vertical: AppConstants.spacingMd,
@@ -645,7 +645,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.logout_rounded, size: 20, color: AppColors.error),
+            Icon(Icons.logout_rounded, size: 20, color: AppColors.errorText),
             const SizedBox(width: AppConstants.spacingSm),
             Text(
               'LOGOUT',
@@ -653,7 +653,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.8,
-                color: AppColors.error,
+                color: AppColors.errorText,
               ),
             ),
           ],

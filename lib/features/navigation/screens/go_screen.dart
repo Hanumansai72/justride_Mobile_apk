@@ -7,6 +7,7 @@ import '../../../core/models/destination.dart';
 import '../../../core/services/google_maps_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/navigation_service.dart';
+import '../../../shared/widgets/require_device_connection.dart';
 import '../widgets/voice_assistant_sheet.dart';
 
 /// Dedicated "Go" Page allowing rider to set Start and Endpoint (Destination)
@@ -216,6 +217,7 @@ class _GoScreenState extends State<GoScreen>
 
   Future<void> _handleStartRide() async {
     if (_isStartingRide) return;
+    if (!await requireDeviceConnection(context) || !mounted) return;
     setState(() => _isStartingRide = true);
 
     try {
@@ -250,10 +252,12 @@ class _GoScreenState extends State<GoScreen>
 
       if (!mounted) return;
 
-      if (target == null || (target.latitude == 0.0 && target.longitude == 0.0)) {
+      if (target == null ||
+          (target.latitude == 0.0 && target.longitude == 0.0)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not find location. Please pick from suggestions.'),
+            content:
+                Text('Could not find location. Please pick from suggestions.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -299,19 +303,19 @@ class _GoScreenState extends State<GoScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF071519),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0D1B1E),
+        backgroundColor: AppColors.surface,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white, size: 20),
+              color: AppColors.textPrimary, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           'Go',
           style: GoogleFonts.inter(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -341,9 +345,9 @@ class _GoScreenState extends State<GoScreen>
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF142226),
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF27312B), width: 1.2),
+                border: Border.all(color: AppColors.border, width: 1.2),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.3),
@@ -358,12 +362,12 @@ class _GoScreenState extends State<GoScreen>
                   Column(
                     children: [
                       const Icon(Icons.radio_button_checked_rounded,
-                          color: Color(0xFF38BDF8), size: 18),
+                          color: AppColors.primary, size: 18),
                       Container(
                         width: 2,
                         height: 36,
                         margin: const EdgeInsets.symmetric(vertical: 2),
-                        color: const Color(0xFF27312B),
+                        color: AppColors.border,
                       ),
                       const Icon(Icons.location_on_rounded,
                           color: AppColors.primary, size: 20),
@@ -380,11 +384,11 @@ class _GoScreenState extends State<GoScreen>
                           controller: _startController,
                           focusNode: _startFocusNode,
                           style: GoogleFonts.inter(
-                              color: Colors.white, fontSize: 14),
+                              color: AppColors.textPrimary, fontSize: 14),
                           decoration: InputDecoration(
                             hintText: 'Choose starting point...',
                             hintStyle: GoogleFonts.inter(
-                                color: Colors.white38, fontSize: 13),
+                                color: AppColors.textMuted, fontSize: 13),
                             border: InputBorder.none,
                             isDense: true,
                             contentPadding:
@@ -394,7 +398,7 @@ class _GoScreenState extends State<GoScreen>
                                 ? GestureDetector(
                                     onTap: _useCurrentLocationForStart,
                                     child: const Icon(Icons.close_rounded,
-                                        size: 16, color: Colors.white38),
+                                        size: 16, color: AppColors.textMuted),
                                   )
                                 : null,
                           ),
@@ -403,7 +407,7 @@ class _GoScreenState extends State<GoScreen>
                         ),
 
                         const Divider(
-                            color: Color(0xFF27312B), height: 16, thickness: 1),
+                            color: AppColors.border, height: 16, thickness: 1),
 
                         // Destination point input
                         TextField(
@@ -411,14 +415,15 @@ class _GoScreenState extends State<GoScreen>
                           focusNode: _destFocusNode,
                           autofocus: widget.initialDestination == null,
                           style: GoogleFonts.inter(
-                            color: Colors.white,
+                            color: AppColors.textPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                           decoration: InputDecoration(
-                            hintText: 'Enter destination (e.g. Uppal Bus Stop)...',
+                            hintText:
+                                'Enter destination (e.g. Uppal Bus Stop)...',
                             hintStyle: GoogleFonts.inter(
-                                color: Colors.white38, fontSize: 13),
+                                color: AppColors.textMuted, fontSize: 13),
                             border: InputBorder.none,
                             isDense: true,
                             contentPadding:
@@ -434,7 +439,7 @@ class _GoScreenState extends State<GoScreen>
                                       });
                                     },
                                     child: const Icon(Icons.close_rounded,
-                                        size: 16, color: Colors.white38),
+                                        size: 16, color: AppColors.textMuted),
                                   )
                                 : null,
                           ),
@@ -453,12 +458,12 @@ class _GoScreenState extends State<GoScreen>
                     icon: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E2C30),
+                        color: AppColors.surfaceElevated,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF27312B)),
+                        border: Border.all(color: AppColors.border),
                       ),
                       child: const Icon(Icons.swap_vert_rounded,
-                          color: Color(0xFF38BDF8), size: 20),
+                          color: AppColors.primary, size: 20),
                     ),
                     onPressed: _swapEndpoints,
                   ),
@@ -482,9 +487,9 @@ class _GoScreenState extends State<GoScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: const BoxDecoration(
-                color: Color(0xFF0D1B1E),
+                color: AppColors.backgroundInset,
                 border: Border(
-                  top: BorderSide(color: Color(0xFF27312B), width: 1.2),
+                  top: BorderSide(color: AppColors.border, width: 1.2),
                 ),
               ),
               child: AnimatedBuilder(
@@ -499,7 +504,7 @@ class _GoScreenState extends State<GoScreen>
                         onPressed: _handleStartRide,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          foregroundColor: const Color(0xFF003915),
+                          foregroundColor: AppColors.onPrimary,
                           elevation: 6,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -513,7 +518,7 @@ class _GoScreenState extends State<GoScreen>
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
-                                      color: Color(0xFF003915),
+                                      color: AppColors.onPrimary,
                                       strokeWidth: 2.5,
                                     ),
                                   ),
@@ -524,7 +529,7 @@ class _GoScreenState extends State<GoScreen>
                                       fontSize: 15,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.8,
-                                      color: const Color(0xFF003915),
+                                      color: AppColors.onPrimary,
                                     ),
                                   ),
                                 ],
@@ -533,7 +538,7 @@ class _GoScreenState extends State<GoScreen>
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Icon(Icons.navigation_rounded,
-                                      size: 22, color: Color(0xFF003915)),
+                                      size: 22, color: AppColors.onPrimary),
                                   const SizedBox(width: 10),
                                   Text(
                                     'START RIDE',
@@ -541,7 +546,7 @@ class _GoScreenState extends State<GoScreen>
                                       fontSize: 16,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.8,
-                                      color: const Color(0xFF003915),
+                                      color: AppColors.onPrimary,
                                     ),
                                   ),
                                 ],
@@ -563,7 +568,7 @@ class _GoScreenState extends State<GoScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _suggestions.length,
       separatorBuilder: (_, __) =>
-          const Divider(color: Color(0xFF1E2C30), height: 1),
+          const Divider(color: AppColors.surfaceElevated, height: 1),
       itemBuilder: (context, index) {
         final item = _suggestions[index];
         final icon = _iconForPlace(item);
@@ -575,16 +580,16 @@ class _GoScreenState extends State<GoScreen>
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF142226),
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF27312B)),
+              border: Border.all(color: AppColors.border),
             ),
             child: Icon(icon, color: AppColors.primary, size: 20),
           ),
           title: Text(
             item.displayTitle,
             style: GoogleFonts.inter(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
@@ -592,14 +597,13 @@ class _GoScreenState extends State<GoScreen>
           subtitle: Text(
             item.displaySubtitle,
             style: GoogleFonts.inter(
-              color: Colors.white54,
+              color: AppColors.textMuted,
               fontSize: 12,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          onTap: () =>
-              _selectSuggestion(item, isStart: _isStartFocused),
+          onTap: () => _selectSuggestion(item, isStart: _isStartFocused),
         );
       },
     );
@@ -617,9 +621,9 @@ class _GoScreenState extends State<GoScreen>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF142226),
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF27312B)),
+                border: Border.all(color: AppColors.border),
               ),
               child: Row(
                 children: [
@@ -632,8 +636,8 @@ class _GoScreenState extends State<GoScreen>
                   const SizedBox(width: 12),
                   Text(
                     'Calculating fastest motorcycle route...',
-                    style: GoogleFonts.inter(
-                        color: Colors.white70, fontSize: 13),
+                    style:
+                        GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -643,7 +647,7 @@ class _GoScreenState extends State<GoScreen>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF142226),
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: AppColors.primary.withValues(alpha: 0.3),
@@ -670,7 +674,7 @@ class _GoScreenState extends State<GoScreen>
                       Text(
                         '${(_previewRoute!.totalDistanceMeters / 1000).toStringAsFixed(1)} km',
                         style: GoogleFonts.jetBrainsMono(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
@@ -680,8 +684,8 @@ class _GoScreenState extends State<GoScreen>
                   const SizedBox(height: 8),
                   Text(
                     'Approx. ${(_previewRoute!.totalDurationSeconds / 60).round()} mins • ${_previewRoute!.steps.length} turns',
-                    style: GoogleFonts.inter(
-                        color: Colors.white70, fontSize: 13),
+                    style:
+                        GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -693,7 +697,7 @@ class _GoScreenState extends State<GoScreen>
           Text(
             'QUICK DESTINATIONS',
             style: GoogleFonts.jetBrainsMono(
-              color: Colors.white38,
+              color: AppColors.textMuted,
               fontSize: 11,
               letterSpacing: 1.1,
               fontWeight: FontWeight.bold,
@@ -706,8 +710,8 @@ class _GoScreenState extends State<GoScreen>
             runSpacing: 8,
             children: _quickPlaces.map((name) {
               return ActionChip(
-                backgroundColor: const Color(0xFF142226),
-                side: const BorderSide(color: Color(0xFF27312B)),
+                backgroundColor: AppColors.surface,
+                side: const BorderSide(color: AppColors.border),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -716,7 +720,7 @@ class _GoScreenState extends State<GoScreen>
                 label: Text(
                   name,
                   style: GoogleFonts.inter(
-                    color: const Color(0xFFD6E5EA),
+                    color: AppColors.textPrimary,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -735,20 +739,20 @@ class _GoScreenState extends State<GoScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F1A1C),
+              color: AppColors.backgroundInset,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E2C30)),
+              border: Border.all(color: AppColors.surfaceElevated),
             ),
             child: Row(
               children: [
                 const Icon(Icons.tips_and_updates_outlined,
-                    color: Color(0xFF38BDF8), size: 18),
+                    color: AppColors.primary, size: 18),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Tip: You can also tap the mic icon in the header to speak any destination.',
-                    style: GoogleFonts.inter(
-                        color: Colors.white60, fontSize: 12),
+                    style:
+                        GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ),
               ],

@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
-import '../../../app/theme/app_text_styles.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/navigation_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -11,7 +12,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _scaleAnimation;
@@ -25,11 +27,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.6, curve: Curves.easeOut)),
+      CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0.0, 0.6, curve: Curves.easeOut)),
     );
 
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack)),
+      CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack)),
     );
 
     _controller.forward();
@@ -38,13 +44,22 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
       if (ApiClient.instance.isAuthenticated) {
-        Navigator.of(context).pushReplacementNamed('/dashboard');
+        final navigator = Navigator.of(context);
+        navigator.pushReplacementNamed('/dashboard');
+        unawaited(NavigationService.instance.recalculateAndResumeRoute().then(
+          (restored) {
+            if (restored &&
+                navigator.mounted &&
+                ApiClient.instance.isAuthenticated) {
+              navigator.pushNamed('/active-navigation');
+            }
+          },
+        ));
       } else {
         Navigator.of(context).pushReplacementNamed('/login');
       }
     });
   }
-
 
   @override
   void dispose() {
@@ -64,17 +79,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               opacity: _fadeAnimation,
               child: ScaleTransition(
                 scale: _scaleAnimation,
-                child: const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AppLogo(
-                      iconSize: 40,
-                      fontSize: 32,
-                      showTagline: true,
-                      isStacked: true,
-                    ),
-
-                  ],
+                child: const AppLogo(
+                  iconSize: 42,
+                  fontSize: 34,
+                  showTagline: true,
+                  isStacked: false,
                 ),
               ),
             );

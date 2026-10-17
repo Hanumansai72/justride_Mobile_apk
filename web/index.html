@@ -18,21 +18,39 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="JustRide: your rides, places, navigation and connected device in one app.">
+  <meta name="theme-color" content="#0B100D">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="justride_ui">
+  <meta name="apple-mobile-web-app-title" content="JustRide">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>justride_ui</title>
+  <title>JustRide App</title>
   <link rel="manifest" href="manifest.json">
 </head>
-<body>
+<body style="margin:0;background:#0B100D;color:#F5F7F5">
+  <script>
+    // Called by Flutter only when GOOGLE_MAPS_API_KEY is provided at build time.
+    window.justRideLoadGoogleMaps = function (key) {
+      if (window.google && window.google.maps) return Promise.resolve();
+      return new Promise(function (resolve, reject) {
+        const script = document.createElement('script');
+        const timer = setTimeout(function () {
+          reject(new Error('Google Maps loading timed out'));
+        }, 10000);
+        script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key);
+        script.onload = function () { clearTimeout(timer); resolve(); };
+        script.onerror = function () { clearTimeout(timer); reject(new Error('Google Maps could not load')); };
+        document.head.appendChild(script);
+      });
+    };
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

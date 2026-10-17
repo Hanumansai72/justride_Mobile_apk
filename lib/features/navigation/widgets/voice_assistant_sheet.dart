@@ -117,10 +117,10 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
     return Container(
       margin: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
-        color: Color(0xFF0D1B1E),
+        color: AppColors.backgroundInset,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(
-          top: BorderSide(color: Color(0xFF27312B), width: 1.5),
+          top: BorderSide(color: AppColors.border, width: 1.5),
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -132,7 +132,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.white24,
+              color: AppColors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -162,13 +162,13 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                     style: GoogleFonts.inter(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -218,13 +218,13 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                                 child: CircularProgressIndicator(
                                   strokeWidth: 3,
                                   valueColor:
-                                      AlwaysStoppedAnimation<Color>(Color(0xFF003915)),
+                                      AlwaysStoppedAnimation<Color>(AppColors.onPrimary),
                                 ),
                               ),
                             )
                           : const Icon(
                               Icons.mic_rounded,
-                              color: Color(0xFF003915),
+                              color: AppColors.onPrimary,
                               size: 36,
                             ),
                     ),
@@ -243,7 +243,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
             style: GoogleFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: _isProcessing ? AppColors.primary : Colors.white70,
+              color: _isProcessing ? AppColors.primary : AppColors.textSecondary,
             ),
           ),
 
@@ -258,7 +258,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                 fontSize: 10,
                 letterSpacing: 1.1,
                 fontWeight: FontWeight.bold,
-                color: Colors.white38,
+                color: AppColors.textMuted,
               ),
             ),
           ),
@@ -269,8 +269,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
             runSpacing: 8,
             children: _quickSuggestions.map((place) {
               return ActionChip(
-                backgroundColor: const Color(0xFF142226),
-                side: const BorderSide(color: Color(0xFF27312B)),
+                backgroundColor: AppColors.surface,
+                side: const BorderSide(color: AppColors.border),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -283,7 +283,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                   place,
                   style: GoogleFonts.inter(
                     fontSize: 12,
-                    color: const Color(0xFFD6E5EA),
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -300,23 +300,23 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFF142226),
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF27312B)),
+              border: Border.all(color: AppColors.border),
             ),
             child: Row(
               children: [
                 const Icon(Icons.search_rounded,
-                    color: Colors.white38, size: 20),
+                    color: AppColors.textMuted, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _textController,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                    style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Type place (e.g. Uppal, Charminar)...',
                       hintStyle: GoogleFonts.inter(
-                          color: Colors.white38, fontSize: 13),
+                          color: AppColors.textMuted, fontSize: 13),
                       border: InputBorder.none,
                       isDense: true,
                       contentPadding:

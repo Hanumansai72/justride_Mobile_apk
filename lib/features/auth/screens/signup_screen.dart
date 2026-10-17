@@ -45,7 +45,7 @@ class _SignupScreenState extends State<SignupScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Welcome, ${result.user?.fullName ?? "Rider"}!'),
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.primaryContainer,
           ),
         );
         Navigator.of(context).pushReplacementNamed('/dashboard');
@@ -53,7 +53,7 @@ class _SignupScreenState extends State<SignupScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.message ?? 'Google Sign-In failed'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -63,7 +63,7 @@ class _SignupScreenState extends State<SignupScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -87,7 +87,8 @@ class _SignupScreenState extends State<SignupScreen> {
     final confirmPassword = _confirmPasswordController.text;
 
     if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'Please fill in all required fields (Name, Email, Phone, Password)');
+      setState(() => _errorMessage =
+          'Please fill in all required fields (Name, Email, Phone, Password)');
       return;
     }
     if (password.length < 6) {
@@ -99,7 +100,8 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
     if (!_agreeToTerms) {
-      setState(() => _errorMessage = 'Please accept the Terms & Privacy Policy');
+      setState(
+          () => _errorMessage = 'Please accept the Terms & Privacy Policy');
       return;
     }
 
@@ -122,10 +124,11 @@ class _SignupScreenState extends State<SignupScreen> {
       if (res.success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.primaryContainer,
             content: Text(
               'Account created successfully! Welcome to JustRide.',
-              style: GoogleFonts.inter(color: AppColors.background, fontWeight: FontWeight.w600),
+              style: GoogleFonts.inter(
+                  color: AppColors.background, fontWeight: FontWeight.w600),
             ),
           ),
         );
@@ -174,7 +177,8 @@ class _SignupScreenState extends State<SignupScreen> {
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.pagePadding),
                     child: Column(
                       children: [
                         const SizedBox(height: 20),
@@ -200,28 +204,72 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Join JustRide for smart motorcycle telemetry',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                          'Create your account to start riding',
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 24),
+
+                        // Social Google button
+                        SocialLoginButton(
+                          icon: _isGoogleLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.textPrimary),
+                                )
+                              : const GoogleLogoWidget(size: 22),
+                          label: _isGoogleLoading
+                              ? 'Connecting to Google...'
+                              : 'Continue with Google',
+                          onPressed:
+                              _isGoogleLoading ? () {} : _handleGoogleSignIn,
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Divider
+                        Row(
+                          children: [
+                            const Expanded(
+                                child: Divider(color: AppColors.border)),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text('OR SIGN UP WITH EMAIL',
+                                  style: AppTextStyles.labelSmall),
+                            ),
+                            const Expanded(
+                                child: Divider(color: AppColors.border)),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
 
                         // Error message banner
                         if (_errorMessage != null) ...[
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppColors.error.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-                              border: Border.all(color: AppColors.error.withValues(alpha: 0.5)),
+                              color:
+                                  AppColors.errorText.withValues(alpha: 0.15),
+                              borderRadius:
+                                  BorderRadius.circular(AppConstants.radiusSm),
+                              border: Border.all(
+                                  color: AppColors.errorText
+                                      .withValues(alpha: 0.5)),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+                                const Icon(Icons.error_outline_rounded,
+                                    color: AppColors.errorText, size: 20),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
                                     _errorMessage!,
-                                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.error),
+                                    style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: AppColors.errorText),
                                   ),
                                 ),
                               ],
@@ -259,7 +307,6 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                         const SizedBox(height: AppConstants.spacingMd),
 
-
                         // Password
                         AuthTextField(
                           label: 'Password',
@@ -269,11 +316,14 @@ class _SignupScreenState extends State<SignupScreen> {
                           controller: _passwordController,
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                               color: AppColors.primary,
                               size: 20,
                             ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
                           ),
                         ),
                         const SizedBox(height: AppConstants.spacingMd),
@@ -287,11 +337,14 @@ class _SignupScreenState extends State<SignupScreen> {
                           controller: _confirmPasswordController,
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              _obscureConfirm
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                               color: AppColors.primary,
                               size: 20,
                             ),
-                            onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                            onPressed: () => setState(
+                                () => _obscureConfirm = !_obscureConfirm),
                           ),
                         ),
                         const SizedBox(height: AppConstants.spacingSm),
@@ -304,10 +357,12 @@ class _SignupScreenState extends State<SignupScreen> {
                               height: 24,
                               child: Checkbox(
                                 value: _agreeToTerms,
-                                onChanged: (val) => setState(() => _agreeToTerms = val ?? false),
+                                onChanged: (val) => setState(
+                                    () => _agreeToTerms = val ?? false),
                                 activeColor: AppColors.primary,
                                 checkColor: AppColors.background,
-                                side: const BorderSide(color: AppColors.primary),
+                                side:
+                                    const BorderSide(color: AppColors.primary),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(4),
                                 ),
@@ -337,7 +392,8 @@ class _SignupScreenState extends State<SignupScreen> {
                               backgroundColor: AppColors.primary,
                               foregroundColor: AppColors.background,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                                borderRadius: BorderRadius.circular(
+                                    AppConstants.radiusMd),
                               ),
                               elevation: 0,
                             ),
@@ -353,61 +409,42 @@ class _SignupScreenState extends State<SignupScreen> {
                                 : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text(
+                                      Flexible(
+                                          child: Text(
                                         'Create Account',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: GoogleFonts.inter(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.background,
                                         ),
-                                      ),
+                                      )),
                                       const SizedBox(width: 8),
-                                      const Icon(Icons.arrow_forward_rounded, color: AppColors.background, size: 18),
+                                      const Icon(Icons.arrow_forward_rounded,
+                                          color: AppColors.background,
+                                          size: 18),
                                     ],
                                   ),
                           ),
                         ),
-                        const SizedBox(height: 20),
-
-                        // Divider
-                        Row(
-                          children: [
-                            const Expanded(child: Divider(color: AppColors.border)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text('OR', style: AppTextStyles.labelSmall),
-                            ),
-                            const Expanded(child: Divider(color: AppColors.border)),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Social Google button
-                        SocialLoginButton(
-                          icon: _isGoogleLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const GoogleLogoWidget(size: 22),
-                          label: _isGoogleLoading ? 'Connecting to Google...' : 'Continue with Google',
-                          onPressed: _isGoogleLoading ? () {} : _handleGoogleSignIn,
-                        ),
-                        const Spacer(),
+                        const SizedBox(height: 8),
 
                         // Bottom Link to Login
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 20),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text(
                                 'Already have an account? ',
-                                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                                style: AppTextStyles.bodyMedium
+                                    .copyWith(color: AppColors.textSecondary),
                               ),
                               GestureDetector(
-                                onTap: () => Navigator.of(context).pushReplacementNamed('/login'),
+                                onTap: () => Navigator.of(context)
+                                    .pushReplacementNamed('/login'),
                                 child: Text(
                                   'Log In',
                                   style: AppTextStyles.bodyMedium.copyWith(

@@ -172,7 +172,7 @@ class _MapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final roadPaint = Paint()
-      ..color = const Color(0xFF2A2A2A)
+      ..color = AppColors.surfaceElevated
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 

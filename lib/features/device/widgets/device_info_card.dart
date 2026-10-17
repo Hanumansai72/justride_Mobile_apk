@@ -5,8 +5,7 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/bluetooth_service.dart';
 
-/// The main device info card showing the device image on the left
-/// and status details with live Disconnect/Connect controls on the right.
+/// Original product image and live device status with connection controls.
 class DeviceInfoCard extends StatelessWidget {
   final bool hasUpdate;
   final String firmwareVersion;
@@ -42,21 +41,21 @@ class DeviceInfoCard extends StatelessWidget {
                   : AppColors.border,
             ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Left: Device mockup
-              const _DeviceMockup(),
-              const SizedBox(width: AppConstants.spacingLg),
+              const _DeviceProductImage(),
+              const SizedBox(height: AppConstants.spacingLg),
 
               // Right: Device details
-              Expanded(
+              SizedBox(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Title and navigation to settings
                     InkWell(
-                      onTap: () => Navigator.of(context).pushNamed('/device-settings'),
+                      onTap: () =>
+                          Navigator.of(context).pushNamed('/device-settings'),
                       child: Row(
                         children: [
                           Container(
@@ -64,7 +63,9 @@ class DeviceInfoCard extends StatelessWidget {
                             height: 8,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isConnected ? AppColors.primary : AppColors.textMuted,
+                              color: isConnected
+                                  ? AppColors.primary
+                                  : AppColors.textMuted,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -75,7 +76,8 @@ class DeviceInfoCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: AppColors.textSecondary, size: 20),
                         ],
                       ),
                     ),
@@ -88,27 +90,34 @@ class DeviceInfoCard extends StatelessWidget {
                           isConnected
                               ? Icons.bluetooth_connected_rounded
                               : Icons.bluetooth_disabled_rounded,
-                          color: isConnected ? AppColors.primary : AppColors.textMuted,
+                          color: isConnected
+                              ? AppColors.primary
+                              : AppColors.textMuted,
                           size: 16,
                         ),
                         const SizedBox(width: 5),
-                        Text(
-                          isConnected ? 'Connected' : 'Disconnected',
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: isConnected ? AppColors.primary : AppColors.textMuted,
-                            fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: Text(
+                            isConnected ? 'Connected' : 'Disconnected',
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: isConnected
+                                  ? AppColors.primary
+                                  : AppColors.textMuted,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        const Spacer(),
                         // Dedicated Disconnect / Reconnect Button (not unpairing)
                         GestureDetector(
                           onTap: () async {
                             if (isConnected) {
-                              await JustRideBleService.instance.disconnectDevice();
+                              await JustRideBleService.instance
+                                  .disconnectDevice();
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Device disconnected (remains paired).'),
+                                    content: Text(
+                                        'Device disconnected (remains paired).'),
                                     duration: Duration(seconds: 2),
                                     backgroundColor: AppColors.surfaceElevated,
                                   ),
@@ -118,19 +127,22 @@ class DeviceInfoCard extends StatelessWidget {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Searching for your JustRide device…'),
+                                    content: Text(
+                                        'Searching for your JustRide device…'),
                                     duration: Duration(seconds: 2),
-                                    backgroundColor: AppColors.primary,
+                                    backgroundColor: AppColors.primaryContainer,
                                   ),
                                 );
                               }
                               // Load the exact MAC address saved during pairing
-                              final bleAddress =
-                                  await JustRideBleService.instance.loadSavedBleAddress();
+                              final bleAddress = await JustRideBleService
+                                  .instance
+                                  .loadSavedBleAddress();
                               final ok = await JustRideBleService.instance
                                   .reconnect(targetBleAddress: bleAddress);
                               if (context.mounted) {
-                                final err = JustRideBleService.instance.lastBleErrorNotifier.value;
+                                final err = JustRideBleService
+                                    .instance.lastBleErrorNotifier.value;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(ok
@@ -140,14 +152,17 @@ class DeviceInfoCard extends StatelessWidget {
                                                 ? 'Could not find device ($bleAddress). Ensure it is nearby.'
                                                 : 'No paired device found. Please pair first.'))),
                                     duration: const Duration(seconds: 3),
-                                    backgroundColor: ok ? AppColors.primary : AppColors.error,
+                                    backgroundColor: ok
+                                        ? AppColors.primary
+                                        : AppColors.errorText,
                                   ),
                                 );
                               }
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: isConnected
                                   ? AppColors.surfaceElevated
@@ -165,7 +180,9 @@ class DeviceInfoCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: isConnected ? AppColors.textSecondary : AppColors.primary,
+                                color: isConnected
+                                    ? AppColors.textSecondary
+                                    : AppColors.primary,
                               ),
                             ),
                           ),
@@ -182,7 +199,8 @@ class DeviceInfoCard extends StatelessWidget {
                       title: 'Battery',
                       value: isConnected ? '$batteryPercent%' : '--',
                       subtitle: isConnected ? 'Active' : 'Offline',
-                      valueColor: isConnected ? AppColors.primary : AppColors.textMuted,
+                      valueColor:
+                          isConnected ? AppColors.primary : AppColors.textMuted,
                     ),
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
@@ -194,8 +212,10 @@ class DeviceInfoCard extends StatelessWidget {
                       icon: Icons.bluetooth_rounded,
                       title: 'Connection',
                       value: isConnected ? 'Strong' : 'Disconnected',
-                      subtitle: isConnected ? 'BLE 5.2' : 'Auto-reconnecting...',
-                      valueColor: isConnected ? AppColors.primary : AppColors.textMuted,
+                      subtitle:
+                          isConnected ? 'BLE 5.2' : 'Auto-reconnecting...',
+                      valueColor:
+                          isConnected ? AppColors.primary : AppColors.textMuted,
                     ),
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
@@ -204,15 +224,21 @@ class DeviceInfoCard extends StatelessWidget {
 
                     // Firmware / Update status
                     InkWell(
-                      onTap: () => Navigator.of(context).pushNamed('/device-settings'),
+                      onTap: () =>
+                          Navigator.of(context).pushNamed('/device-settings'),
                       child: _InfoRow(
                         icon: hasUpdate
                             ? Icons.system_update_rounded
                             : Icons.memory_rounded,
                         title: 'Firmware',
-                        value: hasUpdate ? '$firmwareVersion → $newVersion' : firmwareVersion,
-                        subtitle: hasUpdate ? '⚡ Update Available' : 'Up to date',
-                        valueColor: hasUpdate ? AppColors.primary : AppColors.textPrimary,
+                        value: hasUpdate
+                            ? '$firmwareVersion → $newVersion'
+                            : firmwareVersion,
+                        subtitle:
+                            hasUpdate ? '⚡ Update Available' : 'Up to date',
+                        valueColor: hasUpdate
+                            ? AppColors.primary
+                            : AppColors.textPrimary,
                         isHighlight: hasUpdate,
                       ),
                     ),
@@ -249,7 +275,9 @@ class _InfoRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: isHighlight ? AppColors.primary : AppColors.primary, size: 20),
+        Icon(icon,
+            color: isHighlight ? AppColors.primary : AppColors.primary,
+            size: 20),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -264,156 +292,39 @@ class _InfoRow extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Row(
-                children: [
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      fontSize: 10,
-                      color: isHighlight ? AppColors.primary : AppColors.textSecondary,
-                      fontWeight: isHighlight ? FontWeight.w700 : FontWeight.normal,
-                    ),
-                  ),
-                ],
+              Text(
+                subtitle,
+                style: AppTextStyles.labelSmall.copyWith(
+                  fontSize: 10,
+                  color:
+                      isHighlight ? AppColors.primary : AppColors.textSecondary,
+                  fontWeight: isHighlight ? FontWeight.w700 : FontWeight.normal,
+                ),
               ),
             ],
           ),
         ),
-        const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
+        const Icon(Icons.chevron_right_rounded,
+            color: AppColors.textSecondary, size: 20),
       ],
     );
   }
 }
 
-
-/// A pure-Flutter painted mockup of the JustRide Pro device
-class _DeviceMockup extends StatelessWidget {
-  const _DeviceMockup();
+/// Original product asset; contain preserves the bezel and navigation display.
+class _DeviceProductImage extends StatelessWidget {
+  const _DeviceProductImage();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 110,
-      height: 190,
-      decoration: BoxDecoration(
-        color: const Color(0xFF222222), // Dark casing
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF333333), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(6.0),
-        child: Column(
-          children: [
-            // Screen area
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF111111), width: 1),
-                ),
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  children: [
-                    // Top bar
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('JustRide', style: AppTextStyles.labelSmall.copyWith(fontSize: 8, fontStyle: FontStyle.italic)),
-                        Row(
-                          children: [
-                            const Icon(Icons.bluetooth, color: Colors.white, size: 8),
-                            const SizedBox(width: 2),
-                            Container(width: 12, height: 6, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(1))),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    // Arrow
-                    const Icon(Icons.turn_right_rounded, color: AppColors.primary, size: 40),
-                    const SizedBox(height: 4),
-                    Text('300 m', style: AppTextStyles.headingSmall.copyWith(fontSize: 16)),
-                    Text('TURN RIGHT', style: AppTextStyles.labelSmall.copyWith(fontSize: 7, color: AppColors.primary)),
-                    const Spacer(),
-                    // Bottom stats
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('42', style: AppTextStyles.headingSmall.copyWith(fontSize: 14)),
-                            Text('km/h', style: AppTextStyles.labelSmall.copyWith(fontSize: 6, color: AppColors.primary)),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('10.2 km', style: AppTextStyles.labelSmall.copyWith(fontSize: 8, color: Colors.white)),
-                            Text('21 min', style: AppTextStyles.labelSmall.copyWith(fontSize: 8, color: Colors.white)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Hardware buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _HardwareButton(),
-                _HardwareButton(),
-                _HardwareButton(),
-              ],
-            ),
-            const SizedBox(height: 4),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HardwareButton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFF1A1A1A),
-        border: Border.all(color: const Color(0xFF2A2A2A), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF333333), width: 1),
+  Widget build(BuildContext context) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220),
+          child: Image.asset(
+            'assets/justride-device.webp',
+            fit: BoxFit.contain,
+            semanticLabel:
+                'JustRide circular navigation device with silver bezel and green route',
           ),
         ),
-      ),
-    );
-  }
+      );
 }

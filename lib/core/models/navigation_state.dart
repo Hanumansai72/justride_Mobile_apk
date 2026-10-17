@@ -26,6 +26,7 @@ class NavigationState {
   /// The *next* maneuver after the current one (lookahead preview).
   final String nextManeuver;
   final String nextManeuverText;
+  final double nextManeuverDistanceMeters;
 
   final int maneuverId;
   final String maneuverState;
@@ -55,6 +56,7 @@ class NavigationState {
     this.maneuverDistanceMeters = 0.0,
     this.nextManeuver = 'STRAIGHT',
     this.nextManeuverText = '',
+    this.nextManeuverDistanceMeters = 0.0,
     this.maneuverId = 0,
     this.maneuverState = 'NONE',
     this.rerouting = false,
@@ -104,6 +106,7 @@ class NavigationState {
       maneuverDistanceMeters: previous.maneuverDistanceMeters,
       nextManeuver: previous.nextManeuver,
       nextManeuverText: previous.nextManeuverText,
+      nextManeuverDistanceMeters: previous.nextManeuverDistanceMeters,
       maneuverId: previous.maneuverId,
       maneuverState: previous.maneuverState,
       rerouting: previous.rerouting,
@@ -179,6 +182,7 @@ class NavigationState {
     double? maneuverDistanceMeters,
     String? nextManeuver,
     String? nextManeuverText,
+    double? nextManeuverDistanceMeters,
     int? maneuverId,
     String? maneuverState,
     bool? rerouting,
@@ -202,6 +206,8 @@ class NavigationState {
           maneuverDistanceMeters ?? this.maneuverDistanceMeters,
       nextManeuver: nextManeuver ?? this.nextManeuver,
       nextManeuverText: nextManeuverText ?? this.nextManeuverText,
+      nextManeuverDistanceMeters:
+          nextManeuverDistanceMeters ?? this.nextManeuverDistanceMeters,
       maneuverId: maneuverId ?? this.maneuverId,
       maneuverState: maneuverState ?? this.maneuverState,
       rerouting: rerouting ?? this.rerouting,
@@ -227,6 +233,7 @@ class NavigationState {
       'maneuverDistanceMeters': maneuverDistanceMeters,
       'nextManeuver': nextManeuver,
       'nextManeuverText': nextManeuverText,
+      'nextManeuverDistanceMeters': nextManeuverDistanceMeters,
       'maneuverId': maneuverId,
       'maneuverState': maneuverState,
       'rerouting': rerouting,
@@ -252,6 +259,8 @@ class NavigationState {
           (map['maneuverDistanceMeters'] as num?)?.toDouble() ?? 0.0,
       nextManeuver: map['nextManeuver'] as String? ?? 'STRAIGHT',
       nextManeuverText: map['nextManeuverText'] as String? ?? '',
+      nextManeuverDistanceMeters:
+          (map['nextManeuverDistanceMeters'] as num?)?.toDouble() ?? 0.0,
       maneuverId: (map['maneuverId'] as num?)?.toInt() ?? 0,
       maneuverState: map['maneuverState'] as String? ?? 'NONE',
       rerouting: map['rerouting'] as bool? ?? false,

@@ -32,6 +32,8 @@ abstract final class ApiEndpoints {
   // â”€â”€ Notifications (/api/notifications) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   static const String notifications = '/notifications';
   static String markNotificationAsRead(String id) => '/notifications/$id/read';
+  // Existing backend accepts "read-all" through its /:id/read action.
+  static const String markAllNotificationsAsRead = '/notifications/read-all/read';
   static String deleteNotification(String id) => '/notifications/$id';
 
   // â”€â”€ Support & Tickets (/api/support) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

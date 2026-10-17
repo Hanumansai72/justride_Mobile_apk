@@ -68,7 +68,9 @@ class JustRideBleService {
     _adapterSub?.cancel();
     _adapterSub = FlutterBluePlus.adapterState.listen((state) {
       adapterStateNotifier.value = state;
-      if (state == BluetoothAdapterState.on && !FlutterBluePlus.isScanningNow) {
+      if (!kIsWeb &&
+          state == BluetoothAdapterState.on &&
+          !FlutterBluePlus.isScanningNow) {
         _startOneScan();
       }
     });
@@ -76,7 +78,7 @@ class JustRideBleService {
     _isScanSub?.cancel();
     _isScanSub = FlutterBluePlus.isScanning.listen((scanning) {
       isScanningNotifier.value = scanning;
-      if (!scanning && !_disposed && _connectedDevice == null) {
+      if (!kIsWeb && !scanning && !_disposed && _connectedDevice == null) {
         // 2s pause between scans prevents Android BLE scan throttling (5 scans per 30s limit)
         _scheduleRescan(delay: const Duration(seconds: 2));
       }
@@ -144,6 +146,10 @@ class JustRideBleService {
 
     try {
       await FlutterBluePlus.startScan(
+        withNames: kIsWeb ? [_kDeviceName] : [],
+        webOptionalServices: kIsWeb
+            ? [Guid('1805'), Guid('180f'), Guid('ff10'), Guid('ff30')]
+            : [],
         timeout: _kScanWindow,
         androidUsesFineLocation: false,
       );
@@ -153,6 +159,7 @@ class JustRideBleService {
   }
 
   void _scheduleRescan({Duration delay = const Duration(seconds: 1)}) {
+    if (kIsWeb) return;
     _rescanTimer?.cancel();
     _rescanTimer = Timer(delay, () {
       if (!_disposed && _connectedDevice == null) _startOneScan();
@@ -250,6 +257,28 @@ class JustRideBleService {
         );
       } catch (_) {}
 
+      // 1. Negotiate extended MTU (256 bytes) on Android so large navigation & route packets never drop
+      try {
+        if (defaultTargetPlatform == TargetPlatform.android) {
+          final mtu = await device.requestMtu(256);
+          debugPrint('[BLE] ✓ MTU negotiated: $mtu bytes');
+        }
+      } catch (e) {
+        debugPrint('[BLE] MTU request notice: $e');
+      }
+
+      // Small stabilization delay for Android Bluetooth stack before discovery
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // 2. Discover all GATT services once sequentially so servicesList is complete
+      try {
+        final svcs = await device.discoverServices();
+        debugPrint(
+            '[BLE] ✓ Discovered ${svcs.length} GATT services on ${device.remoteId.str}');
+      } catch (e) {
+        debugPrint('[BLE] Initial discoverServices error: $e');
+      }
+
       _connectedDevice = device;
       _lastConnectedDeviceId = device.remoteId.str;
       connectionStateNotifier.value = BluetoothConnectionState.connected;
@@ -263,9 +292,7 @@ class JustRideBleService {
             'justride_saved_mac_address', device.remoteId.str);
       } catch (_) {}
 
-      // Complete the first clock write before the delayed navigation/media
-      // services inspect GATT.  A fire-and-forget write regularly lost the
-      // clock characteristic during Android's initial service-cache update.
+      // Complete the first clock write immediately
       await syncCurrentTime(device);
 
       // Periodic time sync every 60 seconds while device stays connected
@@ -337,7 +364,14 @@ class JustRideBleService {
     if (_isReconnecting) {
       debugPrint(
           '[BLE] Reconnect already in progress, skipping duplicate call.');
-      return false;
+      // A shared destination sheet may request a reconnect while the scan
+      // listener has already started one. Wait for that connection attempt
+      // instead of making navigation fail immediately.
+      final deadline = DateTime.now().add(timeout);
+      while (_isReconnecting && DateTime.now().isBefore(deadline)) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return !_isReconnecting && isDeviceConnected;
     }
     try {
       _isReconnecting = true;
@@ -365,7 +399,7 @@ class JustRideBleService {
 
       // ── Step 2: Check OS-connected & bonded devices (Android OS cache fast-path) ──
       try {
-        final connected = await FlutterBluePlus.connectedDevices;
+        final connected = FlutterBluePlus.connectedDevices;
         for (final d in connected) {
           final dName = d.platformName.toLowerCase();
           final dMac = _normalizeMac(d.remoteId.str);
@@ -554,7 +588,7 @@ class JustRideBleService {
       _connectedDevice = null;
       connectionStateNotifier.value = BluetoothConnectionState.disconnected;
       // Restart scan so paired device shows in the Available list again
-      if (!_disposed) startJustRideScan();
+      if (!kIsWeb && !_disposed) startJustRideScan();
     }
   }
 
@@ -573,9 +607,6 @@ class JustRideBleService {
     if (_isSyncingTime) return false;
     _isSyncingTime = true;
     try {
-      // Android can expose a non-empty but incomplete cached service list just
-      // after connect.  Look in it first, then force one discovery if CTS is
-      // missing rather than assuming the clock service does not exist.
       List<BluetoothService> services = device.servicesList;
       BluetoothCharacteristic? findTimeCharacteristic(
           List<BluetoothService> availableServices) {
@@ -596,12 +627,15 @@ class JustRideBleService {
 
       var timeChr = findTimeCharacteristic(services);
       if (timeChr == null) {
-        await Future.delayed(const Duration(milliseconds: 350));
+        debugPrint(
+            '[BLE] CTS characteristic not cached, discovering services...');
+        await Future.delayed(const Duration(milliseconds: 200));
         services = await device.discoverServices();
         timeChr = findTimeCharacteristic(services);
       }
       if (timeChr == null) {
-        debugPrint('[BLE] CTS characteristic 0x2A2B not found.');
+        debugPrint(
+            '[BLE] ⚠️ CTS characteristic 0x2A2B not found on ${device.remoteId.str}');
         return false;
       }
 
@@ -610,13 +644,33 @@ class JustRideBleService {
           '${now.minute.toString().padLeft(2, '0')}:'
           '${now.second.toString().padLeft(2, '0')}';
 
-      await timeChr.write(
-        utf8.encode(timeStr),
-        withoutResponse: timeChr.properties.writeWithoutResponse,
-      );
+      // Send confirmed write (withoutResponse: false) first for guaranteed acknowledgement
+      bool writeSucceeded = false;
+      try {
+        await timeChr.write(
+          utf8.encode(timeStr),
+          withoutResponse: false,
+        );
+        writeSucceeded = true;
+      } catch (e1) {
+        debugPrint(
+            '[BLE] Confirmed CTS write failed: $e1. Retrying with writeWithoutResponse...');
+        try {
+          await timeChr.write(
+            utf8.encode(timeStr),
+            withoutResponse: true,
+          );
+          writeSucceeded = true;
+        } catch (e2) {
+          debugPrint('[BLE] CTS fallback write also failed: $e2');
+        }
+      }
 
-      debugPrint('[BLE] ✓ Time synced to JustRide OLED: $timeStr');
-      return true;
+      if (writeSucceeded) {
+        debugPrint('[BLE] ✓ Time synced to JustRide HUD: $timeStr');
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('[BLE] Error syncing time: $e');
       return false;

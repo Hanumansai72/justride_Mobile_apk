@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'destination.dart';
 
 /// Stores per-ride telemetry for optional ride history tracking.
@@ -15,6 +16,7 @@ class NavigationSession {
   final int durationSeconds;
   final double averageSpeedKmh;
   final double maxSpeedKmh;
+  final String status;
 
   const NavigationSession({
     required this.sessionId,
@@ -26,6 +28,7 @@ class NavigationSession {
     this.durationSeconds = 0,
     this.averageSpeedKmh = 0.0,
     this.maxSpeedKmh = 0.0,
+    this.status = 'completed',
   });
 
   /// Creates an in-progress session with start metadata.
@@ -34,7 +37,8 @@ class NavigationSession {
     required Destination? destination,
   }) {
     return NavigationSession(
-      sessionId: 'jr_${DateTime.now().millisecondsSinceEpoch}',
+      sessionId:
+          'jr_${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(0x100000000)}',
       startTime: DateTime.now(),
       origin: origin,
       destination: destination,
@@ -43,6 +47,7 @@ class NavigationSession {
 
   /// Returns a completed session from the in-progress one.
   NavigationSession complete({
+    String status = 'completed',
     required double distanceMeters,
     required double averageSpeedKmh,
     required double maxSpeedKmh,
@@ -59,6 +64,7 @@ class NavigationSession {
       durationSeconds: secs,
       averageSpeedKmh: averageSpeedKmh,
       maxSpeedKmh: maxSpeedKmh,
+      status: status,
     );
   }
 
@@ -86,6 +92,7 @@ class NavigationSession {
       'durationSeconds': durationSeconds,
       'averageSpeedKmh': averageSpeedKmh,
       'maxSpeedKmh': maxSpeedKmh,
+      'status': status,
     };
   }
 
@@ -93,8 +100,9 @@ class NavigationSession {
     return NavigationSession(
       sessionId: map['sessionId'] as String,
       startTime: DateTime.parse(map['startTime'] as String),
-      endTime:
-          map['endTime'] != null ? DateTime.parse(map['endTime'] as String) : null,
+      endTime: map['endTime'] != null
+          ? DateTime.parse(map['endTime'] as String)
+          : null,
       origin: map['origin'] != null
           ? Destination.fromMap(map['origin'] as Map<String, dynamic>)
           : null,
@@ -105,6 +113,7 @@ class NavigationSession {
       durationSeconds: (map['durationSeconds'] as num?)?.toInt() ?? 0,
       averageSpeedKmh: (map['averageSpeedKmh'] as num?)?.toDouble() ?? 0.0,
       maxSpeedKmh: (map['maxSpeedKmh'] as num?)?.toDouble() ?? 0.0,
+      status: map['status'] as String? ?? 'completed',
     );
   }
 

@@ -26,7 +26,8 @@ class GoogleAuthService {
   static final GoogleAuthService instance = GoogleAuthService._();
 
   late final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: AppConstants.googleClientId,
+    clientId: kIsWeb ? AppConstants.googleClientId : null,
+    serverClientId: kIsWeb ? null : AppConstants.googleClientId,
     scopes: const ['email', 'profile'],
   );
 
@@ -54,7 +55,8 @@ class GoogleAuthService {
 
       debugPrint('[GoogleAuthService] Signed in: ${account.email}');
 
-      if ((idToken == null || idToken.isEmpty) && (accessToken == null || accessToken.isEmpty)) {
+      if ((idToken == null || idToken.isEmpty) &&
+          (accessToken == null || accessToken.isEmpty)) {
         return const GoogleAuthResult(
           success: false,
           message: 'Failed to retrieve Google credentials from device.',
@@ -62,7 +64,8 @@ class GoogleAuthService {
       }
 
       // Exchange token with JustRide Express Backend
-      final ApiResponse<UserModel> res = await BackendService.instance.loginWithGoogle(
+      final ApiResponse<UserModel> res =
+          await BackendService.instance.loginWithGoogle(
         idToken: idToken,
         accessToken: accessToken,
       );
@@ -76,7 +79,9 @@ class GoogleAuthService {
       } else {
         return GoogleAuthResult(
           success: false,
-          message: res.message.isNotEmpty ? res.message : 'Backend authentication failed.',
+          message: res.message.isNotEmpty
+              ? res.message
+              : 'Backend authentication failed.',
         );
       }
     } catch (e, stack) {

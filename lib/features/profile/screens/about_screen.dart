@@ -1,21 +1,22 @@
+import '../../../app/theme/app_colors.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../core/models/app_models.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../shared/widgets/app_logo.dart';
+import '../../../core/routes/app_routes.dart';
 
 // â”€â”€ Color tokens (consistent with all JustRide screens) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _C {
-  static const bg = Color(0xFF071519);
-  static const cardBg = Color(0xFF151A17);
-  static const cardBorder = Color(0xFF27312B);
-  static const surfContHigh = Color(0xFF1E2C30);
-  static const primary = Color(0xFF4BE277);
-  static const textSec = Color(0xFFBCCBB9);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const outlineVariant = Color(0xFF3D4A3D);
+  static const bg = AppColors.background;
+  static const cardBg = AppColors.surface;
+  static const cardBorder = AppColors.border;
+  static const surfContHigh = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
+  static const textSec = AppColors.textSecondary;
+  static const onSurface = AppColors.textPrimary;
+  static const outlineVariant = AppColors.border;
 }
 
 class AboutScreen extends StatefulWidget {
@@ -41,7 +42,9 @@ class _AboutScreenState extends State<AboutScreen> {
       final res = await BackendService.instance.getLatestAppRelease(
         currentBuild: AppConstants.appBuildNumber,
       );
-      if (res.success && res.data != null && res.data!.buildNumber > AppConstants.appBuildNumber) {
+      if (res.success &&
+          res.data != null &&
+          res.data!.buildNumber > AppConstants.appBuildNumber) {
         if (mounted) {
           setState(() {
             _latestApkRelease = res.data;
@@ -57,18 +60,12 @@ class _AboutScreenState extends State<AboutScreen> {
     return Scaffold(
       backgroundColor: _C.bg,
       appBar: _buildAppBar(context),
-      body: Column(
-        children: [
-          Expanded(child: _buildBody()),
-          _buildFooter(),
-        ],
-      ),
+      body: SafeArea(top: false, child: _buildBody()),
     );
   }
 
   // â”€â”€ App Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   PreferredSizeWidget _buildAppBar(BuildContext context) {
-
     return PreferredSize(
       preferredSize: const Size.fromHeight(56),
       child: SafeArea(
@@ -96,15 +93,15 @@ class _AboutScreenState extends State<AboutScreen> {
                 icon: const Icon(Icons.arrow_back_rounded,
                     color: _C.textSec, size: 24),
               ),
-              // AppLogo identical to all other screens
-              const AppLogo(
-                iconSize: 16,
-                fontSize: 20,
-                showTagline: false,
-                isCentered: true,
+              Image.asset(
+                'assets/justride-logo-horizontal.png',
+                width: 140,
+                fit: BoxFit.contain,
+                semanticLabel: 'JustRide',
               ),
               IconButton(
-                onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/profile-settings'),
                 icon: const Icon(Icons.settings_outlined,
                     color: _C.textSec, size: 24),
               ),
@@ -114,7 +111,6 @@ class _AboutScreenState extends State<AboutScreen> {
       ),
     );
   }
-
 
   // â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildBody() {
@@ -128,23 +124,11 @@ class _AboutScreenState extends State<AboutScreen> {
         children: [
           // â”€â”€ Header: icon + title + version badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const SizedBox(height: AppConstants.spacingLg),
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _C.cardBg,
-              border: Border.all(color: _C.cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: _C.primary.withValues(alpha: 0.1),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: const Icon(Icons.two_wheeler_rounded,
-                color: _C.primary, size: 48),
+          Image.asset(
+            'assets/justride-logo-horizontal.png',
+            width: 280,
+            fit: BoxFit.contain,
+            semanticLabel: 'JustRide official company logo',
           ),
           const SizedBox(height: AppConstants.spacingMd),
           Text(
@@ -164,8 +148,7 @@ class _AboutScreenState extends State<AboutScreen> {
             decoration: BoxDecoration(
               color: _C.surfContHigh,
               border: Border.all(color: _C.outlineVariant),
-              borderRadius:
-                  BorderRadius.circular(AppConstants.radiusCircle),
+              borderRadius: BorderRadius.circular(AppConstants.radiusCircle),
             ),
             child: Text(
               '${AppConstants.appVersion} (Build ${AppConstants.appBuildNumber})',
@@ -191,7 +174,8 @@ class _AboutScreenState extends State<AboutScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.system_update_rounded, color: _C.primary, size: 28),
+                  const Icon(Icons.system_update_rounded,
+                      color: _C.primary, size: 28),
                   const SizedBox(width: AppConstants.spacingMd),
                   Expanded(
                     child: Column(
@@ -199,14 +183,17 @@ class _AboutScreenState extends State<AboutScreen> {
                       children: [
                         Text(
                           'Update Available: v${_latestApkRelease!.version} (b${_latestApkRelease!.buildNumber})',
-                          style: AppTextStyles.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                          style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           _latestApkRelease!.releaseNotes?.isNotEmpty == true
                               ? _latestApkRelease!.releaseNotes!
                               : 'New features and stability updates are available.',
-                          style: AppTextStyles.bodySmall.copyWith(color: _C.textSec),
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: _C.textSec),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -225,19 +212,22 @@ class _AboutScreenState extends State<AboutScreen> {
                     ? 'Download Latest APK'
                     : 'Check for App Updates'),
             onTap: () {
-              if (_latestApkRelease != null && _latestApkRelease!.downloadUrl != null) {
+              if (_latestApkRelease != null &&
+                  _latestApkRelease!.downloadUrl != null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Downloading APK: ${_latestApkRelease!.downloadUrl}'),
-                    backgroundColor: _C.primary,
+                    content: Text(
+                        'Downloading APK: ${_latestApkRelease!.downloadUrl}'),
+                    backgroundColor: AppColors.primaryContainer,
                   ),
                 );
               } else {
                 _checkAppUpdate();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('You are already running the latest version!'),
-                    backgroundColor: _C.primary,
+                    content:
+                        Text('You are already running the latest version!'),
+                    backgroundColor: AppColors.primaryContainer,
                   ),
                 );
               }
@@ -246,69 +236,22 @@ class _AboutScreenState extends State<AboutScreen> {
           const SizedBox(height: AppConstants.spacingSm),
           _LinkTile(
             icon: Icons.description_outlined,
-            label: 'Terms of Service',
-            onTap: () {},
+            label: 'Terms & Conditions',
+            onTap: () => Navigator.of(context).pushNamed(AppRoutes.terms),
           ),
           const SizedBox(height: AppConstants.spacingSm),
           _LinkTile(
             icon: Icons.privacy_tip_outlined,
             label: 'Privacy Policy',
-            onTap: () {},
-          ),
-          const SizedBox(height: AppConstants.spacingSm),
-          _LinkTile(
-            icon: Icons.code_rounded,
-            label: 'Open Source Licenses',
-            onTap: () {},
+            onTap: () => Navigator.of(context).pushNamed(AppRoutes.privacy),
           ),
           const SizedBox(height: AppConstants.spacingSection),
         ],
       ),
     );
   }
-
-  // â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  Widget _buildFooter() {
-    return Container(
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: _C.outlineVariant, width: 1),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(
-        vertical: AppConstants.spacingLg,
-        horizontal: AppConstants.pagePadding,
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Â© 2024 JustRide Technologies',
-            style: AppTextStyles.bodyMedium.copyWith(color: _C.textSec),
-          ),
-          const SizedBox(height: AppConstants.spacingSm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _PulsingDot(),
-              const SizedBox(width: AppConstants.spacingSm),
-              Text(
-                'ALL SYSTEMS OPERATIONAL',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: _C.primary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-// â”€â”€ Link Tile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _LinkTile extends StatefulWidget {
   const _LinkTile({
     required this.icon,
@@ -328,85 +271,43 @@ class _LinkTileState extends State<_LinkTile> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _hovered = true),
-      onTapUp: (_) {
-        setState(() => _hovered = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: AppConstants.animFast,
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd),
-        decoration: BoxDecoration(
-          color: _C.cardBg,
-          border: Border.all(
-            color: _hovered
-                ? _C.primary.withValues(alpha: 0.5)
-                : _C.cardBorder,
-          ),
-          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        ),
-        child: Row(
-          children: [
-            Icon(widget.icon,
-                color: _hovered ? _C.primary : _C.textSec, size: 22),
-            const SizedBox(width: AppConstants.spacingMd),
-            Expanded(
-              child: Text(
-                widget.label,
-                style: AppTextStyles.bodyLarge.copyWith(color: _C.onSurface),
-              ),
+    return Semantics(
+      button: true,
+      label: widget.label,
+      child: InkWell(
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _hovered = true),
+        onTapUp: (_) {
+          setState(() => _hovered = false);
+        },
+        onTapCancel: () => setState(() => _hovered = false),
+        child: AnimatedContainer(
+          duration: AppConstants.animFast,
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.all(AppConstants.spacingMd),
+          decoration: BoxDecoration(
+            color: _C.cardBg,
+            border: Border.all(
+              color:
+                  _hovered ? _C.primary.withValues(alpha: 0.5) : _C.cardBorder,
             ),
-            Icon(Icons.chevron_right_rounded, color: _C.textSec, size: 22),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// â”€â”€ Pulsing Dot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-class _PulsingDot extends StatefulWidget {
-  @override
-  State<_PulsingDot> createState() => _PulsingDotState();
-}
-
-class _PulsingDotState extends State<_PulsingDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _opacity;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _opacity = Tween<double>(begin: 0.3, end: 1.0).animate(_ctrl);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _opacity,
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: _C.primary,
-          boxShadow: [
-            BoxShadow(color: Color(0x994BE277), blurRadius: 8),
-          ],
+            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+          ),
+          child: Row(
+            children: [
+              Icon(widget.icon,
+                  color: _hovered ? _C.primary : _C.textSec, size: 22),
+              const SizedBox(width: AppConstants.spacingMd),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: AppTextStyles.bodyLarge.copyWith(color: _C.onSurface),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: _C.textSec, size: 22),
+            ],
+          ),
         ),
       ),
     );

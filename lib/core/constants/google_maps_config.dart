@@ -1,4 +1,7 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'maps_loader_stub.dart'
+    if (dart.library.js_interop) 'maps_loader_web.dart' as maps_loader;
 
 /// Secure configuration manager for Google Maps Platform APIs.
 /// Keys are never hard-coded in Dart source files.
@@ -14,6 +17,7 @@ abstract final class GoogleMapsConfig {
   );
 
   static String _runtimeApiKey = '';
+  static bool webMapsLoaded = false;
 
   /// Sets runtime API key (useful for dynamic settings or testing)
   static void setApiKey(String key) {
@@ -24,6 +28,18 @@ abstract final class GoogleMapsConfig {
   /// A dart-define still takes precedence, so CI and other platforms can
   /// provide a key without relying on this Android bridge.
   static Future<void> loadPlatformApiKey() async {
+    if (kIsWeb) {
+      if (hasApiKey) {
+        try {
+          await maps_loader.load(apiKey);
+          webMapsLoaded = true;
+        } catch (_) {
+          debugPrint(
+              '[Maps] Browser map could not load. Other app features remain available.');
+        }
+      }
+      return;
+    }
     if (_envApiKey.isNotEmpty || _runtimeApiKey.isNotEmpty) return;
     try {
       final key = await const MethodChannel('com.justride.app/maps_config')

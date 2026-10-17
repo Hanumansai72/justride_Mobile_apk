@@ -1,3 +1,4 @@
+import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -6,19 +7,18 @@ import '../../../shared/widgets/app_logo.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 import 'support_ticket_screen.dart';
 
-
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const surfCont = Color(0xFF142226);
-  static const surfContHigh = Color(0xFF1E2C30);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outlineVariant = Color(0xFF3D4A3D);
-  static const tertiary = Color(0xFF7CD0FF);
-  static const secondary = Color(0xFF4DE082);
+  static const bg = AppColors.background;
+  static const surfCont = AppColors.surface;
+  static const surfContHigh = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outlineVariant = AppColors.border;
+  static const tertiary = AppColors.primary;
+  static const secondary = AppColors.primary;
 }
 
 class HelpSupportScreen extends StatefulWidget {
@@ -53,7 +53,6 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     );
   }
 
-
   // ── App Bar ────────────────────────────────────────────────────────────────
   PreferredSizeWidget _buildAppBar() {
     return PreferredSize(
@@ -84,7 +83,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 isCentered: true,
               ),
               IconButton(
-                onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/profile-settings'),
                 icon: const Icon(Icons.settings_outlined,
                     color: _C.primary, size: 24),
               ),
@@ -94,7 +94,6 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       ),
     );
   }
-
 
   // ── Body ───────────────────────────────────────────────────────────────────
   Widget _buildBody() {
@@ -218,6 +217,16 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
           ),
 
           // Action buttons
+          TextButton.icon(
+            onPressed: () => showLicensePage(
+              context: context,
+              applicationName: 'JustRide',
+              applicationVersion: AppConstants.appVersion,
+            ),
+            icon: const Icon(Icons.code_rounded),
+            label: const Text('Third-party notices'),
+          ),
+          const SizedBox(height: AppConstants.spacingMd),
           _ActionButton(
             icon: Icons.report_rounded,
             label: 'REPORT A PROBLEM',
@@ -290,7 +299,7 @@ class _CategoryCardState extends State<_CategoryCard> {
               opacity: _hovered ? 1.0 : 0.0,
               duration: AppConstants.animNormal,
               child: Container(
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,

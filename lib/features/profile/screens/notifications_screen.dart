@@ -1,3 +1,4 @@
+import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -10,18 +11,18 @@ import '../../../shared/widgets/app_logo.dart';
 
 // â”€â”€ Colour tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _C {
-  static const bg = Color(0xFF071519);
-  static const surfCont = Color(0xFF142226);
-  static const surfContLow = Color(0xFF101E22);
-  static const surfContHighest = Color(0xFF29373B);
-  static const surfVariant = Color(0xFF29373B);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const primaryCont = Color(0xFF22C55E);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outline = Color(0xFF869585);
-  static const outlineVariant = Color(0xFF3D4A3D);
+  static const bg = AppColors.background;
+  static const surfCont = AppColors.surface;
+  static const surfContLow = AppColors.backgroundInset;
+  static const surfContHighest = AppColors.surfaceElevated;
+  static const surfVariant = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const primaryCont = AppColors.primary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outline = AppColors.textMuted;
+  static const outlineVariant = AppColors.border;
 }
 
 // â”€â”€ Data models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -56,6 +57,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   int _selectedChip = 0;
   List<NotificationModel> _backendNotifications = [];
   bool _isLoading = true;
+  bool _isUpdatingRead = false;
+  int _fetchVersion = 0;
 
   @override
   void initState() {
@@ -63,10 +66,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _fetchNotifications();
   }
 
-  Future<void> _fetchNotifications() async {
-    setState(() => _isLoading = true);
+  Future<void> _fetchNotifications({bool showLoading = true}) async {
+    final version = ++_fetchVersion;
+    if (showLoading) setState(() => _isLoading = true);
     final res = await BackendService.instance.getNotifications();
-    if (mounted) {
+    if (mounted && version == _fetchVersion) {
       setState(() {
         _isLoading = false;
         if (res.success && res.data != null) {
@@ -74,6 +78,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         }
       });
     }
+  }
+
+  Future<bool> _markRead({NotificationModel? notification}) async {
+    if (_isUpdatingRead) return false;
+    if (notification?.isRead == true) return true;
+    ++_fetchVersion; // Ignore a list fetched before this write.
+    setState(() => _isUpdatingRead = true);
+    final response = notification == null
+        ? await BackendService.instance.markAllNotificationsAsRead()
+        : await BackendService.instance.markNotificationAsRead(notification.id);
+    if (!mounted) return false;
+    setState(() {
+      _isUpdatingRead = false;
+      _isLoading = false;
+      if (response.success) {
+        _backendNotifications = _backendNotifications
+            .map((item) => notification == null || item.id == notification.id
+                ? item.copyWith(isRead: true)
+                : item)
+            .toList();
+      }
+    });
+    if (!response.success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(response.message.isNotEmpty
+            ? response.message
+            : 'Could not mark notifications as read. Please try again.'),
+      ));
+      return false;
+    }
+    await _fetchNotifications(showLoading: false);
+    return true;
   }
 
   @override
@@ -153,9 +189,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             AppConstants.pagePadding,
             0,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 12,
             children: [
               Text(
                 'Notifications',
@@ -165,7 +202,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   GestureDetector(
                     onTap: () async {
@@ -178,7 +218,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         final latest = _backendNotifications.first;
                         BleNavigationService.instance.sendLatestNotification(
                             latest.title, latest.message);
-                        if (context.mounted) {
+                        if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                                 content:
@@ -193,7 +233,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       decoration: BoxDecoration(
                         color: _C.surfCont,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _C.primary.withOpacity(0.4)),
+                        border: Border.all(
+                            color: _C.primary.withValues(alpha: 0.4)),
                       ),
                       child: Row(
                         children: [
@@ -212,16 +253,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
                   GestureDetector(
-                    onTap: () {},
+                    onTap: _isUpdatingRead ? null : () => _markRead(),
                     child: Text(
                       'MARK ALL READ',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
-                        color: _C.primary,
+                        color: _isUpdatingRead ? _C.textSec : _C.primary,
                       ),
                     ),
                   ),
@@ -260,8 +300,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               final filtered = _backendNotifications.where((n) {
                 if (_selectedChip == 0) return true; // ALL
                 final type = n.type.toUpperCase();
-                if (_selectedChip == 1)
+                if (_selectedChip == 1) {
                   return type.contains('APK') || type.contains('APP');
+                }
                 if (_selectedChip == 2) return type.contains('FIRMWARE');
                 if (_selectedChip == 3) return type.contains('DEVICE');
                 if (_selectedChip == 4) return type.contains('SECURITY');
@@ -324,13 +365,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         BleNavigationService.instance
                             .sendLatestNotification(n.title, n.message);
                       }
-                      await BackendService.instance
-                          .markNotificationAsRead(n.id);
+                      if (!await _markRead(notification: n)) return;
                       if (!context.mounted) return;
                       if (type.contains('FIRMWARE')) {
                         Navigator.of(context).pushNamed('/device-settings');
                       }
-                      _fetchNotifications();
                     },
                   );
                 },

@@ -17,7 +17,7 @@ class _C {
   static const cardBorder = AppColors.border;
   static const inputBg = AppColors.surfaceElevated;
   static const primary = AppColors.primary;
-  static const onPrimary = Color(0xFF003915);
+  static const onPrimary = AppColors.onPrimary;
   static const onSurface = AppColors.textPrimary;
   static const textSec = AppColors.textSecondary;
 }
@@ -126,7 +126,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Current GPS coordinates captured!'),
-              backgroundColor: _C.primary,
+              backgroundColor: AppColors.primaryContainer,
               duration: Duration(seconds: 2),
             ),
           );
@@ -194,7 +194,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$label saved successfully!'),
-            backgroundColor: _C.primary,
+            backgroundColor: AppColors.primaryContainer,
           ),
         );
         Navigator.of(context).pop(true);

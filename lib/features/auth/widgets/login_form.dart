@@ -74,18 +74,21 @@ class _LoginFormState extends State<LoginForm> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.15),
+              color: AppColors.errorText.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-              border: Border.all(color: AppColors.error.withValues(alpha: 0.5)),
+              border:
+                  Border.all(color: AppColors.errorText.withValues(alpha: 0.5)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+                const Icon(Icons.error_outline_rounded,
+                    color: AppColors.errorText, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     _errorMessage!,
-                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.error),
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: AppColors.errorText),
                   ),
                 ),
               ],
@@ -109,25 +112,34 @@ class _LoginFormState extends State<LoginForm> {
           controller: _passwordController,
           suffixIcon: IconButton(
             icon: Icon(
-              _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              _obscurePassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
               color: AppColors.primary,
               size: 20,
             ),
-            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+            onPressed: () =>
+                setState(() => _obscurePassword = !_obscurePassword),
           ),
         ),
         const SizedBox(height: AppConstants.spacingSm),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
+            Expanded(
+                child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
                   width: 24,
                   height: 24,
                   child: Checkbox(
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
                     value: _rememberMe,
-                    onChanged: (val) => setState(() => _rememberMe = val ?? false),
+                    onChanged: (val) =>
+                        setState(() => _rememberMe = val ?? false),
                     activeColor: AppColors.primary,
                     checkColor: AppColors.background,
                     side: const BorderSide(color: AppColors.primary),
@@ -137,16 +149,31 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('Remember me', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary)),
+                Flexible(
+                    child: Text('Remember me',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textPrimary))),
               ],
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pushNamed('/forgot-password'),
+            )),
+            const SizedBox(width: 8),
+            Flexible(
+                child: TextButton(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                minimumSize: const Size(0, 44),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: () =>
+                  Navigator.of(context).pushNamed('/forgot-password'),
               child: Text(
                 'Forgot Password?',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.accentMedium,
               ),
-            ),
+            )),
           ],
         ),
         const SizedBox(height: AppConstants.spacingLg),
@@ -189,4 +216,3 @@ class _LoginFormState extends State<LoginForm> {
     );
   }
 }
-

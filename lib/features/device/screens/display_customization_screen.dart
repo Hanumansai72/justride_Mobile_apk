@@ -1,3 +1,4 @@
+import '../../../app/theme/app_colors.dart';
 // lib/features/device/screens/display_customization_screen.dart
 //
 // Full-featured Display Customization screen:
@@ -22,19 +23,19 @@ import '../../../core/services/backend_service.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const surfCont = Color(0xFF142226);
-  static const surfContHigh = Color(0xFF1E2C30);
-  static const surfContLow = Color(0xFF101E22);
-  static const surfVariant = Color(0xFF29373B);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outlineVariant = Color(0xFF3D4A3D);
-  static const errorContainer = Color(0xFF93000A);
-  static const error = Color(0xFFFFB4AB);
-  static const onError = Color(0xFF690005);
+  static const bg = AppColors.background;
+  static const surfCont = AppColors.surface;
+  static const surfContHigh = AppColors.surfaceElevated;
+  static const surfContLow = AppColors.backgroundInset;
+  static const surfVariant = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outlineVariant = AppColors.border;
+  static const errorContainer = AppColors.errorSurface;
+  static const error = AppColors.errorLight;
+  static const onError = AppColors.onPrimary;
 }
 
 class DisplayCustomizationScreen extends StatefulWidget {
@@ -79,7 +80,7 @@ class _DisplayCustomizationScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not open image: $e'),
-            backgroundColor: _C.error,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -117,7 +118,7 @@ class _DisplayCustomizationScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Image processing error: $e'),
-          backgroundColor: _C.error,
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -152,7 +153,7 @@ class _DisplayCustomizationScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No device connected. Please pair your JustRide device first.'),
-          backgroundColor: _C.error,
+          backgroundColor: AppColors.error,
         ),
       );
       return;
@@ -257,7 +258,7 @@ class _DisplayCustomizationScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Custom image removed from device and backend! Default display restored.'),
-          backgroundColor: _C.primary,
+          backgroundColor: AppColors.primaryContainer,
         ),
       );
     }

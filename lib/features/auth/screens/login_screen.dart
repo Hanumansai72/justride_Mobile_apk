@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Welcome, ${result.user?.fullName ?? "Rider"}!'),
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.primaryContainer,
           ),
         );
         Navigator.of(context).pushReplacementNamed('/dashboard');
@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.message ?? 'Google Sign-In failed'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -50,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -62,63 +62,39 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // Bottom background biker graphic (placeholder)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Opacity(
-              opacity: 0.6,
-              child: Image.network(
-                'https://via.placeholder.com/800x400/000000/00C853?text=JustRide+Biker+Graphic',
-                fit: BoxFit.cover,
-                height: 250,
-              ),
-            ),
-          ),
-          // Top to bottom gradient to fade the background
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.background,
-                    AppColors.background.withOpacity(0.8),
-                    AppColors.transparent,
-                  ],
-                  stops: const [0.0, 0.7, 1.0],
-                ),
-              ),
-            ),
-          ),
           SafeArea(
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.pagePadding),
                     child: Column(
                       children: [
                         const SizedBox(height: 40),
                         // Logo
                         const Center(
-                          child: AppLogo(
-                            iconSize: 32,
-                            fontSize: 28,
-                            showTagline: false,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: AppLogo(
+                              iconSize: 32,
+                              fontSize: 28,
+                              showTagline: false,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 40),
                         // Titles
-                        Text('Welcome back!', style: AppTextStyles.displayMedium),
+                        Text('Welcome back!',
+                            style: AppTextStyles.displayMedium),
                         const SizedBox(height: 8),
                         Text(
                           'Login to continue your journey',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 40),
                         // Login Form
@@ -127,12 +103,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Divider
                         Row(
                           children: [
-                            const Expanded(child: Divider(color: AppColors.border)),
+                            const Expanded(
+                                child: Divider(color: AppColors.border)),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text('OR', style: AppTextStyles.labelSmall),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child:
+                                  Text('OR', style: AppTextStyles.labelSmall),
                             ),
-                            const Expanded(child: Divider(color: AppColors.border)),
+                            const Expanded(
+                                child: Divider(color: AppColors.border)),
                           ],
                         ),
                         const SizedBox(height: 24),
@@ -142,26 +122,34 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.textPrimary),
                                 )
                               : const GoogleLogoWidget(size: 22),
-                          label: _isGoogleLoading ? 'Connecting to Google...' : 'Continue with Google',
-                          onPressed: _isGoogleLoading ? () {} : _handleGoogleSignIn,
+                          label: _isGoogleLoading
+                              ? 'Connecting to Google...'
+                              : 'Continue with Google',
+                          onPressed:
+                              _isGoogleLoading ? () {} : _handleGoogleSignIn,
                         ),
                         const SizedBox(height: 32),
                         // Footer
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Wrap(
+                          alignment: WrapAlignment.center,
                           children: [
                             Text(
                               "Don't have an account? ",
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                              style: AppTextStyles.bodyMedium
+                                  .copyWith(color: AppColors.textSecondary),
                             ),
                             GestureDetector(
-                              onTap: () => Navigator.of(context).pushReplacementNamed('/signup'),
+                              onTap: () => Navigator.of(context)
+                                  .pushReplacementNamed('/signup'),
                               child: Text(
                                 'Sign Up',
-                                style: AppTextStyles.accentMedium.copyWith(fontWeight: FontWeight.bold),
+                                style: AppTextStyles.accentMedium
+                                    .copyWith(fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
@@ -181,7 +169,8 @@ class _LoginScreenState extends State<LoginScreen> {
             left: 10,
             child: IconButton(
               onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              icon: const Icon(Icons.arrow_back_rounded,
+                  color: AppColors.textPrimary),
             ),
           ),
         ],

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/ble_navigation_packet.dart';
 import '../models/navigation_state.dart';
 import '../utils/route_window_transformer.dart';
@@ -25,6 +26,9 @@ class BleNavigationService {
   VoidCallback? _connListener;
 
   NavigationState? _lastTransmittedState;
+  RouteWindowSegment? _latestRouteSegment;
+  NavContextPacket? _latestContext;
+  StreamSubscription<List<int>>? _statusSubscription;
   DateTime? _lastTransmittedTime;
   bool _useJson = false;
 
@@ -60,17 +64,29 @@ class BleNavigationService {
       final chr = _dataChar;
       if (chr == null) return false;
       try {
+        final useNoResponse =
+            withoutResponse ?? chr.properties.writeWithoutResponse;
         await chr.write(
           bytes,
-          withoutResponse:
-              withoutResponse ?? chr.properties.writeWithoutResponse,
+          withoutResponse: useNoResponse,
         );
         return true;
       } catch (e) {
-        // A transient GATT_BUSY must not discard a working characteristic.
-        // The following periodic telemetry write can use it immediately.
-        debugPrint('[BleNav] GATT write failed: $e');
-        return false;
+        debugPrint(
+            '[BleNav] GATT write failed (noResponse=$withoutResponse): $e. Attempting fallback...');
+        try {
+          final fallbackNoResponse =
+              !(withoutResponse ?? chr.properties.writeWithoutResponse);
+          await chr.write(
+            bytes,
+            withoutResponse: fallbackNoResponse,
+          );
+          debugPrint('[BleNav] GATT fallback write succeeded!');
+          return true;
+        } catch (e2) {
+          debugPrint('[BleNav] Both write modes failed: $e2');
+          return false;
+        }
       }
     });
   }
@@ -94,9 +110,20 @@ class BleNavigationService {
         .addListener(_connListener!);
 
     // In case the device is already connected when init() is called.
-    if (JustRideBleService.instance.isDeviceConnected) {
-      _discoverNavCharacteristics(JustRideBleService.instance.connectedDevice);
+    final connectedDevice = JustRideBleService.instance.connectedDevice;
+    if (connectedDevice != null &&
+        JustRideBleService.instance.isDeviceConnected) {
+      _scheduleNavDiscovery(connectedDevice);
     }
+  }
+
+  void _scheduleNavDiscovery(BluetoothDevice device) {
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (JustRideBleService.instance.connectedDevice == device &&
+          JustRideBleService.instance.isDeviceConnected) {
+        _discoverNavCharacteristics(device);
+      }
+    });
   }
 
   void _onConnectionStateChanged() {
@@ -104,15 +131,15 @@ class BleNavigationService {
     if (state == BluetoothConnectionState.connected) {
       final dev = JustRideBleService.instance.connectedDevice;
       if (dev != null) {
-        // Delay: let bluetooth_service.syncCurrentTime() finish its discoverServices()
-        // call first. Android BLE stack is not re-entrant — two concurrent
-        // discoverServices() calls on the same device will reset MTU and can
-        // cause an immediate disconnection.
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          _discoverNavCharacteristics(dev);
-        });
+        // bluetooth_service.connectDevice still performs service discovery and
+        // the initial clock write after the connection event.  Wait for those
+        // GATT operations to finish before inspecting navigation characteristics
+        // (Android permits only one GATT operation at a time).
+        _scheduleNavDiscovery(dev);
       }
     } else {
+      _statusSubscription?.cancel();
+      _statusSubscription = null;
       _dataChar = null;
       _statusChar = null;
       _isDiscovering = false;
@@ -133,7 +160,12 @@ class BleNavigationService {
     _isDiscovering = true;
     try {
       List<BluetoothService> services = device.servicesList;
-      if (services.isEmpty) {
+      final hasNavSvc = services.any((svc) => svc.uuid
+          .toString()
+          .toLowerCase()
+          .replaceAll('-', '')
+          .contains(navServiceUuid));
+      if (!hasNavSvc) {
         debugPrint(
             '[BleNav] Discovering GATT services for ${device.remoteId.str}...');
         services = await device.discoverServices();
@@ -168,7 +200,8 @@ class BleNavigationService {
         if (_statusChar != null) {
           if (_statusChar!.properties.notify) {
             await _statusChar!.setNotifyValue(true);
-            _statusChar!.onValueReceived.listen((value) {
+            await _statusSubscription?.cancel();
+            _statusSubscription = _statusChar!.onValueReceived.listen((value) {
               if (value.isNotEmpty) {
                 final status = value[0];
                 debugPrint(
@@ -189,15 +222,29 @@ class BleNavigationService {
 
         // Sync if navigation is active in any riding state:
         //   NAVIGATING, REROUTING, or PAUSED — not just NAVIGATING
-        if (_lastTransmittedState != null) {
-          final status = _lastTransmittedState!.navigationStatus;
-          final isActiveState = status == 'NAVIGATING' ||
-              status == 'REROUTING' ||
-              status == 'PAUSED' ||
-              status == 'GPS_LOST';
-          if (isActiveState) {
-            syncState(_lastTransmittedState!);
+        final navigation = NavigationService.instance;
+        if (navigation.isNavigating &&
+            navigation.currentState.rideState.isActive) {
+          await syncState(navigation.currentState);
+          final route = navigation.activeRoute;
+          final destination = navigation.currentDestination;
+          if (route != null &&
+              destination != null &&
+              route.polylinePoints.isNotEmpty) {
+            final state = navigation.currentState;
+            final window = RouteWindowTransformer.transform(
+              riderPosition:
+                  LatLng(state.currentLatitude, state.currentLongitude),
+              riderHeadingDeg: state.heading,
+              polylinePoints: route.polylinePoints,
+              destination: LatLng(destination.latitude, destination.longitude),
+              minimumRouteIndex: navigation.routeProgressIndex,
+            );
+            await sendRouteSegment(window);
+          } else if (_latestRouteSegment != null) {
+            await sendRouteSegment(_latestRouteSegment!);
           }
+          if (_latestContext != null) await sendNavContext(_latestContext!);
         }
       }
       return ready;
@@ -289,6 +336,8 @@ class BleNavigationService {
     debugPrint('[BleNav] Sending NAV_STOP to ESP32...');
     await sendNavUpdate(state, opCode: BleNavOpCode.navStop, force: true);
     _lastTransmittedState = null;
+    _latestRouteSegment = null;
+    _latestContext = null;
   }
 
   /// Sends immediate standalone NAV_CANCEL to reset the display back to idle
@@ -407,11 +456,18 @@ class BleNavigationService {
 
   /// Sends sliding route window segment (OpCode 0x0B) to ESP32
   Future<bool> sendRouteSegment(RouteWindowSegment segment) async {
+    _latestRouteSegment = segment;
     if (!isReady || _dataChar == null || segment.points.isEmpty) return false;
 
     final packet = RouteSegmentPacket.fromWindow(segment);
     final bytes = packet.toBinary();
     return await _writeBytes(bytes, withoutResponse: false);
+  }
+
+  Future<bool> sendNavContext(NavContextPacket context) async {
+    _latestContext = context;
+    if (!isReady || _dataChar == null) return false;
+    return _writeBytes(context.toBinary(), withoutResponse: false);
   }
 
   /// Sends strictly the latest notification (OpCode 0x0F) to the ESP32 HUD display.
@@ -480,7 +536,8 @@ class BleNavigationService {
     if ((current.speedKmh - last.speedKmh).abs() >= 0.4) return true;
 
     // Heading changed noticeably (>= 3 degrees while moving)
-    if (current.speedKmh >= 1.5 && (current.heading - last.heading).abs() >= 3.0) {
+    if (current.speedKmh >= 1.5 &&
+        (current.heading - last.heading).abs() >= 3.0) {
       return true;
     }
 
@@ -502,7 +559,8 @@ class BleNavigationService {
     // between phone movement and the motorcycle HUD display.
     final now = DateTime.now();
     if (_lastTransmittedTime != null &&
-        now.difference(_lastTransmittedTime!) > const Duration(milliseconds: 250)) {
+        now.difference(_lastTransmittedTime!) >
+            const Duration(milliseconds: 250)) {
       return true;
     }
 
@@ -510,6 +568,8 @@ class BleNavigationService {
   }
 
   void dispose() {
+    _statusSubscription?.cancel();
+    _statusSubscription = null;
     if (_connListener != null) {
       JustRideBleService.instance.connectionStateNotifier
           .removeListener(_connListener!);

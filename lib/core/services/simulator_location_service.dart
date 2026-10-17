@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,7 +12,7 @@ class SimulatorLocationService {
   SimulatorLocationService._();
   static final SimulatorLocationService instance = SimulatorLocationService._();
 
-  WebSocket? _socket;
+  WebSocketChannel? _socket;
   Timer? _reconnectTimer;
   bool _isConnecting = false;
   bool _shouldReconnect = false;
@@ -45,7 +45,10 @@ class SimulatorLocationService {
 
   /// Sets custom simulator host (e.g. 192.168.1.100:8080)
   Future<void> setHost(String newHost) async {
-    _host = newHost.trim().replaceAll('http://', '').replaceAll('ws://', '');
+    _host = newHost
+        .trim()
+        .replaceFirst(RegExp(r'^https://'), 'wss://')
+        .replaceFirst(RegExp(r'^http://'), 'ws://');
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_defaultHostKey, _host);
@@ -69,12 +72,18 @@ class SimulatorLocationService {
     ];
 
     for (final h in candidateHosts) {
-      final wsUrl = 'ws://$h';
+      final wsUrl =
+          h.startsWith('ws://') || h.startsWith('wss://') ? h : 'ws://$h';
       try {
         debugPrint('[SimLoc] Attempting connection to $wsUrl...');
-        final socket = await WebSocket.connect(wsUrl)
-            .timeout(const Duration(milliseconds: 1500));
-        
+        final socket = WebSocketChannel.connect(Uri.parse(wsUrl));
+        try {
+          await socket.ready.timeout(const Duration(milliseconds: 1500));
+        } catch (_) {
+          unawaited(socket.sink.close());
+          rethrow;
+        }
+
         _socket = socket;
         _isConnecting = false;
         isConnectedNotifier.value = true;
@@ -95,7 +104,7 @@ class SimulatorLocationService {
   }
 
   void _listenToSocket() {
-    _socket?.listen(
+    _socket?.stream.listen(
       (data) {
         try {
           final json = jsonDecode(data as String) as Map<String, dynamic>;
@@ -155,7 +164,7 @@ class SimulatorLocationService {
     _shouldReconnect = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _socket?.close();
+    _socket?.sink.close();
     _socket = null;
     isConnectedNotifier.value = false;
   }

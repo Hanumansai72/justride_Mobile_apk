@@ -23,8 +23,8 @@ class ProfileMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? AppColors.error : AppColors.primary;
-    final textColor = isDestructive ? AppColors.error : AppColors.textPrimary;
+    final color = isDestructive ? AppColors.errorText : AppColors.primary;
+    final textColor = isDestructive ? AppColors.errorText : AppColors.textPrimary;
 
     return InkWell(
       onTap: onTap ?? () {},

@@ -42,6 +42,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:label="JUSTRIDE"
             android:exported="true"
             android:launchMode="singleTask"
             android:documentLaunchMode="never"
@@ -62,11 +63,36 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Receive shared text/urls from Google Maps -->
-            <intent-filter>
+            <!-- Receive shared text/urls from Google Maps and other apps -->
+            <intent-filter android:label="JUSTRIDE">
                 <action android:name="android.intent.action.SEND"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="text/plain"/>
+            </intent-filter>
+            <intent-filter android:label="JUSTRIDE">
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/*"/>
+            </intent-filter>
+
+            <!-- Receive geo URIs (e.g. geo:17.3615,78.4746 or geo:0,0?q=...) -->
+            <intent-filter android:label="JUSTRIDE">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="geo"/>
+            </intent-filter>
+
+            <!-- Handle Google Maps web and shortened links -->
+            <intent-filter android:label="JUSTRIDE">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="maps.google.com"/>
+                <data android:scheme="https" android:host="maps.app.goo.gl"/>
+                <data android:scheme="https" android:host="goo.gl" android:pathPrefix="/maps"/>
+                <data android:scheme="https" android:host="www.google.com" android:pathPrefix="/maps"/>
+                <data android:scheme="http" android:host="maps.google.com"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

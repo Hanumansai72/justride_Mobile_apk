@@ -65,6 +65,8 @@ class ApiClient {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
+    await prefs.remove('resume_active_session');
+    await prefs.remove('resume_destination');
   }
 
   /// Handle session expiration: clears auth and forces user back to login screen

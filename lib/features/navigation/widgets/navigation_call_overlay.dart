@@ -1,3 +1,4 @@
+import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/services/telephony_service.dart';
@@ -30,13 +31,13 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
   bool _isActionInProgress = false;
 
   // Obsidian HUD Palette
-  static const Color _cardBg = Color(0xFF0F1E24);
-  static const Color _border = Color(0xFF27434C);
-  static const Color _primary = Color(0xFF4BE277);
-  static const Color _onPrimary = Color(0xFF003915);
-  static const Color _red = Color(0xFFFF453A);
-  static const Color _textPrimary = Color(0xFFF2F5F6);
-  static const Color _textSecondary = Color(0xFFA1B4B9);
+  static const Color _cardBg = AppColors.backgroundInset;
+  static const Color _border = AppColors.border;
+  static const Color _primary = AppColors.primary;
+  static const Color _onPrimary = AppColors.onPrimary;
+  static const Color _red = AppColors.error;
+  static const Color _textPrimary = AppColors.textPrimary;
+  static const Color _textSecondary = AppColors.textSecondary;
 
   @override
   void initState() {
@@ -162,7 +163,7 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                           decoration: BoxDecoration(
                             color: isOffhook
                                 ? _primary.withValues(alpha: 0.15)
-                                : const Color(0xFFFFAE33).withValues(alpha: 0.15),
+                                : AppColors.warning.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -170,7 +171,7 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                             style: GoogleFonts.jetBrainsMono(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
-                              color: isOffhook ? _primary : const Color(0xFFFFAE33),
+                              color: isOffhook ? _primary : AppColors.warning,
                             ),
                           ),
                         ),
@@ -203,7 +204,7 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                   onPressed: _isActionInProgress ? null : _handleReject,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _red,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.textPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     elevation: 0,
                     shape: RoundedRectangleBorder(

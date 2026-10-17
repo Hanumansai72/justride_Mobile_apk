@@ -217,7 +217,7 @@ void main() {
 
       final binary = packet.toBinary();
 
-      expect(binary.length, 21 + 'MG Road'.length);
+      expect(binary.length, 21 + 'MG Road'.length + 4 + 'Church Street'.length);
       expect(binary[0], 0x02); // OpCode update
       expect(binary[1], 5);    // JustRideManeuverCode right = 5
       expect(binary[16] & 0x01, 1); // isNavigating

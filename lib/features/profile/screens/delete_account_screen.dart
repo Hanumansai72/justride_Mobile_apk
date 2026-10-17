@@ -1,3 +1,4 @@
+import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -6,19 +7,19 @@ import '../../../shared/widgets/app_logo.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const surfCont = Color(0xFF142226);
-  static const surfContLow = Color(0xFF101E22);
-  static const primary = Color(0xFF4BE277);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outlineVariant = Color(0xFF3D4A3D);
-  static const surfaceVariant = Color(0xFF29373B);
-  static const outline = Color(0xFF869585);
+  static const bg = AppColors.background;
+  static const surfCont = AppColors.surface;
+  static const surfContLow = AppColors.backgroundInset;
+  static const primary = AppColors.primary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outlineVariant = AppColors.border;
+  static const surfaceVariant = AppColors.surfaceElevated;
+  static const outline = AppColors.textMuted;
   // Error palette
-  static const error = Color(0xFFFFB4AB);
-  static const onError = Color(0xFF690005);
-  static const errorContainer = Color(0xFF93000A);
+  static const error = AppColors.errorLight;
+  static const onError = AppColors.onPrimary;
+  static const errorContainer = AppColors.errorSurface;
 }
 
 class DeleteAccountScreen extends StatefulWidget {

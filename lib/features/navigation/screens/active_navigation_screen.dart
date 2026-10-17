@@ -1,8 +1,10 @@
 import 'dart:ui' as ui;
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import '../../../core/constants/google_maps_config.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/navigation_state.dart';
 import '../../../core/models/simulated_location_packet.dart';
@@ -16,15 +18,15 @@ import '../../../core/utils/maneuver_mapper.dart';
 
 // ── Obsidian & Emerald HUD palette ──────────────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const cardBg = Color(0xFF101E22);
-  static const cardBorder = Color(0xFF22353A);
-  static const primary = Color(0xFF4BE277);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFF9EACB1);
-  static const blueAccent = Color(0xFF38BDF8);
-  static const amber = Color(0xFFFDA026);
-  static const red = Color(0xFFFF5252);
+  static const bg = AppColors.background;
+  static const cardBg = AppColors.surface;
+  static const cardBorder = AppColors.border;
+  static const primary = AppColors.primary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const blueAccent = AppColors.primary;
+  static const amber = AppColors.warning;
+  static const red = AppColors.errorText;
 }
 
 /// Full-screen active motorcycle turn-by-turn navigation screen with Google Maps.
@@ -69,7 +71,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
 
     // 1. Forward directional indicator tip (pointing UP / North in direction of travel)
     final arrowPaint = Paint()
-      ..color = const Color(0xFF00E676)
+      ..color = AppColors.primary
       ..style = PaintingStyle.fill;
     final arrowPath = Path()
       ..moveTo(center.dx, 8.0)
@@ -80,19 +82,19 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
 
     // 2. Outer pulse / glow halo
     final glowPaint = Paint()
-      ..color = const Color(0xFF00E676).withValues(alpha: 0.22)
+      ..color = AppColors.primary.withValues(alpha: 0.22)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(center, 48.0, glowPaint);
 
     // 3. Dark Disc Body
     final discPaint = Paint()
-      ..color = const Color(0xFF0A1B1E)
+      ..color = AppColors.backgroundInset
       ..style = PaintingStyle.fill;
     canvas.drawCircle(center, 38.0, discPaint);
 
     // 4. Emerald Accent Border
     final borderPaint = Paint()
-      ..color = const Color(0xFF00E676)
+      ..color = AppColors.primary
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5;
     canvas.drawCircle(center, 38.0, borderPaint);
@@ -106,14 +108,15 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
           fontSize: 42.0,
           fontFamily: Icons.two_wheeler_rounded.fontFamily,
           package: Icons.two_wheeler_rounded.fontPackage,
-          color: Colors.white,
+          color: AppColors.textPrimary,
         ),
       ),
     );
     textPainter.layout();
     textPainter.paint(
       canvas,
-      Offset(center.dx - textPainter.width / 2, center.dy - textPainter.height / 2),
+      Offset(center.dx - textPainter.width / 2,
+          center.dy - textPainter.height / 2),
     );
 
     final picture = pictureRecorder.endRecording();
@@ -126,17 +129,14 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
   // Dark navigation map style
   static const String _darkMapStyle = '''
   [
-    {"elementType": "geometry", "stylers": [{"color": "#091316"}]},
-    {"elementType": "labels.text.fill", "stylers": [{"color": "#74868c"}]},
-    {"elementType": "labels.text.stroke", "stylers": [{"color": "#091316"}]},
-    {"featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{"color": "#bccbb9"}]},
-    {"featureType": "poi", "elementType": "labels.text.fill", "stylers": [{"color": "#4be277"}]},
-    {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#0d221c"}]},
-    {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#182a30"}]},
-    {"featureType": "road", "elementType": "geometry.stroke", "stylers": [{"color": "#0c181b"}]},
-    {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#223b42"}]},
-    {"featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{"color": "#14252a"}]},
-    {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#05161a"}]}
+    {"elementType": "geometry", "stylers": [{"color": "#0b100d"}]},
+    {"elementType": "labels.text.fill", "stylers": [{"color": "#aab5ad"}]},
+    {"elementType": "labels.text.stroke", "stylers": [{"color": "#0b100d"}]},
+    {"featureType": "poi", "elementType": "labels.text.fill", "stylers": [{"color": "#34d399"}]},
+    {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#141a16"}]},
+    {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#1a211c"}]},
+    {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#27382b"}]},
+    {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#101812"}]}
   ]
   ''';
 
@@ -186,14 +186,18 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
           valueListenable: NavigationService.instance.navigationStateNotifier,
           builder: (context, state, _) {
             final route = NavigationService.instance.activeRoute;
-            final isBleConnected = JustRideBleService.instance.isDeviceConnected;
+            final isBleConnected =
+                JustRideBleService.instance.isDeviceConnected;
 
             // Update camera smoothly if following user (use moveCamera to avoid animation cancel/restart stutter during real-time GPS stream)
-            if (_isFollowingUser && _mapController != null && state.currentLatitude != 0) {
+            if (_isFollowingUser &&
+                _mapController != null &&
+                state.currentLatitude != 0) {
               _mapController!.moveCamera(
                 CameraUpdate.newCameraPosition(
                   CameraPosition(
-                    target: LatLng(state.currentLatitude, state.currentLongitude),
+                    target:
+                        LatLng(state.currentLatitude, state.currentLongitude),
                     zoom: 17.5,
                     tilt: 45.0,
                     bearing: state.heading,
@@ -210,12 +214,14 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               markers.add(
                 Marker(
                   markerId: const MarkerId('rider'),
-                  position: LatLng(state.currentLatitude, state.currentLongitude),
+                  position:
+                      LatLng(state.currentLatitude, state.currentLongitude),
                   rotation: state.heading,
                   anchor: const Offset(0.5, 0.5),
                   flat: true,
                   icon: _bikeMarkerIcon ??
-                      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                      BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueGreen),
                 ),
               );
             }
@@ -227,19 +233,20 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 Marker(
                   markerId: const MarkerId('destination'),
                   position: LatLng(dest.latitude, dest.longitude),
-                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueRed),
                   infoWindow: InfoWindow(title: dest.displayTitle),
                 ),
               );
             }
 
-            // Route Polyline (VIBRANT ROYAL BLUE — 0x2979FF per Master Design System)
+            // Active route uses the customer site's navigation accent.
             if (route != null && route.polylinePoints.isNotEmpty) {
               polylines.add(
                 Polyline(
                   polylineId: const PolylineId('active_route'),
                   points: route.polylinePoints,
-                  color: const Color(0xFF2979FF),
+                  color: AppColors.primary,
                   width: 7,
                   jointType: JointType.round,
                   endCap: Cap.roundCap,
@@ -251,33 +258,47 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
             return Stack(
               children: [
                 // 1. Google Map View
-                GoogleMap(
-                  onMapCreated: _onMapCreated,
-                  initialCameraPosition: CameraPosition(
-                    target: LatLng(
-                      state.currentLatitude != 0 ? state.currentLatitude : 12.9716,
-                      state.currentLongitude != 0 ? state.currentLongitude : 77.5946,
+                if (kIsWeb && !GoogleMapsConfig.webMapsLoaded)
+                  const Center(
+                      child: Text(
+                          'Map unavailable. Check the Maps configuration or your connection.'))
+                else
+                  GoogleMap(
+                    onMapCreated: _onMapCreated,
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(
+                        state.currentLatitude != 0
+                            ? state.currentLatitude
+                            : (route?.polylinePoints.isNotEmpty == true
+                                ? route!.polylinePoints.first.latitude
+                                : 0),
+                        state.currentLongitude != 0
+                            ? state.currentLongitude
+                            : (route?.polylinePoints.isNotEmpty == true
+                                ? route!.polylinePoints.first.longitude
+                                : 0),
+                      ),
+                      zoom: 17.0,
                     ),
-                    zoom: 17.0,
+                    style: _darkMapStyle,
+                    markers: markers,
+                    polylines: polylines,
+                    myLocationEnabled:
+                        false, // Using custom directional rider marker
+                    myLocationButtonEnabled: false,
+                    compassEnabled: false,
+                    zoomControlsEnabled: false,
+                    mapToolbarEnabled: false,
+                    onCameraMoveStarted: () {
+                      // Rider touched the map, temporarily stop auto-centering
+                      if (_isFollowingUser) {
+                        setState(() => _isFollowingUser = false);
+                      }
+                    },
                   ),
-                  style: _darkMapStyle,
-                  markers: markers,
-                  polylines: polylines,
-                  myLocationEnabled: false, // Using custom directional rider marker
-                  myLocationButtonEnabled: false,
-                  compassEnabled: false,
-                  zoomControlsEnabled: false,
-                  mapToolbarEnabled: false,
-                  onCameraMoveStarted: () {
-                    // Rider touched the map, temporarily stop auto-centering
-                    if (_isFollowingUser) {
-                      setState(() => _isFollowingUser = false);
-                    }
-                  },
-                ),
 
                 // Map Loading Screen Overlay until Google Map tiles and camera are ready
-                if (!_isMapReady)
+                if (!_isMapReady && (!kIsWeb || GoogleMapsConfig.webMapsLoaded))
                   Positioned.fill(
                     child: Container(
                       color: _C.bg,
@@ -339,21 +360,23 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       child: _buildManeuverBanner(state),
                     ),
                   ),
                 ),
 
                 // 3. GPS LOST banner — shown prominently when satellite fix is lost
-                if (!state.gpsAvailable)
-                  _buildGpsLostBanner(),
+                if (!state.gpsAvailable) _buildGpsLostBanner(),
 
                 // Simulator Mode indicator pill
                 ValueListenableBuilder<LocationSource>(
-                  valueListenable: LocationService.instance.locationSourceNotifier,
+                  valueListenable:
+                      LocationService.instance.locationSourceNotifier,
                   builder: (context, source, _) {
-                    if (source != LocationSource.simulator) return const SizedBox.shrink();
+                    if (source != LocationSource.simulator)
+                      return const SizedBox.shrink();
                     return SafeArea(
                       child: Align(
                         alignment: Alignment.topLeft,
@@ -362,28 +385,32 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           child: GestureDetector(
                             onTap: _showSimulatorConfigSheet,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.deepPurpleAccent.withValues(alpha: 0.85),
+                                color: AppColors.primaryLight
+                                    .withValues(alpha: 0.85),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.white24),
+                                border: Border.all(color: AppColors.border),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.sports_esports_rounded, color: Colors.white, size: 14),
+                                  const Icon(Icons.sports_esports_rounded,
+                                      color: AppColors.textPrimary, size: 14),
                                   const SizedBox(width: 6),
                                   Text(
                                     'SIMULATOR ACTIVE',
                                     style: GoogleFonts.jetBrainsMono(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w700,
-                                      color: Colors.white,
+                                      color: AppColors.textPrimary,
                                       letterSpacing: 0.6,
                                     ),
                                   ),
                                   const SizedBox(width: 4),
-                                  const Icon(Icons.settings_rounded, color: Colors.white70, size: 12),
+                                  const Icon(Icons.settings_rounded,
+                                      color: AppColors.textSecondary, size: 12),
                                 ],
                               ),
                             ),
@@ -405,11 +432,14 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                       FloatingActionButton.small(
                         heroTag: 'recenter_btn',
                         backgroundColor: _C.cardBg,
-                        foregroundColor: _isFollowingUser ? _C.primary : Colors.white70,
+                        foregroundColor: _isFollowingUser
+                            ? _C.primary
+                            : AppColors.textSecondary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
-                            color: _isFollowingUser ? _C.primary : _C.cardBorder,
+                            color:
+                                _isFollowingUser ? _C.primary : _C.cardBorder,
                           ),
                         ),
                         onPressed: _centerOnUser,
@@ -421,7 +451,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                       FloatingActionButton.small(
                         heroTag: 'zoom_in_btn',
                         backgroundColor: _C.cardBg,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.textPrimary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: const BorderSide(color: _C.cardBorder),
@@ -437,7 +467,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                       FloatingActionButton.small(
                         heroTag: 'zoom_out_btn',
                         backgroundColor: _C.cardBg,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.textPrimary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: const BorderSide(color: _C.cardBorder),
@@ -460,9 +490,14 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         ),
                         onPressed: () {
                           final r = NavigationService.instance.activeRoute;
-                          if (r != null && r.polylinePoints.isNotEmpty && _mapController != null) {
+                          if (r != null &&
+                              r.polylinePoints.isNotEmpty &&
+                              _mapController != null) {
                             setState(() => _isFollowingUser = false);
-                            double minLat = 90.0, maxLat = -90.0, minLng = 180.0, maxLng = -180.0;
+                            double minLat = 90.0,
+                                maxLat = -90.0,
+                                minLng = 180.0,
+                                maxLng = -180.0;
                             for (final pt in r.polylinePoints) {
                               if (pt.latitude < minLat) minLat = pt.latitude;
                               if (pt.latitude > maxLat) maxLat = pt.latitude;
@@ -486,26 +521,38 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
 
                       // Simulator / Real GPS Mode Toggle Button (Tap to toggle, Long-press for config)
                       ValueListenableBuilder<LocationSource>(
-                        valueListenable: LocationService.instance.locationSourceNotifier,
+                        valueListenable:
+                            LocationService.instance.locationSourceNotifier,
                         builder: (context, source, _) {
                           final isSim = source == LocationSource.simulator;
                           return GestureDetector(
                             onLongPress: _showSimulatorConfigSheet,
                             child: FloatingActionButton.small(
                               heroTag: 'sim_toggle_btn',
-                              backgroundColor: isSim ? Colors.deepPurpleAccent : _C.cardBg,
-                              foregroundColor: isSim ? Colors.white : Colors.white70,
-                              tooltip: isSim ? 'Simulation Active (Long press to config)' : 'Switch to Simulator',
+                              backgroundColor:
+                                  isSim ? AppColors.primaryLight : _C.cardBg,
+                              foregroundColor: isSim
+                                  ? AppColors.onPrimary
+                                  : AppColors.textSecondary,
+                              tooltip: isSim
+                                  ? 'Simulation Active (Long press to config)'
+                                  : 'Switch to Simulator',
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 side: BorderSide(
-                                  color: isSim ? Colors.deepPurpleAccent : _C.cardBorder,
+                                  color: isSim
+                                      ? AppColors.primaryLight
+                                      : _C.cardBorder,
                                 ),
                               ),
                               onPressed: () {
-                                final nextSource = isSim ? LocationSource.realGps : LocationSource.simulator;
-                                LocationService.instance.setLocationSource(nextSource);
-                                final isConnected = SimulatorLocationService.instance.isConnected;
+                                final nextSource = isSim
+                                    ? LocationSource.realGps
+                                    : LocationSource.simulator;
+                                LocationService.instance
+                                    .setLocationSource(nextSource);
+                                final isConnected = SimulatorLocationService
+                                    .instance.isConnected;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     duration: const Duration(seconds: 3),
@@ -516,20 +563,27 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                                               ? '🎮 Simulation Active (Connected to Web Simulator)'
                                               : '🎮 Simulation Active (Connecting to ${SimulatorLocationService.instance.host}...)')
                                           : '🛰️ Real Phone GPS Active',
-                                      style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                                      style: GoogleFonts.inter(
+                                          color: AppColors.textPrimary,
+                                          fontWeight: FontWeight.w600),
                                     ),
-                                    action: nextSource == LocationSource.simulator && !isConnected
+                                    action: nextSource ==
+                                                LocationSource.simulator &&
+                                            !isConnected
                                         ? SnackBarAction(
                                             label: 'CONFIG',
                                             textColor: _C.primary,
-                                            onPressed: _showSimulatorConfigSheet,
+                                            onPressed:
+                                                _showSimulatorConfigSheet,
                                           )
                                         : null,
                                   ),
                                 );
                               },
                               child: Icon(
-                                isSim ? Icons.sports_esports_rounded : Icons.satellite_alt_rounded,
+                                isSim
+                                    ? Icons.sports_esports_rounded
+                                    : Icons.satellite_alt_rounded,
                                 size: 20,
                               ),
                             ),
@@ -548,9 +602,11 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                     children: [
                       // Incoming / Active Call HUD Overlay at the bottom
                       ValueListenableBuilder<IncomingCallInfo>(
-                        valueListenable: TelephonyService.instance.callInfoNotifier,
+                        valueListenable:
+                            TelephonyService.instance.callInfoNotifier,
                         builder: (context, callInfo, _) {
-                          if (!callInfo.hasActiveCall) return const SizedBox.shrink();
+                          if (!callInfo.hasActiveCall)
+                            return const SizedBox.shrink();
                           return NavigationCallOverlay(callInfo: callInfo);
                         },
                       ),
@@ -580,14 +636,15 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.gps_off_rounded, color: Colors.redAccent, size: 20),
+              const Icon(Icons.gps_off_rounded,
+                  color: AppColors.errorText, size: 20),
               const SizedBox(width: 8),
               Text(
                 'GPS SIGNAL LOST',
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
-                  color: Colors.redAccent,
+                  color: AppColors.errorText,
                   letterSpacing: 0.8,
                 ),
               ),
@@ -596,7 +653,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 '· Speed: --',
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 12,
-                  color: Colors.white54,
+                  color: AppColors.textMuted,
                 ),
               ),
             ],
@@ -635,7 +692,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
             width: 54,
             height: 54,
             decoration: BoxDecoration(
-              color: isRerouting ? _C.amber.withValues(alpha: 0.15) : _C.primary.withValues(alpha: 0.15),
+              color: isRerouting
+                  ? _C.amber.withValues(alpha: 0.15)
+                  : _C.primary.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: isRerouting
@@ -657,7 +716,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 Row(
                   children: [
                     Text(
-                      isRerouting ? 'REROUTING...' : state.maneuverDistanceFormatted,
+                      isRerouting
+                          ? 'REROUTING...'
+                          : state.maneuverDistanceFormatted,
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
@@ -668,7 +729,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                     const SizedBox(width: 8),
                     if (!isRerouting)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
                           color: _C.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
@@ -705,7 +767,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  isRerouting ? 'Recalculating best motorcycle route' : state.maneuverText,
+                  isRerouting
+                      ? 'Recalculating best motorcycle route'
+                      : state.maneuverText,
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -720,7 +784,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
 
           // Exit button
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 22),
+            icon: const Icon(Icons.close_rounded,
+                color: AppColors.textSecondary, size: 22),
             onPressed: _confirmExitNavigation,
           ),
         ],
@@ -780,20 +845,29 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               children: [
                 // BLE HUD status pill
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: isBleConnected ? _C.blueAccent.withValues(alpha: 0.12) : Colors.white10,
+                    color: isBleConnected
+                        ? _C.blueAccent.withValues(alpha: 0.12)
+                        : AppColors.surfaceElevated,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isBleConnected ? _C.blueAccent.withValues(alpha: 0.3) : Colors.white24,
+                      color: isBleConnected
+                          ? _C.blueAccent.withValues(alpha: 0.3)
+                          : AppColors.border,
                     ),
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        isBleConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                        isBleConnected
+                            ? Icons.bluetooth_connected
+                            : Icons.bluetooth_disabled,
                         size: 14,
-                        color: isBleConnected ? _C.blueAccent : Colors.white54,
+                        color: isBleConnected
+                            ? _C.blueAccent
+                            : AppColors.textMuted,
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -801,7 +875,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         style: GoogleFonts.jetBrainsMono(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: isBleConnected ? _C.blueAccent : Colors.white54,
+                          color: isBleConnected
+                              ? _C.blueAccent
+                              : AppColors.textMuted,
                         ),
                       ),
                     ],
@@ -813,14 +889,15 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 ElevatedButton.icon(
                   onPressed: _confirmExitNavigation,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _C.red.withValues(alpha: 0.15),
+                    backgroundColor: AppColors.error.withValues(alpha: 0.15),
                     foregroundColor: _C.red,
                     elevation: 0,
                     side: const BorderSide(color: _C.red, width: 1.2),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                   ),
                   icon: const Icon(Icons.stop_circle_outlined, size: 18),
                   label: Text(
@@ -894,7 +971,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'End Navigation?',
-          style: GoogleFonts.jetBrainsMono(color: _C.onSurface, fontWeight: FontWeight.w700),
+          style: GoogleFonts.jetBrainsMono(
+              color: _C.onSurface, fontWeight: FontWeight.w700),
         ),
         content: Text(
           'Are you sure you want to stop active motorcycle navigation?',
@@ -903,12 +981,16 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('CONTINUE RIDE', style: GoogleFonts.jetBrainsMono(color: _C.primary)),
+            child: Text('CONTINUE RIDE',
+                style: GoogleFonts.jetBrainsMono(color: _C.primary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: _C.red, foregroundColor: Colors.white),
-            child: Text('STOP', style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: AppColors.textPrimary),
+            child: Text('STOP',
+                style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -939,7 +1021,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               decoration: const BoxDecoration(
                 color: _C.cardBg,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                border: Border(top: BorderSide(color: _C.cardBorder, width: 1.5)),
+                border:
+                    Border(top: BorderSide(color: _C.cardBorder, width: 1.5)),
               ),
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
               child: SafeArea(
@@ -967,12 +1050,13 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.deepPurpleAccent.withValues(alpha: 0.2),
+                            color:
+                                AppColors.primaryLight.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
                             Icons.sports_esports_rounded,
-                            color: Colors.deepPurpleAccent,
+                            color: AppColors.primaryLight,
                             size: 22,
                           ),
                         ),
@@ -1001,9 +1085,11 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         ),
                         // Live connection pill
                         ValueListenableBuilder<bool>(
-                          valueListenable: SimulatorLocationService.instance.isConnectedNotifier,
+                          valueListenable: SimulatorLocationService
+                              .instance.isConnectedNotifier,
                           builder: (_, connected, __) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: connected
                                   ? _C.primary.withValues(alpha: 0.15)
@@ -1055,7 +1141,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                     ),
                     const SizedBox(height: 8),
                     ValueListenableBuilder<LocationSource>(
-                      valueListenable: LocationService.instance.locationSourceNotifier,
+                      valueListenable:
+                          LocationService.instance.locationSourceNotifier,
                       builder: (_, source, __) {
                         final isSim = source == LocationSource.simulator;
                         return Row(
@@ -1063,7 +1150,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () {
-                                  LocationService.instance.setLocationSource(LocationSource.realGps);
+                                  LocationService.instance.setLocationSource(
+                                      LocationSource.realGps);
                                   setSheetState(() {});
                                 },
                                 icon: Icon(
@@ -1075,12 +1163,16 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                                   'Real Phone GPS',
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
-                                    fontWeight: !isSim ? FontWeight.w700 : FontWeight.normal,
+                                    fontWeight: !isSim
+                                        ? FontWeight.w700
+                                        : FontWeight.normal,
                                     color: !isSim ? _C.onSurface : _C.textSec,
                                   ),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  backgroundColor: !isSim ? _C.primary.withValues(alpha: 0.1) : Colors.transparent,
+                                  backgroundColor: !isSim
+                                      ? _C.primary.withValues(alpha: 0.1)
+                                      : Colors.transparent,
                                   side: BorderSide(
                                     color: !isSim ? _C.primary : _C.cardBorder,
                                   ),
@@ -1094,26 +1186,36 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () {
-                                  LocationService.instance.setLocationSource(LocationSource.simulator);
+                                  LocationService.instance.setLocationSource(
+                                      LocationSource.simulator);
                                   setSheetState(() {});
                                 },
                                 icon: Icon(
                                   Icons.sports_esports_rounded,
                                   size: 16,
-                                  color: isSim ? Colors.deepPurpleAccent : _C.textSec,
+                                  color: isSim
+                                      ? AppColors.primaryLight
+                                      : _C.textSec,
                                 ),
                                 label: Text(
                                   'Web Simulator',
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
-                                    fontWeight: isSim ? FontWeight.w700 : FontWeight.normal,
+                                    fontWeight: isSim
+                                        ? FontWeight.w700
+                                        : FontWeight.normal,
                                     color: isSim ? _C.onSurface : _C.textSec,
                                   ),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  backgroundColor: isSim ? Colors.deepPurpleAccent.withValues(alpha: 0.15) : Colors.transparent,
+                                  backgroundColor: isSim
+                                      ? AppColors.primaryLight
+                                          .withValues(alpha: 0.15)
+                                      : Colors.transparent,
                                   side: BorderSide(
-                                    color: isSim ? Colors.deepPurpleAccent : _C.cardBorder,
+                                    color: isSim
+                                        ? AppColors.primaryLight
+                                        : _C.cardBorder,
                                   ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
@@ -1160,7 +1262,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           onPressed: () async {
                             final text = hostController.text.trim();
                             if (text.isNotEmpty) {
-                              await SimulatorLocationService.instance.setHost(text);
+                              await SimulatorLocationService.instance
+                                  .setHost(text);
                               await SimulatorLocationService.instance.connect();
                               setSheetState(() {});
                             }
@@ -1171,7 +1274,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           color: _C.textSec.withValues(alpha: 0.5),
                           fontSize: 12,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: const BorderSide(color: _C.cardBorder),
@@ -1206,7 +1310,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           side: const BorderSide(color: _C.cardBorder),
                           onPressed: () async {
                             hostController.text = '127.0.0.1:8080';
-                            await SimulatorLocationService.instance.setHost('127.0.0.1:8080');
+                            await SimulatorLocationService.instance
+                                .setHost('127.0.0.1:8080');
                             await SimulatorLocationService.instance.connect();
                             setSheetState(() {});
                           },
@@ -1224,7 +1329,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           side: const BorderSide(color: _C.cardBorder),
                           onPressed: () async {
                             hostController.text = '10.0.2.2:8080';
-                            await SimulatorLocationService.instance.setHost('10.0.2.2:8080');
+                            await SimulatorLocationService.instance
+                                .setHost('10.0.2.2:8080');
                             await SimulatorLocationService.instance.connect();
                             setSheetState(() {});
                           },
@@ -1235,7 +1341,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
 
                     // Telemetry Status Row
                     ValueListenableBuilder<SimulatedLocationPacket?>(
-                      valueListenable: SimulatorLocationService.instance.latestPacketNotifier,
+                      valueListenable: SimulatorLocationService
+                          .instance.latestPacketNotifier,
                       builder: (_, packet, __) {
                         return Container(
                           padding: const EdgeInsets.all(12),
@@ -1258,7 +1365,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                                     ),
                                   ),
                                   ValueListenableBuilder<int>(
-                                    valueListenable: SimulatorLocationService.instance.latencyMsNotifier,
+                                    valueListenable: SimulatorLocationService
+                                        .instance.latencyMsNotifier,
                                     builder: (_, lat, __) => Text(
                                       '$lat ms',
                                       style: GoogleFonts.jetBrainsMono(
@@ -1283,7 +1391,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                                     ),
                                   ),
                                   Text(
-                                    packet != null ? '${packet.speedKmh.toStringAsFixed(1)} km/h' : '--',
+                                    packet != null
+                                        ? '${packet.speedKmh.toStringAsFixed(1)} km/h'
+                                        : '--',
                                     style: GoogleFonts.jetBrainsMono(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
@@ -1303,7 +1413,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                                     ),
                                   ),
                                   Text(
-                                    packet != null ? '${(packet.routeProgress * 100).toStringAsFixed(1)}%' : '--',
+                                    packet != null
+                                        ? '${(packet.routeProgress * 100).toStringAsFixed(1)}%'
+                                        : '--',
                                     style: GoogleFonts.jetBrainsMono(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,

@@ -8,10 +8,9 @@
 ///     Doppler reading is zero or inaccurate (Bug B fix).
 ///   - Return null when GPS is unavailable (display as "--")
 class SpeedFilter {
-
   /// Minimum speed threshold below which we treat the rider as stationary.
-  /// Prevents GPS jitter showing 1–2 km/h when parked.
-  static const double _stationaryThresholdKmh = 2.5;
+  /// Prevents GPS jitter showing 1–3 km/h when parked.
+  static const double _stationaryThresholdKmh = 3.5;
 
   /// Maximum plausible speed increase between two consecutive samples (km/h).
   /// Rejects GPS spikes caused by satellite multipath / urban canyons.
@@ -50,7 +49,8 @@ class SpeedFilter {
     // Android can report –1 when speed is unknown
     if (rawSpeedMs < 0) {
       // If displacement speed is reliable, use it
-      if (displacementKmh != null && displacementKmh > _stationaryThresholdKmh) {
+      if (displacementKmh != null &&
+          displacementKmh > _stationaryThresholdKmh) {
         final clamped = displacementKmh.clamp(0.0, _absMaxSpeedKmh);
         _lastValidKmh = clamped;
         return clamped;
@@ -63,7 +63,8 @@ class SpeedFilter {
     // strict 5.0 m/s caused zero speed on motorcycles in urban canyons.
     if (speedAccuracy != null && !speedAccuracy.isNaN && speedAccuracy > 8.0) {
       // Try displacement fallback before returning 0
-      if (displacementKmh != null && displacementKmh > _stationaryThresholdKmh) {
+      if (displacementKmh != null &&
+          displacementKmh > _stationaryThresholdKmh) {
         final clamped = displacementKmh.clamp(0.0, _absMaxSpeedKmh);
         _lastValidKmh = clamped;
         return clamped;
@@ -81,14 +82,14 @@ class SpeedFilter {
       kmh = displacementKmh.clamp(0.0, _absMaxSpeedKmh);
     }
 
-    // Absolute ceiling
     if (kmh > _absMaxSpeedKmh) {
       // Return last valid instead of the bad spike
       return _lastValidKmh ?? 0.0;
     }
 
     // Spike rejection: if jump from last value is > 80 km/h, reject
-    if (_lastValidKmh != null && (kmh - _lastValidKmh!).abs() > _maxSpeedJumpKmh) {
+    if (_lastValidKmh != null &&
+        (kmh - _lastValidKmh!).abs() > _maxSpeedJumpKmh) {
       return _lastValidKmh;
     }
 

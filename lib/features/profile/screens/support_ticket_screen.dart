@@ -1,3 +1,4 @@
+import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -7,20 +8,20 @@ import '../../../core/services/backend_service.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const surfCont = Color(0xFF142226);
-  static const surfContLowest = Color(0xFF031014);
-  static const surfContLow = Color(0xFF101E22);
-  static const surfContHigh = Color(0xFF1E2C30);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const primaryCont = Color(0xFF22C55E);
-  static const onPrimaryCont = Color(0xFF004B1E);
-  static const secondary = Color(0xFF4DE082);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outlineVariant = Color(0xFF3D4A3D);
-  static const tertiary = Color(0xFF7CD0FF);
+  static const bg = AppColors.background;
+  static const surfCont = AppColors.surface;
+  static const surfContLowest = AppColors.background;
+  static const surfContLow = AppColors.backgroundInset;
+  static const surfContHigh = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const primaryCont = AppColors.primary;
+  static const onPrimaryCont = AppColors.primaryContainer;
+  static const secondary = AppColors.primary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outlineVariant = AppColors.border;
+  static const tertiary = AppColors.primary;
 }
 
 class SupportTicketScreen extends StatefulWidget {
@@ -149,7 +150,7 @@ class _SupportTicketScreenState extends State<SupportTicketScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(res.message),
-              backgroundColor: Colors.redAccent,
+              backgroundColor: AppColors.error,
             ),
           );
         }

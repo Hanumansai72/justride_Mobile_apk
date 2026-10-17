@@ -7,7 +7,7 @@ import '../../../core/constants/app_constants.dart';
 ///
 /// Displays a compact rectangular battery icon with a percentage label and
 /// an optional colour that transitions from [AppColors.primary] (high) to
-/// [AppColors.warning] (mid) to [AppColors.error] (low).
+/// [AppColors.warning] (mid) to [AppColors.errorText] (low).
 class BatteryIndicator extends StatelessWidget {
   const BatteryIndicator({
     super.key,
@@ -25,7 +25,7 @@ class BatteryIndicator extends StatelessWidget {
   Color get _barColor {
     if (percent >= 50) return AppColors.primary;
     if (percent >= 25) return AppColors.warning;
-    return AppColors.error;
+    return AppColors.errorText;
   }
 
   @override

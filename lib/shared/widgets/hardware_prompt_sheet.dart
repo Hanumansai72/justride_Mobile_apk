@@ -1,3 +1,4 @@
+import '../../app/theme/app_colors.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -53,14 +54,14 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
   Timer? _periodicCheckTimer;
 
   // Obsidian & Emerald theme colors
-  static const Color _bg = Color(0xFF101E22);
-  static const Color _card = Color(0xFF15262B);
-  static const Color _border = Color(0xFF223A40);
-  static const Color _primary = Color(0xFF4BE277);
-  static const Color _onPrimary = Color(0xFF003915);
-  static const Color _warning = Color(0xFFFFAE33);
-  static const Color _textPrimary = Color(0xFFD6E5EA);
-  static const Color _textSecondary = Color(0xFF8FA3A8);
+  static const Color _bg = AppColors.backgroundInset;
+  static const Color _card = AppColors.surface;
+  static const Color _border = AppColors.border;
+  static const Color _primary = AppColors.primary;
+  static const Color _onPrimary = AppColors.onPrimary;
+  static const Color _warning = AppColors.warning;
+  static const Color _textPrimary = AppColors.textPrimary;
+  static const Color _textSecondary = AppColors.textSecondary;
 
   @override
   void initState() {

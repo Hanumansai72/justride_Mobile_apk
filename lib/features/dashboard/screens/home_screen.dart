@@ -2,32 +2,33 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/destination.dart';
-import '../../../core/services/share_service.dart';
 import '../../../core/services/google_maps_service.dart';
 import '../../../core/utils/maps_url_parser.dart';
 import '../../../core/services/navigation_service.dart';
+import '../../../shared/widgets/require_device_connection.dart';
 import '../../navigation/widgets/destination_confirm_sheet.dart';
 import '../../../shared/widgets/app_logo.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const cardBg = Color(0xFF151A17);
-  static const cardBorder = Color(0xFF27312B);
-  static const surfCont = Color(0xFF142226);
-  static const surfBright = Color(0xFF2D3B40);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outlineVariant = Color(0xFF3D4A3D);
-  static const blueAccent = Color(0xFF38BDF8);
-  static const inputBg = Color(0xFF111613);
-  static const iconCircleBg = Color(0xFF1E2C30);
+  static const bg = AppColors.background;
+  static const cardBg = AppColors.surface;
+  static const cardBorder = AppColors.border;
+  static const surfCont = AppColors.surface;
+  static const surfBright = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outlineVariant = AppColors.border;
+  static const blueAccent = AppColors.primary;
+  static const inputBg = AppColors.backgroundInset;
+  static const iconCircleBg = AppColors.surfaceElevated;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -63,27 +64,10 @@ class _HomeScreenState extends State<HomeScreen>
     _pulseOpacity = Tween<double>(begin: 0.5, end: 0).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut),
     );
-
-    // Auto-display confirmation sheet if a destination was shared from Google Maps
-    ShareService.instance.destinationSharedNotifier
-        .addListener(_onDestinationShared);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _onDestinationShared();
-    });
-  }
-
-  void _onDestinationShared() {
-    final dest = ShareService.instance.destinationSharedNotifier.value;
-    if (dest != null && mounted) {
-      ShareService.instance.clearSharedDestination();
-      DestinationConfirmSheet.show(context, dest);
-    }
   }
 
   @override
   void dispose() {
-    ShareService.instance.destinationSharedNotifier
-        .removeListener(_onDestinationShared);
     _startController.dispose();
     _destinationController.dispose();
     _pulseCtrl.dispose();
@@ -91,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _openRoutePlan() async {
+    if (!await requireDeviceConnection(context) || !mounted) return;
     final destinationQuery = _destinationController.text.trim();
     if (destinationQuery.isEmpty) {
       // Directly redirect to the inbuilt app maps page
@@ -409,7 +394,7 @@ class _DeviceCard extends StatelessWidget {
                     Expanded(
                       child: _StatCell(
                         label: 'BATTERY',
-                        value: '85%',
+                        value: '0%',
                         icon: Icons.battery_5_bar_rounded,
                         iconColor: _C.primary,
                       ),

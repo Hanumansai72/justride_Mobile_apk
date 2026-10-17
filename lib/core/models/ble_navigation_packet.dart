@@ -19,7 +19,8 @@ enum BleNavOpCode {
   setBrightness(0x0C),
   restartDevice(0x0D),
   resetDevice(0x0E),
-  latestNotification(0x0F);
+  latestNotification(0x0F),
+  navContext(0x11);
 
   final int value;
   const BleNavOpCode(this.value);
@@ -134,6 +135,9 @@ class BleNavigationPacket {
   final bool bleConnected;
   final int maneuverId;
   final int maneuverState;
+  final JustRideManeuverCode nextManeuver;
+  final int nextManeuverDistanceMeters;
+  final String nextManeuverText;
 
   const BleNavigationPacket({
     required this.opCode,
@@ -151,6 +155,9 @@ class BleNavigationPacket {
     this.bleConnected = true,
     this.maneuverId = 0,
     this.maneuverState = 0,
+    this.nextManeuver = JustRideManeuverCode.straight,
+    this.nextManeuverDistanceMeters = 0,
+    this.nextManeuverText = '',
   });
 
   /// Factory helper from NavigationState
@@ -161,7 +168,8 @@ class BleNavigationPacket {
     return BleNavigationPacket(
       opCode: opCode,
       maneuver: JustRideManeuverCode.fromString(state.maneuver),
-      maneuverDistanceMeters: state.maneuverDistanceMeters.clamp(0, 65535).round(),
+      maneuverDistanceMeters:
+          state.maneuverDistanceMeters.clamp(0, 65535).round(),
       speedKmh: state.speedKmh.clamp(0, 300).round(),
       headingDeg: state.heading.clamp(0, 359).round(),
       remainingDistanceMeters:
@@ -176,17 +184,28 @@ class BleNavigationPacket {
       bleConnected: state.bleConnected,
       maneuverId: state.maneuverId.clamp(0, 65535),
       maneuverState: parseManeuverStateCode(state.maneuverState),
+      nextManeuver: JustRideManeuverCode.fromString(state.nextManeuver),
+      nextManeuverDistanceMeters:
+          state.nextManeuverDistanceMeters.clamp(0, 65535).round(),
+      nextManeuverText: state.nextManeuverText,
     );
   }
 
-  /// Compact Binary Serialization with 21-byte Header
+  /// Compact Binary Serialization with 21-byte Header and Secondary Maneuver Extension
   Uint8List toBinary() {
     final cleanStreet = streetName.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
     final textBytes = utf8.encode(
       cleanStreet.length > 31 ? cleanStreet.substring(0, 31) : cleanStreet,
     );
+    final cleanNextStreet =
+        nextManeuverText.replaceAll(RegExp(r'[^\x20-\x7E]'), '');
+    final nextTextBytes = utf8.encode(
+      cleanNextStreet.length > 31
+          ? cleanNextStreet.substring(0, 31)
+          : cleanNextStreet,
+    );
 
-    final totalLen = 21 + textBytes.length;
+    final totalLen = 21 + textBytes.length + 4 + nextTextBytes.length;
     final data = ByteData(totalLen);
 
     // Byte 0: OpCode
@@ -224,6 +243,15 @@ class BleNavigationPacket {
     // Bytes 21..N: Street Name ASCII/UTF-8
     final result = data.buffer.asUint8List();
     result.setRange(21, 21 + textBytes.length, textBytes);
+
+    // Secondary / Lookahead Maneuver extension:
+    final nextOffset = 21 + textBytes.length;
+    data.setUint8(nextOffset, nextManeuver.value);
+    data.setUint16(nextOffset + 1, nextManeuverDistanceMeters.clamp(0, 65535),
+        Endian.little);
+    data.setUint8(nextOffset + 3, nextTextBytes.length);
+    result.setRange(
+        nextOffset + 4, nextOffset + 4 + nextTextBytes.length, nextTextBytes);
     return result;
   }
 
@@ -241,6 +269,9 @@ class BleNavigationPacket {
       'eta': remainingDurationSeconds,
       'navigationStatus': navigationStatus,
       'street': streetName,
+      'nextManeuver': nextManeuver.name.toUpperCase(),
+      'nextManeuverDistance': nextManeuverDistanceMeters,
+      'nextStreet': nextManeuverText,
     });
   }
 
@@ -250,11 +281,15 @@ class BleNavigationPacket {
 /// Compact binary packet representing a sliding route window segment (OpCode 0x0B).
 class RouteSegmentPacket {
   final List<ScreenPoint> points;
+  final int completedSegmentCount;
+  final int progressPercent;
   final bool isDestinationVisible;
   final ScreenPoint? destinationScreenPoint;
 
   const RouteSegmentPacket({
     required this.points,
+    this.completedSegmentCount = 0,
+    this.progressPercent = 0,
     this.isDestinationVisible = false,
     this.destinationScreenPoint,
   });
@@ -262,6 +297,8 @@ class RouteSegmentPacket {
   factory RouteSegmentPacket.fromWindow(RouteWindowSegment segment) {
     return RouteSegmentPacket(
       points: segment.points,
+      completedSegmentCount: segment.completedSegmentCount,
+      progressPercent: segment.progressPercent,
       isDestinationVisible: segment.isDestinationVisible,
       destinationScreenPoint: segment.destinationScreenPoint,
     );
@@ -269,19 +306,24 @@ class RouteSegmentPacket {
 
   Uint8List toBinary() {
     final count = points.length.clamp(0, 16);
-    final totalLen = 7 + count * 4;
+    final totalLen = 8 + count * 4;
     final data = ByteData(totalLen);
 
     // Byte 0: OpCode
     data.setUint8(0, BleNavOpCode.navRouteSegment.value);
     // Byte 1: Point count
     data.setUint8(1, count);
-    // Byte 2: Flags (bit 0 = dest visible)
-    data.setUint8(2, isDestinationVisible ? 1 : 0);
+    // Byte 2: destination flag and count of completed leading segments.
+    data.setUint8(
+        2,
+        (isDestinationVisible ? 1 : 0) |
+            (completedSegmentCount.clamp(0, 15) << 1));
     // Bytes 3-4: Dest X (uint16 LE)
-    data.setUint16(3, (destinationScreenPoint?.x ?? 0).clamp(0, 320), Endian.little);
+    data.setUint16(
+        3, (destinationScreenPoint?.x ?? 0).clamp(0, 320), Endian.little);
     // Bytes 5-6: Dest Y (uint16 LE)
-    data.setUint16(5, (destinationScreenPoint?.y ?? 0).clamp(0, 240), Endian.little);
+    data.setUint16(
+        5, (destinationScreenPoint?.y ?? 0).clamp(0, 240), Endian.little);
 
     // Bytes 7..: Points [x0, y0, x1, y1, ...]
     int offset = 7;
@@ -291,6 +333,53 @@ class RouteSegmentPacket {
       offset += 4;
     }
 
+    data.setUint8(offset, progressPercent.clamp(0, 100));
+
+    return data.buffer.asUint8List();
+  }
+}
+
+/// Optional low-rate city/POI context. Never used for turn guidance.
+class NavContextPacket {
+  final String city;
+  final int poiType; // 0 none, 1 fuel, 2 motorcycle repair
+  final int poiDistanceMeters;
+  final String poiName;
+  final ScreenPoint? poiPoint;
+
+  const NavContextPacket({
+    required this.city,
+    this.poiType = 0,
+    this.poiDistanceMeters = 0,
+    this.poiName = '',
+    this.poiPoint,
+  });
+
+  Uint8List toBinary() {
+    List<int> ascii(String text, int max) => text.codeUnits
+        .where((c) => c >= 32 && c <= 126)
+        .take(max)
+        .toList(growable: false);
+    final cityBytes = ascii(city, 18);
+    final nameBytes = ascii(poiName, 18);
+    final data = ByteData(10 + cityBytes.length + nameBytes.length);
+    var offset = 0;
+    data.setUint8(offset++, BleNavOpCode.navContext.value);
+    data.setUint8(offset++, cityBytes.length);
+    for (final byte in cityBytes) {
+      data.setUint8(offset++, byte);
+    }
+    data.setUint8(offset++, poiType.clamp(0, 2));
+    data.setUint16(offset, poiDistanceMeters.clamp(0, 65535), Endian.little);
+    offset += 2;
+    data.setUint16(offset, poiPoint?.x ?? 0xffff, Endian.little);
+    offset += 2;
+    data.setUint16(offset, poiPoint?.y ?? 0xffff, Endian.little);
+    offset += 2;
+    data.setUint8(offset++, nameBytes.length);
+    for (final byte in nameBytes) {
+      data.setUint8(offset++, byte);
+    }
     return data.buffer.asUint8List();
   }
 }
@@ -312,8 +401,10 @@ class LatestNotificationPacket {
   });
 
   Uint8List toBinary() {
-    final titleBytes = utf8.encode(title.length > 31 ? title.substring(0, 31) : title);
-    final messageBytes = utf8.encode(message.length > 63 ? message.substring(0, 63) : message);
+    final titleBytes =
+        utf8.encode(title.length > 31 ? title.substring(0, 31) : title);
+    final messageBytes =
+        utf8.encode(message.length > 63 ? message.substring(0, 63) : message);
 
     final totalLen = 3 + titleBytes.length + messageBytes.length;
     final data = ByteData(totalLen);

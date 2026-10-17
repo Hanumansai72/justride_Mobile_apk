@@ -21,8 +21,8 @@ class DeviceActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? AppColors.error : AppColors.textPrimary;
-    final iconColor = isDestructive ? AppColors.error : AppColors.primary;
+    final color = isDestructive ? AppColors.errorText : AppColors.textPrimary;
+    final iconColor = isDestructive ? AppColors.errorText : AppColors.primary;
 
     return GestureDetector(
       onTap: onTap,

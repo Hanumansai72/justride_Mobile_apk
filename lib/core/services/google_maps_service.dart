@@ -64,8 +64,10 @@ class GoogleMapsService {
 
     // Reference coordinates for biasing searches towards the user's area
     final pos = LocationService.instance.currentPosition;
-    final refLat = (pos != null && pos.latitude != 0.0) ? pos.latitude : 17.3850;
-    final refLon = (pos != null && pos.longitude != 0.0) ? pos.longitude : 78.4867;
+    final refLat =
+        (pos != null && pos.latitude != 0.0) ? pos.latitude : 17.3850;
+    final refLon =
+        (pos != null && pos.longitude != 0.0) ? pos.longitude : 78.4867;
 
     final key = GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
@@ -125,7 +127,8 @@ class GoogleMapsService {
               '[PLACES] Google Places returned ${response.statusCode}, falling back to Photon & Nominatim');
         }
       } catch (e) {
-        debugPrint('[PLACES] Google Places search error: $e, falling back to Photon & Nominatim');
+        debugPrint(
+            '[PLACES] Google Places search error: $e, falling back to Photon & Nominatim');
       }
     }
 
@@ -160,11 +163,15 @@ class GoogleMapsService {
 
           // Smart category annotation for bus stops, metro stations, localities
           final lowerName = name.toLowerCase();
-          if ((osmValue == 'bus_stop' || osmKey == 'bus_stop') && !lowerName.contains('bus')) {
+          if ((osmValue == 'bus_stop' || osmKey == 'bus_stop') &&
+              !lowerName.contains('bus')) {
             name = '$name Bus Stop';
           } else if (osmValue == 'bus_station' && !lowerName.contains('bus')) {
             name = '$name Bus Station';
-          } else if (osmValue == 'station' && osmKey == 'railway' && !lowerName.contains('station') && !lowerName.contains('metro')) {
+          } else if (osmValue == 'station' &&
+              osmKey == 'railway' &&
+              !lowerName.contains('station') &&
+              !lowerName.contains('metro')) {
             name = '$name Metro / Station';
           }
 
@@ -177,10 +184,18 @@ class GoogleMapsService {
           final state = props['state']?.toString();
           final country = props['country']?.toString();
 
-          final addressParts = [street, locality, district, city, state, country]
+          final addressParts = [
+            street,
+            locality,
+            district,
+            city,
+            state,
+            country
+          ]
               .whereType<String>()
               .map((s) => s.trim())
-              .where((s) => s.isNotEmpty && s.toLowerCase() != name.toLowerCase())
+              .where(
+                  (s) => s.isNotEmpty && s.toLowerCase() != name.toLowerCase())
               .toSet()
               .toList();
 
@@ -231,21 +246,25 @@ class GoogleMapsService {
           for (final item in nomList) {
             final lat = double.tryParse(item['lat']?.toString() ?? '');
             final lon = double.tryParse(item['lon']?.toString() ?? '');
-            if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) continue;
+            if (lat == null || lon == null || (lat == 0.0 && lon == 0.0))
+              continue;
 
             var name = item['name']?.toString() ?? cleanQuery;
             final type = (item['type']?.toString() ?? '').toLowerCase();
 
             if (type == 'bus_stop' && !name.toLowerCase().contains('bus')) {
               name = '$name Bus Stop';
-            } else if (type == 'bus_station' && !name.toLowerCase().contains('bus')) {
+            } else if (type == 'bus_station' &&
+                !name.toLowerCase().contains('bus')) {
               name = '$name Bus Station';
-            } else if (type == 'station' && !name.toLowerCase().contains('station')) {
+            } else if (type == 'station' &&
+                !name.toLowerCase().contains('station')) {
               name = '$name Station';
             }
 
             final displayName = item['display_name']?.toString() ?? name;
-            final addressParts = displayName.split(',').map((s) => s.trim()).toList();
+            final addressParts =
+                displayName.split(',').map((s) => s.trim()).toList();
             // Shorten address to 3 readable components
             final shortAddress = addressParts.length > 3
                 ? addressParts.skip(1).take(3).join(', ')
@@ -274,12 +293,101 @@ class GoogleMapsService {
     return suggestions.take(8).toList(growable: false);
   }
 
+  /// Reverse geocodes coordinates to a human-readable street or area address.
+  Future<String?> reverseGeocode(double lat, double lng) async {
+    final key = GoogleMapsConfig.apiKey;
+    if (key.isNotEmpty) {
+      try {
+        final url = Uri.parse(
+          '${GoogleMapsConfig.geocodingApiEndpoint}?latlng=$lat,$lng&key=$key',
+        );
+        final res = await http.get(url).timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          if (data['status'] == 'OK' && (data['results'] as List).isNotEmpty) {
+            return data['results'][0]['formatted_address'] as String?;
+          }
+        }
+      } catch (_) {}
+    }
+    try {
+      final osmUrl = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json',
+      );
+      final res = await http.get(osmUrl, headers: {
+        'User-Agent': 'JustRide-App/1.0',
+      }).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data['display_name'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// City-only lookup for the HUD. Keep it separate from full street addresses.
+  Future<String?> reverseGeocodeCity(double lat, double lng) async {
+    final key = GoogleMapsConfig.apiKey;
+    if (key.isNotEmpty) {
+      try {
+        final uri = Uri.parse(
+            '${GoogleMapsConfig.geocodingApiEndpoint}?latlng=$lat,$lng&key=$key');
+        final res = await http.get(uri).timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) {
+          final results = jsonDecode(res.body)['results'] as List?;
+          for (final result in results ?? const []) {
+            for (final component
+                in result['address_components'] as List? ?? const []) {
+              final types = component['types'] as List? ?? const [];
+              if (types.contains('locality') || types.contains('postal_town')) {
+                return component['long_name']?.toString();
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    try {
+      final uri = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json');
+      final res = await http.get(uri, headers: {
+        'User-Agent': 'JustRide-App/1.0',
+      }).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final address =
+            jsonDecode(res.body)['address'] as Map<String, dynamic>?;
+        return (address?['city'] ?? address?['town'] ?? address?['village'])
+            ?.toString();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   /// Resolves any missing coordinates in a Destination using Google Geocoding / Places,
   /// followed by Photon (Komoot OSM geocoder) and OpenStreetMap Nominatim with debug logging.
   Future<Destination?> resolveDestination(Destination destination) async {
     if (destination.latitude != 0.0 && destination.longitude != 0.0) {
       debugPrint(
           '[GEOCODE] Destination already has valid coordinates: (${destination.latitude}, ${destination.longitude})');
+      if (destination.name == 'Selected Location' ||
+          destination.name == 'Dropped Pin' ||
+          destination.address == null ||
+          destination.address!.isEmpty) {
+        try {
+          final resolvedAddr =
+              await reverseGeocode(destination.latitude, destination.longitude);
+          if (resolvedAddr != null && resolvedAddr.isNotEmpty) {
+            return destination.copyWith(
+              name: destination.name == 'Dropped Pin'
+                  ? 'Dropped Pin ($resolvedAddr)'
+                  : (destination.name == 'Selected Location'
+                      ? resolvedAddr.split(',').first
+                      : destination.name),
+              address: resolvedAddr,
+            );
+          }
+        } catch (_) {}
+      }
       return destination;
     }
 
@@ -382,6 +490,68 @@ class GoogleMapsService {
         } catch (e) {
           debugPrint('[GEOCODE] Google Geocoding exception: $e');
         }
+
+        // 2b. Query Google Places API (New) Text Search if Geocoding returned no result
+        try {
+          final refPos = LocationService.instance.currentPosition;
+          final refLat = (refPos != null && refPos.latitude != 0.0)
+              ? refPos.latitude
+              : 17.3850;
+          final refLon = (refPos != null && refPos.longitude != 0.0)
+              ? refPos.longitude
+              : 78.4867;
+
+          final placesRes = await http
+              .post(
+                Uri.parse(GoogleMapsConfig.placesTextSearchEndpoint),
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Goog-Api-Key': key,
+                  'X-Goog-FieldMask':
+                      'places.id,places.displayName,places.formattedAddress,places.location',
+                },
+                body: jsonEncode({
+                  'textQuery': queryText,
+                  'locationBias': {
+                    'circle': {
+                      'center': {'latitude': refLat, 'longitude': refLon},
+                      'radius': 50000.0,
+                    },
+                  },
+                }),
+              )
+              .timeout(const Duration(seconds: 6));
+
+          if (placesRes.statusCode == 200) {
+            final placesData = jsonDecode(placesRes.body);
+            final placesList = placesData['places'] as List?;
+            if (placesList != null && placesList.isNotEmpty) {
+              final firstPlace = placesList[0];
+              final loc = firstPlace['location'] as Map<String, dynamic>?;
+              if (loc != null) {
+                final lat = (loc['latitude'] as num).toDouble();
+                final lng = (loc['longitude'] as num).toDouble();
+                final name = (firstPlace['displayName']
+                            as Map<String, dynamic>?)?['text']
+                        ?.toString() ??
+                    destination.name;
+                final addr = firstPlace['formattedAddress']?.toString() ??
+                    destination.address;
+                debugPrint(
+                    '[GEOCODE] ✓ Google Places Text Search resolved: $lat, $lng ($name)');
+                return destination.copyWith(
+                  name: name,
+                  address: addr,
+                  latitude: lat,
+                  longitude: lng,
+                  placeId: firstPlace['id']?.toString() ?? destination.placeId,
+                );
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[GEOCODE] Google Places Text Search exception: $e');
+        }
       }
     } else {
       debugPrint(
@@ -396,8 +566,11 @@ class GoogleMapsService {
     }
 
     final refPos = LocationService.instance.currentPosition;
-    final refLat = (refPos != null && refPos.latitude != 0.0) ? refPos.latitude : 17.3850;
-    final refLon = (refPos != null && refPos.longitude != 0.0) ? refPos.longitude : 78.4867;
+    final refLat =
+        (refPos != null && refPos.latitude != 0.0) ? refPos.latitude : 17.3850;
+    final refLon = (refPos != null && refPos.longitude != 0.0)
+        ? refPos.longitude
+        : 78.4867;
 
     // 3. Photon by Komoot geocoder (High performance, global OSM index, no API key needed, never rate-limited)
     try {
@@ -938,7 +1111,8 @@ class GoogleMapsService {
 
   /// Calculates incoming vs outgoing bearing difference at a junction in range [-180, +180].
   /// Negative values correspond to LEFT turns; positive values correspond to RIGHT turns.
-  static double _computeTurnAngle(List<LatLng> curPoints, List<LatLng> nextPoints) {
+  static double _computeTurnAngle(
+      List<LatLng> curPoints, List<LatLng> nextPoints) {
     if (curPoints.isEmpty || nextPoints.isEmpty) return 0.0;
 
     // Incoming bearing: from the last 2 distinct points of curPoints
@@ -946,26 +1120,30 @@ class GoogleMapsService {
     LatLng pBefore = curPoints.first;
     for (int j = curPoints.length - 2; j >= 0; j--) {
       final pt = curPoints[j];
-      final d = Geolocator.distanceBetween(pt.latitude, pt.longitude, pEnd.latitude, pEnd.longitude);
+      final d = Geolocator.distanceBetween(
+          pt.latitude, pt.longitude, pEnd.latitude, pEnd.longitude);
       if (d >= 2.0) {
         pBefore = pt;
         break;
       }
     }
-    final inBearing = Geolocator.bearingBetween(pBefore.latitude, pBefore.longitude, pEnd.latitude, pEnd.longitude);
+    final inBearing = Geolocator.bearingBetween(
+        pBefore.latitude, pBefore.longitude, pEnd.latitude, pEnd.longitude);
 
     // Outgoing bearing: from the first 2 distinct points of nextPoints
     final qStart = nextPoints.first;
     LatLng qAfter = nextPoints.last;
     for (int j = 1; j < nextPoints.length; j++) {
       final pt = nextPoints[j];
-      final d = Geolocator.distanceBetween(qStart.latitude, qStart.longitude, pt.latitude, pt.longitude);
+      final d = Geolocator.distanceBetween(
+          qStart.latitude, qStart.longitude, pt.latitude, pt.longitude);
       if (d >= 2.0) {
         qAfter = pt;
         break;
       }
     }
-    final outBearing = Geolocator.bearingBetween(qStart.latitude, qStart.longitude, qAfter.latitude, qAfter.longitude);
+    final outBearing = Geolocator.bearingBetween(
+        qStart.latitude, qStart.longitude, qAfter.latitude, qAfter.longitude);
 
     return ((outBearing - inBearing + 540.0) % 360.0) - 180.0;
   }
@@ -973,7 +1151,8 @@ class GoogleMapsService {
   /// Normalizes route steps so that each step's maneuver and instruction describe
   /// the turn the rider will execute when approaching that step's endLocation (the upcoming junction).
   /// Road geometry serves as ground truth to verify and correct any contradictory API maneuver tags.
-  static List<RouteStep> _normalizeSteps(List<RouteStep> rawSteps, LatLng origin, LatLng destination) {
+  static List<RouteStep> _normalizeSteps(
+      List<RouteStep> rawSteps, LatLng origin, LatLng destination) {
     if (rawSteps.isEmpty) return rawSteps;
     if (rawSteps.length == 1) {
       final s = rawSteps[0];
@@ -984,7 +1163,9 @@ class GoogleMapsService {
           distanceMeters: s.distanceMeters,
           durationSeconds: s.durationSeconds,
           maneuver: 'ARRIVE',
-          instruction: s.instruction.isNotEmpty ? s.instruction : 'Arrive at destination',
+          instruction: s.instruction.isNotEmpty
+              ? s.instruction
+              : 'Arrive at destination',
           streetName: s.streetName.isNotEmpty ? s.streetName : 'Destination',
           points: s.points,
         )
@@ -1005,42 +1186,56 @@ class GoogleMapsService {
           distanceMeters: cur.distanceMeters,
           durationSeconds: cur.durationSeconds,
           maneuver: 'ARRIVE',
-          instruction: cur.instruction.isNotEmpty ? cur.instruction : 'Arrive at destination',
-          streetName: cur.streetName.isNotEmpty ? cur.streetName : 'Destination',
+          instruction: cur.instruction.isNotEmpty
+              ? cur.instruction
+              : 'Arrive at destination',
+          streetName:
+              cur.streetName.isNotEmpty ? cur.streetName : 'Destination',
           points: cur.points,
         ));
       } else {
         // Immediate U-turn edge case at the very start of navigation
         final bool isImmediateUTurn = (i == 0) &&
             (cur.maneuver.toUpperCase().contains('U_TURN') ||
-             cur.maneuver.toUpperCase().contains('UTURN'));
+                cur.maneuver.toUpperCase().contains('UTURN'));
 
-        String upcomingManeuver = isImmediateUTurn ? cur.maneuver : nxt.maneuver;
-        String upcomingInstruction = isImmediateUTurn ? cur.instruction : nxt.instruction;
-        String upcomingStreet = isImmediateUTurn ? cur.streetName : nxt.streetName;
+        String upcomingManeuver =
+            isImmediateUTurn ? cur.maneuver : nxt.maneuver;
+        String upcomingInstruction =
+            isImmediateUTurn ? cur.instruction : nxt.instruction;
+        String upcomingStreet =
+            isImmediateUTurn ? cur.streetName : nxt.streetName;
 
         // Ground-truth geometry validation
         final turnAngle = _computeTurnAngle(cur.points, nxt.points);
 
         // If turnAngle indicates a clear LEFT turn (<= -25 deg) but maneuver says RIGHT:
-        if (turnAngle <= -25.0 && upcomingManeuver.toUpperCase().contains('RIGHT')) {
+        if (turnAngle <= -25.0 &&
+            upcomingManeuver.toUpperCase().contains('RIGHT')) {
           debugPrint(
               '[GoogleMapsService] ⚠ Overriding contradictory RIGHT maneuver to LEFT based on geometry (angle: ${turnAngle.toStringAsFixed(1)}°)');
           upcomingManeuver = (turnAngle <= -135.0)
               ? 'SHARP_LEFT'
               : (turnAngle <= -45.0 ? 'LEFT' : 'SLIGHT_LEFT');
-        } else if (turnAngle >= 25.0 && upcomingManeuver.toUpperCase().contains('LEFT')) {
+        } else if (turnAngle >= 25.0 &&
+            upcomingManeuver.toUpperCase().contains('LEFT')) {
           debugPrint(
               '[GoogleMapsService] ⚠ Overriding contradictory LEFT maneuver to RIGHT based on geometry (angle: ${turnAngle.toStringAsFixed(1)}°)');
           upcomingManeuver = (turnAngle >= 135.0)
               ? 'SHARP_RIGHT'
               : (turnAngle >= 45.0 ? 'RIGHT' : 'SLIGHT_RIGHT');
-        } else if ((upcomingManeuver == 'STRAIGHT' || upcomingManeuver.isEmpty) && !isImmediateUTurn) {
+        } else if ((upcomingManeuver == 'STRAIGHT' ||
+                upcomingManeuver.isEmpty) &&
+            !isImmediateUTurn) {
           // If maneuver was unspecified or straight but geometry indicates a clear turn:
           if (turnAngle <= -30.0) {
-            upcomingManeuver = (turnAngle <= -135.0) ? 'SHARP_LEFT' : (turnAngle <= -45.0 ? 'LEFT' : 'SLIGHT_LEFT');
+            upcomingManeuver = (turnAngle <= -135.0)
+                ? 'SHARP_LEFT'
+                : (turnAngle <= -45.0 ? 'LEFT' : 'SLIGHT_LEFT');
           } else if (turnAngle >= 30.0) {
-            upcomingManeuver = (turnAngle >= 135.0) ? 'SHARP_RIGHT' : (turnAngle >= 45.0 ? 'RIGHT' : 'SLIGHT_RIGHT');
+            upcomingManeuver = (turnAngle >= 135.0)
+                ? 'SHARP_RIGHT'
+                : (turnAngle >= 45.0 ? 'RIGHT' : 'SLIGHT_RIGHT');
           }
         }
 

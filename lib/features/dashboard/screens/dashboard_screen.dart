@@ -5,6 +5,9 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
+import '../../../core/services/ride_history_service.dart';
+import '../../../core/network/api_client.dart';
+import '../../trips/widgets/ride_history_card.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../../device/screens/device_pairing_screen.dart';
 
@@ -41,11 +44,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isHardwareSheetShowing = false;
   AppReleaseModel? _latestRelease;
   bool _isReleaseBannerDismissed = false;
+  late Future<ApiResponse<RideHistoryPage>> _historyFuture;
+
+  void _reloadHistory() {
+    if (mounted) {
+      setState(() {
+        _historyFuture = RideHistoryService.instance.getPage(limit: 1);
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchDashboardData();
+    RideHistoryService.instance.changed.addListener(_reloadHistory);
     _checkAppRelease();
     // Periodically verify device status with backend every 20s
     _statusPollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
@@ -105,13 +118,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _onDestinationShared() {
     final dest = ShareService.instance.destinationSharedNotifier.value;
     if (dest != null && mounted) {
+      final startLoc = ShareService.instance.currentSharedStartLocation;
       ShareService.instance.clearSharedDestination();
-      DestinationConfirmSheet.show(context, dest);
+      DestinationConfirmSheet.show(context, dest, startLocation: startLoc);
     }
   }
 
   @override
   void dispose() {
+    RideHistoryService.instance.changed.removeListener(_reloadHistory);
     JustRideBleService.instance.adapterStateNotifier
         .removeListener(_onBleStateChanged);
     ShareService.instance.destinationSharedNotifier
@@ -121,7 +136,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchDashboardData() async {
-    setState(() => _isLoading = true);
+    unawaited(RideHistoryService.instance.syncPending());
+    setState(() {
+      _isLoading = true;
+      _historyFuture = RideHistoryService.instance.getPage(limit: 1);
+    });
     final userRes = await BackendService.instance.getProfile();
     final devRes = await BackendService.instance.getMyDevice();
 
@@ -131,14 +150,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (userRes.success && userRes.data != null) {
           _user = userRes.data;
         }
-        if ((devRes.success || devRes.isTransientFailure) && devRes.data != null && !devRes.data!.isBlocked) {
+        if ((devRes.success || devRes.isTransientFailure) &&
+            devRes.data != null &&
+            !devRes.data!.isBlocked) {
           _device = devRes.data;
         } else {
           _device = null;
         }
       });
       if (devRes.isTransientFailure) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(devRes.message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(devRes.message)));
       }
     }
   }
@@ -220,6 +242,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       physics:
           const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       slivers: [
+        const SliverToBoxAdapter(child: SizedBox(height: 16)),
         // ── In-App Release Update Alert Banner ────────────────────────────
         if (_latestRelease != null && !_isReleaseBannerDismissed)
           SliverPadding(
@@ -234,22 +257,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
 
-        // ── Active Navigation Live Route Card (Shows when navigating) ──────
-        const SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(child: ActiveNavigationDashboardCard()),
-        ),
-
-        // ── Device connection card ─────────────────────────────────────────
-        SliverPadding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(child: DeviceCard(device: _device)),
-        ),
-
-        const SliverToBoxAdapter(
-            child: SizedBox(height: AppConstants.spacingXl)),
-
         // ── "Where to?" header row ─────────────────────────────────────────
         SliverPadding(
           padding:
@@ -258,12 +265,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                Expanded(
+                    child: Text(
                   _user != null && _user!.fullName.isNotEmpty
                       ? 'Hello, ${_user!.fullName.split(" ").first} 👋'
                       : 'Where to?',
                   style: AppTextStyles.headingLarge,
-                ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                )),
                 GestureDetector(
                   onTap: () => Navigator.of(context).pushNamed('/places'),
                   child: Row(
@@ -307,6 +317,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SliverToBoxAdapter(
             child: SizedBox(height: AppConstants.spacingLg)),
 
+        const SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+          sliver: SliverToBoxAdapter(child: ActiveNavigationDashboardCard()),
+        ),
+        SliverPadding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+          sliver: SliverToBoxAdapter(child: _buildLatestRide()),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        SliverPadding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+          sliver: SliverToBoxAdapter(child: DeviceCard(device: _device)),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
         // ── Stats row ─────────────────────────────────────────────────────
         SliverPadding(
           padding:
@@ -321,6 +348,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ],
     );
   }
+
+  Widget _buildLatestRide() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(
+                child: Text('Latest ride', style: AppTextStyles.headingSmall)),
+            TextButton(
+                onPressed: () => Navigator.of(context).pushNamed('/trips'),
+                child: const Text('View history')),
+          ]),
+          const SizedBox(height: 4),
+          FutureBuilder<ApiResponse<RideHistoryPage>>(
+            future: _historyFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: LinearProgressIndicator(color: AppColors.primary));
+              }
+              final result = snapshot.data;
+              if (result == null || !result.success || result.data == null) {
+                return Row(children: [
+                  Expanded(
+                      child: Text('Could not load your latest ride.',
+                          style: AppTextStyles.bodySmall)),
+                  TextButton(
+                      onPressed: _reloadHistory, child: const Text('Retry')),
+                ]);
+              }
+              final rides = result.data!.items;
+              if (rides.isEmpty) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text(
+                      'No rides yet. Your latest ride will appear here when navigation ends.',
+                      style: AppTextStyles.bodyMedium),
+                );
+              }
+              return RideHistoryCard(ride: rides.first);
+            },
+          ),
+        ],
+      );
 
   Widget _buildReleaseNotificationBanner() {
     if (_latestRelease == null) return const SizedBox.shrink();
@@ -463,7 +540,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       SnackBar(
                         content: Text(
                             'Downloading APK: ${_latestRelease!.downloadUrl}'),
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: AppColors.primaryContainer,
                         behavior: SnackBarBehavior.floating,
                       ),
                     );

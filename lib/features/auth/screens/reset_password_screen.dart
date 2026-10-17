@@ -1,3 +1,4 @@
+import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -6,16 +7,16 @@ import '../../../shared/widgets/app_logo.dart';
 
 // ── Color tokens (consistent across all JustRide screens) ────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const cardBgInput = Color(0xFF142226);
-  static const surfContHigh = Color(0xFF1E2C30);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const textSec = Color(0xFFBCCBB9);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const outlineVariant = Color(0xFF3D4A3D);
-  static const inputBorder = Color(0xFF3D4A3D);
-  static const surfaceVariant = Color(0xFF29373B);
+  static const bg = AppColors.background;
+  static const cardBgInput = AppColors.surface;
+  static const surfContHigh = AppColors.surfaceElevated;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const onSurface = AppColors.textPrimary;
+  static const outlineVariant = AppColors.border;
+  static const inputBorder = AppColors.border;
+  static const surfaceVariant = AppColors.surfaceElevated;
 }
 
 class ResetPasswordScreen extends StatefulWidget {

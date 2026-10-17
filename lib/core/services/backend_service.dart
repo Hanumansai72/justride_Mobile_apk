@@ -74,7 +74,7 @@ class BackendService {
     required String password,
     required String phonenumber,
   }) async {
-    return _api.post<UserModel>(
+    final res = await _api.post<UserModel>(
       ApiEndpoints.register,
       body: {
         'name': name,
@@ -84,6 +84,11 @@ class BackendService {
       },
       fromJson: (json) => UserModel.fromJson(json['user'] ?? json),
     );
+    if (res.success && res.data != null) {
+      // Ride summaries need the same account identity immediately after signup.
+      await _api.saveUserData(res.data!.toJson());
+    }
+    return res;
   }
 
   Future<ApiResponse<void>> forgotPassword(String email) async {
@@ -400,6 +405,10 @@ class BackendService {
 
   Future<ApiResponse<void>> markNotificationAsRead(String id) async {
     return _api.patch<void>(ApiEndpoints.markNotificationAsRead(id));
+  }
+
+  Future<ApiResponse<void>> markAllNotificationsAsRead() async {
+    return _api.patch<void>(ApiEndpoints.markAllNotificationsAsRead);
   }
 
   // â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â•

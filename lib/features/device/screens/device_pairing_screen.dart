@@ -1,4 +1,6 @@
+import '../../../app/theme/app_colors.dart';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' hide BluetoothService;
 import 'package:google_fonts/google_fonts.dart';
@@ -13,15 +15,15 @@ import '../../../shared/widgets/bottom_nav_bar.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
-  static const bg = Color(0xFF071519);
-  static const surfCont = Color(0xFF142226);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const onSurface = Color(0xFFD6E5EA);
-  static const textSec = Color(0xFFBCCBB9);
-  static const outlineVariant = Color(0xFF3D4A3D);
-  static const tertiary = Color(0xFF7CD0FF);
-  static const error = Color(0xFFFF5252);
+  static const bg = AppColors.background;
+  static const surfCont = AppColors.surface;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const onSurface = AppColors.textPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const outlineVariant = AppColors.border;
+  static const tertiary = AppColors.primary;
+  static const error = AppColors.errorText;
 }
 
 class DevicePairingScreen extends StatefulWidget {
@@ -78,7 +80,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
 
     // Initialize BLE and start real-time scan for JustRide devices
     _bleService.init();
-    _startScanning();
+    if (!kIsWeb) _startScanning();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkHardwareIfOff();
@@ -86,6 +88,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
   }
 
   Future<void> _checkHardwareIfOff() async {
+    if (kIsWeb) return;
     final btState = _bleService.adapterStateNotifier.value;
     final isGpsOn = await Geolocator.isLocationServiceEnabled();
     if (btState == BluetoothAdapterState.off || !isGpsOn) {
@@ -151,15 +154,17 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: _C.error,
+            backgroundColor: AppColors.error,
             content: Row(
               children: [
-                const Icon(Icons.error_rounded, color: Colors.white),
+                const Icon(Icons.error_rounded, color: AppColors.textPrimary),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     errorMsg,
-                    style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.inter(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -185,15 +190,15 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
         setState(() => _connectingDeviceId = null);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: _C.error,
+            backgroundColor: AppColors.error,
             content: Row(
               children: [
-                const Icon(Icons.error_rounded, color: Colors.white),
+                const Icon(Icons.error_rounded, color: AppColors.textPrimary),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Backend pairing failed: ',
-                    style: GoogleFonts.inter(color: Colors.white),
+                    style: GoogleFonts.inter(color: AppColors.textPrimary),
                   ),
                 ),
               ],
@@ -214,7 +219,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: _C.primary,
+        backgroundColor: AppColors.primaryContainer,
         duration: const Duration(seconds: 3),
         content: Row(
           children: [
@@ -298,7 +303,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   decoration: InputDecoration(
                     labelText: 'Device ID',
                     labelStyle: GoogleFonts.inter(color: _C.textSec),
-                    prefixIcon: const Icon(Icons.qr_code_rounded, color: _C.primary),
+                    prefixIcon:
+                        const Icon(Icons.qr_code_rounded, color: _C.primary),
                     filled: true,
                     fillColor: _C.bg,
                     border: OutlineInputBorder(
@@ -320,7 +326,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   decoration: InputDecoration(
                     labelText: 'Pairing PIN (Default: 1234)',
                     labelStyle: GoogleFonts.inter(color: _C.textSec),
-                    prefixIcon: const Icon(Icons.pin_rounded, color: _C.primary),
+                    prefixIcon:
+                        const Icon(Icons.pin_rounded, color: _C.primary),
                     filled: true,
                     fillColor: _C.bg,
                     border: OutlineInputBorder(
@@ -346,7 +353,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                             setSheetState(() => isSubmitting = true);
 
                             // Step 1: backend check
-                            final checkRes = await BackendService.instance.checkDeviceAccess(
+                            final checkRes =
+                                await BackendService.instance.checkDeviceAccess(
                               bleAddress: code,
                               deviceId: code,
                             );
@@ -356,12 +364,13 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                               if (ctx.mounted) {
                                 ScaffoldMessenger.of(ctx).showSnackBar(
                                   SnackBar(
-                                    backgroundColor: _C.error,
+                                    backgroundColor: AppColors.error,
                                     content: Text(
                                       checkRes.message.isNotEmpty
                                           ? checkRes.message
                                           : 'Device not available for pairing.',
-                                      style: const TextStyle(color: Colors.white),
+                                      style: const TextStyle(
+                                          color: AppColors.textPrimary),
                                     ),
                                   ),
                                 );
@@ -370,7 +379,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                             }
 
                             // Step 2: backend official pair
-                            final pairRes = await BackendService.instance.pairDevice(
+                            final pairRes =
+                                await BackendService.instance.pairDevice(
                               bleAddress: code,
                               deviceName: 'JustRide HUD',
                               deviceId: code,
@@ -381,10 +391,11 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                               if (ctx.mounted) {
                                 ScaffoldMessenger.of(ctx).showSnackBar(
                                   SnackBar(
-                                    backgroundColor: _C.error,
+                                    backgroundColor: AppColors.error,
                                     content: Text(
                                       'Pairing failed: ${pairRes.message}',
-                                      style: const TextStyle(color: Colors.white),
+                                      style: const TextStyle(
+                                          color: AppColors.textPrimary),
                                     ),
                                   ),
                                 );
@@ -396,14 +407,15 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  backgroundColor: _C.primary,
+                                  backgroundColor: AppColors.primaryContainer,
                                   content: Text(
                                     'JustRide device paired successfully!',
                                     style: TextStyle(color: _C.onPrimary),
                                   ),
                                 ),
                               );
-                              Navigator.of(context).pushReplacementNamed('/device');
+                              Navigator.of(context)
+                                  .pushReplacementNamed('/device');
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -548,7 +560,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                             Text(
                               'Bluetooth is Turned Off',
                               style: GoogleFonts.inter(
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -567,8 +579,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                       TextButton(
                         onPressed: () => _bleService.turnOnBluetooth(),
                         style: TextButton.styleFrom(
-                          backgroundColor: _C.error,
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppColors.error,
+                          foregroundColor: AppColors.textPrimary,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
                           shape: RoundedRectangleBorder(
@@ -752,7 +764,9 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
               color: _C.primary.withValues(alpha: 0.6), size: 40),
           const SizedBox(height: 12),
           Text(
-            'Searching for JustRide Devices...',
+            kIsWeb
+                ? 'Connect your JustRide device'
+                : 'Searching for JustRide Devices...',
             style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -761,7 +775,9 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Ensure your JustRide HUD or module is turned on and within 10 meters. Other nearby Bluetooth devices are automatically filtered out.',
+            kIsWeb
+                ? 'Use Chrome or Edge and select Choose device to grant Bluetooth access. Keep your JustRide device nearby.'
+                : 'Ensure your JustRide HUD or module is turned on and within 10 meters. Other nearby Bluetooth devices are automatically filtered out.',
             style: GoogleFonts.inter(
               fontSize: 13,
               color: _C.textSec,
@@ -781,7 +797,9 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   color: _C.primary,
                 ),
                 label: Text(
-                  isScanning ? 'Scanning...' : 'Rescan Now',
+                  isScanning
+                      ? 'Scanning...'
+                      : (kIsWeb ? 'Choose device' : 'Rescan Now'),
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -873,7 +891,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     return Container(
       decoration: BoxDecoration(
         color: _C.surfCont,
-        border: Border.all(color: _C.primary.withValues(alpha: 0.6), width: 1.5),
+        border:
+            Border.all(color: _C.primary.withValues(alpha: 0.6), width: 1.5),
         borderRadius: BorderRadius.circular(AppConstants.radiusMd),
         boxShadow: [
           BoxShadow(
@@ -1063,8 +1082,8 @@ class _ScannerLinePainter extends CustomPainter {
     final paint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFF4BE277).withValues(alpha: 0.0),
-          const Color(0xFF4BE277).withValues(alpha: 0.6),
+          AppColors.primary.withValues(alpha: 0.0),
+          AppColors.primary.withValues(alpha: 0.6),
         ],
       ).createShader(Rect.fromCircle(center: center, radius: radius))
       ..strokeWidth = 1.5
@@ -1082,7 +1101,7 @@ class _ScannerLinePainter extends CustomPainter {
       ..shader = LinearGradient(
         colors: [
           Colors.transparent,
-          const Color(0xFF4BE277).withValues(alpha: 0.4),
+          AppColors.primary.withValues(alpha: 0.4),
         ],
       ).createShader(Rect.fromPoints(center, Offset(size.width / 2, 0)))
       ..strokeWidth = 1.5;
@@ -1112,7 +1131,8 @@ class _ConnectButtonState extends State<_ConnectButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: widget.isLoading ? null : (_) => setState(() => _pressed = true),
+      onTapDown:
+          widget.isLoading ? null : (_) => setState(() => _pressed = true),
       onTapUp: widget.isLoading
           ? null
           : (_) {

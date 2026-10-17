@@ -78,8 +78,10 @@ void main() {
   group('NavigationSession Tests', () {
     test('Creates and completes session tracking correctly', () {
       final session = NavigationSession.start(
-        origin: const Destination(name: 'Home', latitude: 12.97, longitude: 77.59),
-        destination: const Destination(name: 'Office', latitude: 12.93, longitude: 77.62),
+        origin:
+            const Destination(name: 'Home', latitude: 12.97, longitude: 77.59),
+        destination: const Destination(
+            name: 'Office', latitude: 12.93, longitude: 77.62),
       );
 
       final completed = session.complete(
@@ -92,6 +94,22 @@ void main() {
       expect(completed.maxSpeedKmh, 65.0);
       expect(completed.averageSpeedKmh, 38.0);
       expect(completed.isCompleted, isTrue);
+    });
+
+    test('Restored active ride keeps its session ID and destination', () {
+      final original = NavigationSession.start(
+        origin:
+            const Destination(name: 'Home', latitude: 12.97, longitude: 77.59),
+        destination: const Destination(
+            name: 'Office', latitude: 12.93, longitude: 77.62),
+      );
+      final restored = NavigationSession.fromJson(original.toJson());
+
+      expect(restored.sessionId, original.sessionId);
+      expect(restored.startTime, original.startTime);
+      expect(restored.destination!.latitude, original.destination!.latitude);
+      expect(restored.destination!.longitude, original.destination!.longitude);
+      expect(restored.isCompleted, isFalse);
     });
   });
 }

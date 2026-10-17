@@ -36,14 +36,16 @@ class SocialLoginButton extends StatelessWidget {
           children: [
             SizedBox(width: 24, height: 24, child: icon),
             const SizedBox(width: 12),
-            Text(
+            Flexible(
+                child: Text(
               label,
+              textAlign: TextAlign.center,
               style: AppTextStyles.labelLarge.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0,
               ),
-            ),
+            )),
           ],
         ),
       ),

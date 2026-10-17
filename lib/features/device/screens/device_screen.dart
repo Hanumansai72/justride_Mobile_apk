@@ -7,7 +7,6 @@ import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../widgets/device_info_card.dart';
-import '../widgets/device_shortcuts.dart';
 import '../widgets/device_action_tile.dart';
 import '../widgets/device_health_card.dart';
 import 'device_pairing_screen.dart';
@@ -55,21 +54,25 @@ class _DeviceScreenState extends State<DeviceScreen> {
           if (!res.isTransientFailure) {
             _device = null;
           }
-          if (res.errors?['reason'] == 'DEVICE_BLOCKED' || res.message.contains('blocked')) {
+          if (res.errors?['reason'] == 'DEVICE_BLOCKED' ||
+              res.message.contains('blocked')) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 backgroundColor: AppColors.error,
                 duration: const Duration(seconds: 5),
                 content: Row(
                   children: [
-                    const Icon(Icons.block_rounded, color: Colors.white),
+                    const Icon(Icons.block_rounded,
+                        color: AppColors.textPrimary),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         res.message.isNotEmpty
                             ? res.message
                             : 'Device has been blocked and disconnected.',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -80,7 +83,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
         }
       });
       if (res.isTransientFailure) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(res.message)));
       }
     }
   }
@@ -93,21 +97,24 @@ class _DeviceScreenState extends State<DeviceScreen> {
       setState(() {
         _device = null;
       });
-      if (res.errors?['reason'] == 'DEVICE_BLOCKED' || res.message.contains('blocked')) {
+      if (res.errors?['reason'] == 'DEVICE_BLOCKED' ||
+          res.message.contains('blocked')) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: AppColors.error,
             duration: const Duration(seconds: 5),
             content: Row(
               children: [
-                const Icon(Icons.block_rounded, color: Colors.white),
+                const Icon(Icons.block_rounded, color: AppColors.textPrimary),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     res.message.isNotEmpty
                         ? res.message
                         : 'Device has been blocked by administrator. Disconnected.',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -158,8 +165,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
     );
   }
 
-
-
   Widget _buildBody() {
     return RefreshIndicator(
       onRefresh: _fetchDevice,
@@ -170,11 +175,13 @@ class _DeviceScreenState extends State<DeviceScreen> {
           parent: BouncingScrollPhysics(),
         ),
         slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
+          const SliverToBoxAdapter(
+              child: SizedBox(height: AppConstants.spacingMd)),
 
           // Device Info Card (live backend data)
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.pagePadding),
             sliver: SliverToBoxAdapter(
               child: DeviceInfoCard(
                 deviceName: _device!.deviceName,
@@ -185,42 +192,42 @@ class _DeviceScreenState extends State<DeviceScreen> {
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
-
-          // Device Shortcuts
-          const SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-            sliver: SliverToBoxAdapter(child: DeviceShortcuts()),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
+          const SliverToBoxAdapter(
+              child: SizedBox(height: AppConstants.spacingMd)),
 
           // Customize Screens
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.pagePadding),
             sliver: SliverToBoxAdapter(
               child: DeviceActionTile(
                 icon: Icons.display_settings_rounded,
                 title: 'Customize Screens',
                 subtitle: 'Choose what to show on your device',
-                onTap: () => Navigator.of(context).pushNamed('/display-customization'),
+                onTap: () =>
+                    Navigator.of(context).pushNamed('/display-customization'),
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
+          const SliverToBoxAdapter(
+              child: SizedBox(height: AppConstants.spacingMd)),
 
           // Device Settings
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.pagePadding),
             sliver: SliverToBoxAdapter(
               child: DeviceActionTile(
                 icon: Icons.tune_rounded,
                 title: 'Hardware Settings',
                 subtitle: 'Brightness, HUD, shift lights, and diagnostics',
-                onTap: () => Navigator.of(context).pushNamed('/device-settings'),
+                onTap: () =>
+                    Navigator.of(context).pushNamed('/device-settings'),
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingMd)),
+          const SliverToBoxAdapter(
+              child: SizedBox(height: AppConstants.spacingMd)),
 
           // Device Health Card
           const SliverPadding(
@@ -228,7 +235,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
             sliver: SliverToBoxAdapter(child: DeviceHealthCard()),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: AppConstants.spacingSection)),
+          const SliverToBoxAdapter(
+              child: SizedBox(height: AppConstants.spacingSection)),
         ],
       ),
     );
@@ -236,7 +244,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
 }
 
 class _DeviceAppBar extends StatelessWidget implements PreferredSizeWidget {
-
   @override
   Size get preferredSize => const Size.fromHeight(64);
 
@@ -267,14 +274,17 @@ class _DeviceAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           IconButton(
             onPressed: () => Navigator.of(context).pushNamed('/notifications'),
-            icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textPrimary, size: 24),
+            icon: const Icon(Icons.notifications_none_rounded,
+                color: AppColors.textPrimary, size: 24),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
           const SizedBox(width: 16),
           IconButton(
-            onPressed: () => Navigator.of(context).pushNamed('/device-settings'),
-            icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary, size: 24),
+            onPressed: () =>
+                Navigator.of(context).pushNamed('/device-settings'),
+            icon: const Icon(Icons.settings_outlined,
+                color: AppColors.textPrimary, size: 24),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -283,4 +293,3 @@ class _DeviceAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
-

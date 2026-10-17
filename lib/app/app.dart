@@ -1,5 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+import 'package:flutter/foundation.dart';
+import 'theme/app_colors.dart';
 import '../core/routes/app_routes.dart';
 
 /// Global Navigation Key for handling automatic session expiry redirects
@@ -17,6 +19,17 @@ class JustRideApp extends StatelessWidget {
       title: 'JustRide',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
+      builder: (context, child) => kIsWeb
+          ? ColoredBox(
+              color: AppColors.backgroundInset,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: child!,
+                ),
+              ),
+            )
+          : child!,
       initialRoute: AppRoutes.splash,
       routes: AppRoutes.routes,
     );

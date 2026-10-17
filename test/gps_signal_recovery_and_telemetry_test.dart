@@ -127,8 +127,9 @@ void main() {
       );
       expect(window2.points.isNotEmpty, isTrue);
       // The road ahead in rider's POV is projected upward on screen
-      expect(window2.points.first.x, closeTo(160, 5));
-      expect(window2.points.first.y, closeTo(160, 5));
+      final riderPoint = window2.points[window2.completedSegmentCount];
+      expect(riderPoint.x, closeTo(160, 5));
+      expect(riderPoint.y, closeTo(160, 5));
     });
 
     test('GpsAccuracyFilter accepts urban GPS fixes up to 120m accuracy', () {

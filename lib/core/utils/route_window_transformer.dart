@@ -18,6 +18,11 @@ class RouteWindowSegment {
   /// Ordered polyline points in local screen space (X: 0..320, Y: 0..240)
   final List<ScreenPoint> points;
 
+  /// Number of leading line segments already travelled in this window.
+  final int completedSegmentCount;
+  final int progressPercent;
+  final int routeIndex;
+
   /// Whether the final destination marker is within this ~500m window
   final bool isDestinationVisible;
 
@@ -26,6 +31,9 @@ class RouteWindowSegment {
 
   const RouteWindowSegment({
     required this.points,
+    this.completedSegmentCount = 0,
+    this.progressPercent = 0,
+    this.routeIndex = 0,
     this.isDestinationVisible = false,
     this.destinationScreenPoint,
   });
@@ -33,12 +41,15 @@ class RouteWindowSegment {
   /// Empty / fallback segment
   const RouteWindowSegment.empty()
       : points = const [],
+        completedSegmentCount = 0,
+        progressPercent = 0,
+        routeIndex = 0,
         isDestinationVisible = false,
         destinationScreenPoint = null;
 }
 
 /// Slices the upcoming ~300m of route polyline ahead of the rider and transforms
-/// it into a heading-up local screen coordinate frame for the 320x240 TFT.
+/// it into a road-aligned local screen coordinate frame for the 320x240 TFT.
 class RouteWindowTransformer {
   // A 300 m follow window gives a 100–150 m straight a visibly long road on a
   // 320 px HUD, while still showing the turn and some of the exit road.  A
@@ -55,37 +66,67 @@ class RouteWindowTransformer {
   // Scale the window into the usable road area above the rider marker.
   static const double metersPerPixel = 300.0 / 150.0;
 
-  /// Transforms the route polyline into a local heading-up screen segment.
+  /// Transforms the route polyline into a local road-aligned screen segment.
   static RouteWindowSegment transform({
     required LatLng riderPosition,
     required double riderHeadingDeg,
     required List<LatLng> polylinePoints,
     required LatLng destination,
+    int minimumRouteIndex = 0,
   }) {
     if (polylinePoints.isEmpty) return const RouteWindowSegment.empty();
 
-    // 1. Find the closest polyline point index to the rider
-    int closestIdx = 0;
-    double minDistance = double.infinity;
-    for (int i = 0; i < polylinePoints.length; i++) {
-      final d = Geolocator.distanceBetween(
-        riderPosition.latitude,
-        riderPosition.longitude,
+    // Snap to the nearest road segment, not the nearest vertex. A sparse
+    // polyline can place its next vertex at the turn 100 m away.
+    int closestIdx = minimumRouteIndex.clamp(0, polylinePoints.length - 1);
+    LatLng roadPosition = polylinePoints[closestIdx];
+    double minDistanceSquared = double.infinity;
+    final lngScale = math.cos(riderPosition.latitude * math.pi / 180.0);
+    for (int i = closestIdx; i < polylinePoints.length - 1; i++) {
+      final a = polylinePoints[i];
+      final b = polylinePoints[i + 1];
+      final ax = (a.longitude - riderPosition.longitude) * lngScale;
+      final ay = a.latitude - riderPosition.latitude;
+      final dx = (b.longitude - a.longitude) * lngScale;
+      final dy = b.latitude - a.latitude;
+      final lengthSquared = dx * dx + dy * dy;
+      final t = lengthSquared == 0
+          ? 0.0
+          : (-(ax * dx + ay * dy) / lengthSquared).clamp(0.0, 1.0);
+      final x = ax + t * dx;
+      final y = ay + t * dy;
+      final distanceSquared = x * x + y * y;
+      if (distanceSquared < minDistanceSquared) {
+        minDistanceSquared = distanceSquared;
+        closestIdx = t >= 1.0 ? i + 1 : i;
+        roadPosition = LatLng(a.latitude + t * (b.latitude - a.latitude),
+            a.longitude + t * (b.longitude - a.longitude));
+      }
+    }
+    final snappedRider = roadPosition;
+
+    // Keep a short travelled tail behind the fixed rider anchor. The phone
+    // owns progress; the ESP32 only colors the transmitted segments.
+    final past = <LatLng>[];
+    double pastDistance = 0;
+    for (int i = closestIdx; i >= 0 && past.length < 3; i--) {
+      pastDistance += Geolocator.distanceBetween(
         polylinePoints[i].latitude,
         polylinePoints[i].longitude,
+        roadPosition.latitude,
+        roadPosition.longitude,
       );
-      if (d < minDistance) {
-        minDistance = d;
-        closestIdx = i;
-      }
+      if (pastDistance > 90) break;
+      past.insert(0, polylinePoints[i]);
+      roadPosition = polylinePoints[i];
     }
 
     // 2. Extract upcoming points within windowDistanceMeters (~300m)
-    final List<LatLng> upcomingPoints = [riderPosition];
+    final List<LatLng> upcomingPoints = [snappedRider];
     double accumulatedDist = 0.0;
-    LatLng prev = riderPosition;
+    LatLng prev = snappedRider;
 
-    for (int i = closestIdx; i < polylinePoints.length; i++) {
+    for (int i = closestIdx + 1; i < polylinePoints.length; i++) {
       final pt = polylinePoints[i];
       final segDist = Geolocator.distanceBetween(
         prev.latitude,
@@ -114,21 +155,49 @@ class RouteWindowTransformer {
     }
 
     // 3. Subsample if more than maxPointsToSend
-    final List<LatLng> sampledPoints =
-        _subsample(upcomingPoints, maxPointsToSend);
+    final List<LatLng> sampledPoints = [
+      ...past,
+      ..._subsample(upcomingPoints, maxPointsToSend - past.length),
+    ];
 
-    // 4. Transform to heading-up screen coordinates
-    final headingRad = (riderHeadingDeg * math.pi) / 180.0;
-    // Local North/East -> heading-up coordinates.  This must use the rider's
-    // actual heading (not its inverse), otherwise an eastbound ride renders the
-    // route behind the fixed, forward-facing rider pointer.
+    double completedMeters = 0;
+    double totalMeters = 0;
+    for (int i = 1; i < polylinePoints.length; i++) {
+      final meters = Geolocator.distanceBetween(
+        polylinePoints[i - 1].latitude,
+        polylinePoints[i - 1].longitude,
+        polylinePoints[i].latitude,
+        polylinePoints[i].longitude,
+      );
+      totalMeters += meters;
+      if (i <= closestIdx) completedMeters += meters;
+    }
+    if (closestIdx < polylinePoints.length - 1) {
+      completedMeters += Geolocator.distanceBetween(
+        polylinePoints[closestIdx].latitude,
+        polylinePoints[closestIdx].longitude,
+        snappedRider.latitude,
+        snappedRider.longitude,
+      );
+    }
+    final progressPercent = totalMeters <= 0
+        ? 0
+        : (100 * completedMeters / totalMeters).round().clamp(0, 100);
+
+    // 4. Transform to road-aligned screen coordinates
+    final routeHeading = closestIdx < polylinePoints.length - 1
+        ? _bearing(polylinePoints[closestIdx], polylinePoints[closestIdx + 1])
+        : riderHeadingDeg;
+    final headingRad = (routeHeading * math.pi) / 180.0;
+    // Keep the current road segment vertical at the fixed rider pointer;
+    // GPS compass jitter must not tilt a straight road before its turn.
     final cosHeading = math.cos(headingRad);
     final sinHeading = math.sin(headingRad);
 
     final List<ScreenPoint> screenPoints = [];
     for (final pt in sampledPoints) {
       final sp = _latLngToScreen(
-        riderPosition,
+        snappedRider,
         pt,
         cosHeading,
         sinHeading,
@@ -148,7 +217,7 @@ class RouteWindowTransformer {
     ScreenPoint? destPoint;
     if (destVisible) {
       destPoint = _latLngToScreen(
-        riderPosition,
+        snappedRider,
         destination,
         cosHeading,
         sinHeading,
@@ -157,6 +226,9 @@ class RouteWindowTransformer {
 
     return RouteWindowSegment(
       points: screenPoints,
+      completedSegmentCount: past.length,
+      progressPercent: progressPercent,
+      routeIndex: closestIdx,
       isDestinationVisible: destVisible,
       destinationScreenPoint: destPoint,
     );
@@ -191,6 +263,15 @@ class RouteWindowTransformer {
     final clampedY = pxY.clamp(26, screenHeight - 40);
 
     return ScreenPoint(clampedX, clampedY);
+  }
+
+  static ScreenPoint projectPoint({
+    required LatLng rider,
+    required LatLng target,
+    required double headingDeg,
+  }) {
+    final radians = headingDeg * math.pi / 180.0;
+    return _latLngToScreen(rider, target, math.cos(radians), math.sin(radians));
   }
 
   static List<LatLng> _subsample(List<LatLng> points, int maxCount) {

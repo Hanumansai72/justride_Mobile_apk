@@ -18,14 +18,16 @@ class UserModel {
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
-      fullName: json['fullName']?.toString() ?? json['name']?.toString() ?? json['username']?.toString() ?? 'Rider',
+      fullName: json['fullName']?.toString() ??
+          json['name']?.toString() ??
+          json['username']?.toString() ??
+          'Rider',
       email: json['email']?.toString() ?? '',
       phone: json['phonenumber']?.toString() ?? json['phone']?.toString(),
       avatarUrl: json['avatarUrl']?.toString() ?? json['avatar']?.toString(),
       role: json['role']?.toString() ?? 'USER',
     );
   }
-
 
   Map<String, dynamic> toJson() => {
         '_id': id,
@@ -63,7 +65,7 @@ class DeviceModel {
     required this.firmwareVersion,
     this.latestFirmwareVersion = 'v2.2.0',
     this.hasUpdateAvailable = true,
-    this.batteryLevel = 98,
+    this.batteryLevel = 0,
     this.connectionState = 'Connected',
     this.isOnline = true,
     this.isBlocked = false,
@@ -123,18 +125,21 @@ class DeviceModel {
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
       deviceId: devId,
       deviceName: devName,
-      model: json['device_version']?.toString() ?? json['model']?.toString() ?? 'JustRide Pro HUD',
+      model: json['device_version']?.toString() ??
+          json['model']?.toString() ??
+          'JustRide Pro HUD',
       firmwareVersion: fw,
       latestFirmwareVersion: latestFw,
       hasUpdateAvailable: hasUpdate,
-      batteryLevel: (json['batteryLevel'] as num?)?.toInt() ?? 85,
+      batteryLevel: (json['batteryLevel'] as num?)?.toInt() ?? 0,
       connectionState: connState,
       isOnline: isPaired,
       isBlocked: isBlocked,
       isActive: isActive,
       isRetired: isRetired,
       blockReason: blockReason,
-      bleAddress: json['BLE_ADDRESS']?.toString() ?? json['bleAddress']?.toString(),
+      bleAddress:
+          json['BLE_ADDRESS']?.toString() ?? json['bleAddress']?.toString(),
     );
   }
 
@@ -148,7 +153,8 @@ class DeviceModel {
       'latest_firmware': latestFirmwareVersion,
       'hasUpdateAvailable': hasUpdateAvailable,
       'batteryLevel': batteryLevel,
-      'status': isOnline ? 'CONNECTED' : (isBlocked ? 'BLOCKED' : 'DISCONNECTED'),
+      'status':
+          isOnline ? 'CONNECTED' : (isBlocked ? 'BLOCKED' : 'DISCONNECTED'),
       'is_paired': isOnline,
       'connectionState': connectionState,
       'isOnline': isOnline,
@@ -160,7 +166,6 @@ class DeviceModel {
     };
   }
 }
-
 
 class SavedPlaceModel {
   final String id;
@@ -190,11 +195,16 @@ class SavedPlaceModel {
         lat = (coords[1] as num?)?.toDouble();
       }
     } else {
-      lat = (json['latitude'] as num?)?.toDouble() ?? (json['lat'] as num?)?.toDouble();
-      lng = (json['longitude'] as num?)?.toDouble() ?? (json['lng'] as num?)?.toDouble();
+      lat = (json['latitude'] as num?)?.toDouble() ??
+          (json['lat'] as num?)?.toDouble();
+      lng = (json['longitude'] as num?)?.toDouble() ??
+          (json['lng'] as num?)?.toDouble();
     }
 
-    final label = json['label']?.toString() ?? json['title']?.toString() ?? json['name']?.toString() ?? 'Saved Place';
+    final label = json['label']?.toString() ??
+        json['title']?.toString() ??
+        json['name']?.toString() ??
+        'Saved Place';
 
     return SavedPlaceModel(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
@@ -217,7 +227,6 @@ class SavedPlaceModel {
       };
 }
 
-
 class NotificationModel {
   final String id;
   final String title;
@@ -235,13 +244,18 @@ class NotificationModel {
     required this.createdAt,
   });
 
+  NotificationModel copyWith({bool? isRead}) => NotificationModel(
+    id: id, title: title, message: message, type: type,
+    isRead: isRead ?? this.isRead, createdAt: createdAt,
+  );
+
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     return NotificationModel(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? 'Notification',
       message: json['message']?.toString() ?? json['body']?.toString() ?? '',
       type: json['type']?.toString() ?? 'SYSTEM',
-      isRead: json['isRead'] == true || json['read'] == true,
+      isRead: json['is_read'] == true || json['isRead'] == true || json['read'] == true,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),
@@ -284,7 +298,9 @@ class ChatMessageModel {
       senderRole: json['sender_role']?.toString().toUpperCase() ?? 'USER',
       senderName: name,
       body: json['body']?.toString() ?? json['message']?.toString() ?? '',
-      attachments: (json['attachments'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      attachments:
+          (json['attachments'] as List?)?.map((e) => e.toString()).toList() ??
+              [],
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),
@@ -298,7 +314,8 @@ class SupportTicketModel {
   final String title;
   final String description;
   final String status; // OPEN, IN_PROGRESS, RESOLVED, CLOSED
-  final String category; // device_problem, connection_issue, contact_support, feedback, general
+  final String
+      category; // device_problem, connection_issue, contact_support, feedback, general
   final List<ChatMessageModel> messages;
   final DateTime createdAt;
 
@@ -317,12 +334,18 @@ class SupportTicketModel {
     final rawMsgs = json['messages'] as List? ?? [];
     return SupportTicketModel(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
-      ticketNumber: json['ticket_number']?.toString() ?? json['ticketNumber']?.toString() ?? 'TKT-001',
-      title: json['subject']?.toString() ?? json['title']?.toString() ?? 'Support Ticket',
+      ticketNumber: json['ticket_number']?.toString() ??
+          json['ticketNumber']?.toString() ??
+          'TKT-001',
+      title: json['subject']?.toString() ??
+          json['title']?.toString() ??
+          'Support Ticket',
       description: json['description']?.toString() ?? '',
       status: json['status']?.toString().toUpperCase() ?? 'OPEN',
       category: json['category']?.toString() ?? 'general',
-      messages: rawMsgs.map((m) => ChatMessageModel.fromJson(m as Map<String, dynamic>)).toList(),
+      messages: rawMsgs
+          .map((m) => ChatMessageModel.fromJson(m as Map<String, dynamic>))
+          .toList(),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),
@@ -406,7 +429,8 @@ class AppReleaseModel {
       isMandatory: json['is_mandatory'] == true,
       isFeatured: json['is_featured'] == true,
       releaseNotes: json['release_notes']?.toString() ?? '',
-      downloadUrl: json['download_url']?.toString() ?? json['file_url']?.toString(),
+      downloadUrl:
+          json['download_url']?.toString() ?? json['file_url']?.toString(),
       fileSizeBytes: (json['file_size_bytes'] as num?)?.toInt(),
       checksumSha256: json['checksum_sha256']?.toString(),
       releaseDate: json['release_date'] != null
@@ -415,5 +439,3 @@ class AppReleaseModel {
     );
   }
 }
-
-

@@ -1,3 +1,4 @@
+import '../../../app/theme/app_colors.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../../../core/services/ota_service.dart';
 import '../../../core/services/backend_service.dart';
@@ -14,14 +15,14 @@ import '../../../shared/widgets/bottom_nav_bar.dart';
 
 // â”€â”€ Colour tokens matching the HTML design â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _SC {
-  static const cardBg = Color(0xFF151A17);
-  static const cardBorder = Color(0xFF27312B);
-  static const primary = Color(0xFF4BE277);
-  static const onPrimary = Color(0xFF003915);
-  static const textSec = Color(0xFFBCCBB9);
-  static const errorRed = Color(0xFFFFB4AB);
-  static const surfCont = Color(0xFF1E2C30);
-  static const bg = Color(0xFF071519);
+  static const cardBg = AppColors.surface;
+  static const cardBorder = AppColors.border;
+  static const primary = AppColors.primary;
+  static const onPrimary = AppColors.onPrimary;
+  static const textSec = AppColors.textSecondary;
+  static const errorRed = AppColors.errorLight;
+  static const surfCont = AppColors.surfaceElevated;
+  static const bg = AppColors.background;
 }
 
 class DeviceSettingsScreen extends StatefulWidget {
@@ -140,7 +141,7 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
             'Hardware Settings',
             style: AppTextStyles.displayMedium.copyWith(
               fontSize: 24,
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -243,7 +244,7 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
             Text(
               'Restart Device?',
               style: GoogleFonts.inter(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),
@@ -306,7 +307,7 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
             Text(
               'Reset to Defaults?',
               style: GoogleFonts.inter(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),
@@ -414,7 +415,7 @@ class _DeviceIdentityCard extends StatelessWidget {
                           Text(
                             'JustRide HUD',
                             style: AppTextStyles.headingMedium.copyWith(
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontSize: 20,
                             ),
                           ),
@@ -503,12 +504,12 @@ class _BrightnessCard extends StatelessWidget {
               Row(
                 children: [
                   const Icon(Icons.light_mode_outlined,
-                      color: Colors.white, size: 22),
+                      color: AppColors.textPrimary, size: 22),
                   const SizedBox(width: AppConstants.spacingSm),
                   Text(
                     'Display Brightness',
                     style: AppTextStyles.headingSmall.copyWith(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -528,7 +529,7 @@ class _BrightnessCard extends StatelessWidget {
             data: SliderThemeData(
               trackHeight: 4,
               activeTrackColor: _SC.primary,
-              inactiveTrackColor: const Color(0xFF29373B),
+              inactiveTrackColor: AppColors.surfaceElevated,
               thumbColor: _SC.primary,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
               overlayColor: _SC.primary.withValues(alpha: 0.2),
@@ -582,7 +583,7 @@ class _SettingsTileState extends State<_SettingsTile> {
         padding: const EdgeInsets.all(AppConstants.spacingMd),
         constraints: const BoxConstraints(minHeight: 100),
         decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFF1B211E) : _SC.cardBg,
+          color: _pressed ? AppColors.surfaceElevated : _SC.cardBg,
           border: Border.all(color: _SC.cardBorder),
           borderRadius: BorderRadius.circular(AppConstants.radiusLg),
         ),
@@ -591,12 +592,12 @@ class _SettingsTileState extends State<_SettingsTile> {
           children: [
             Row(
               children: [
-                Icon(widget.icon, color: Colors.white, size: 22),
+                Icon(widget.icon, color: AppColors.textPrimary, size: 22),
                 const SizedBox(width: AppConstants.spacingSm),
                 Text(
                   widget.title,
                   style: AppTextStyles.headingSmall.copyWith(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -676,7 +677,7 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
               title: Text(
                 'Firmware Update (v$targetVer)',
                 style:
-                    AppTextStyles.headingMedium.copyWith(color: Colors.white),
+                    AppTextStyles.headingMedium.copyWith(color: AppColors.textPrimary),
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -689,7 +690,7 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
                   ),
                   const SizedBox(height: 16),
                   LinearProgressIndicator(
-                    value: progress.progress > 0 ? progress.progress : null,
+                    value: progress.progress.clamp(0.0, 1.0).toDouble(),
                     backgroundColor: _SC.surfCont,
                     color: _SC.primary,
                     minHeight: 8,
@@ -697,7 +698,7 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '% Complete',
+                    '${(progress.progress * 100).round()}% Complete',
                     textAlign: TextAlign.right,
                     style: GoogleFonts.jetBrainsMono(
                       color: _SC.primary,
@@ -806,7 +807,7 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
                         Text(
                           'Update Available',
                           style: AppTextStyles.headingSmall.copyWith(
-                            color: Colors.white,
+                            color: AppColors.textPrimary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -966,7 +967,7 @@ class _GlowButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppConstants.radiusMd),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x634BE277),
+              color: AppColors.primarySoft,
               blurRadius: 14,
               offset: Offset(0, 4),
             ),
@@ -1024,7 +1025,7 @@ class _PulsingDotState extends State<_PulsingDot>
           shape: BoxShape.circle,
           color: _SC.primary,
           boxShadow: [
-            BoxShadow(color: Color(0x994BE277), blurRadius: 8),
+            BoxShadow(color: AppColors.primaryTranslucent, blurRadius: 8),
           ],
         ),
       ),
@@ -1123,7 +1124,7 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
                       Text(
                         'Hardware Diagnostics',
                         style: GoogleFonts.inter(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),
@@ -1240,7 +1241,7 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
                 Text(
                   title,
                   style: GoogleFonts.inter(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),

@@ -1,4 +1,6 @@
-﻿import 'package:geolocator/geolocator.dart';
+import 'dart:math' as math;
+
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 /// Internal state of off-route detection.
@@ -63,16 +65,18 @@ class OffRouteDetector {
   }) {
     if (polylinePoints.isEmpty) return _state;
 
-    // 1. Find minimum distance from rider to any polyline point.
+    // 1. Find minimum distance to the route geometry, not just its vertices.
+    // A sparse polyline can place a rider close to a segment while remaining
+    // farther than the corridor from both endpoint samples.
     double minDist = double.infinity;
-    for (final pt in polylinePoints) {
-      final d = Geolocator.distanceBetween(
-        riderPosition.latitude,
-        riderPosition.longitude,
-        pt.latitude,
-        pt.longitude,
-      );
-      if (d < minDist) minDist = d;
+    for (var i = 0; i < polylinePoints.length; i++) {
+      final d = i == 0
+          ? _distanceToPointMeters(riderPosition, polylinePoints[i])
+          : _distanceToSegmentMeters(
+              riderPosition, polylinePoints[i - 1], polylinePoints[i]);
+      if (d < minDist) {
+        minDist = d;
+      }
     }
 
     final isOutsideCorridor = minDist > _offRouteCorridorMeters;
@@ -113,5 +117,61 @@ class OffRouteDetector {
     }
 
     return _state;
+  }
+
+  static double _distanceToPointMeters(LatLng point, LatLng routePoint) {
+    return Geolocator.distanceBetween(
+      point.latitude,
+      point.longitude,
+      routePoint.latitude,
+      routePoint.longitude,
+    );
+  }
+
+  /// Distance from [point] to a route segment in a local equirectangular
+  /// projection. Segments are short enough for this projection to be accurate
+  /// at navigation-corridor scales, while avoiding a second route engine or
+  /// any protocol change.
+  static double _distanceToSegmentMeters(
+    LatLng point,
+    LatLng segmentStart,
+    LatLng segmentEnd,
+  ) {
+    const earthRadiusMeters = 6371000.0;
+    final lat0 =
+        (point.latitude + segmentStart.latitude + segmentEnd.latitude) /
+            3.0 *
+            3.141592653589793 /
+            180.0;
+    final cosLat = math.cos(lat0);
+
+    double x(double longitude) =>
+        (longitude - point.longitude) *
+        3.141592653589793 /
+        180.0 *
+        earthRadiusMeters *
+        cosLat;
+    double y(double latitude) =>
+        (latitude - point.latitude) *
+        3.141592653589793 /
+        180.0 *
+        earthRadiusMeters;
+
+    final ax = x(segmentStart.longitude);
+    final ay = y(segmentStart.latitude);
+    final bx = x(segmentEnd.longitude);
+    final by = y(segmentEnd.latitude);
+    final dx = bx - ax;
+    final dy = by - ay;
+    final lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared == 0.0) {
+      return math.sqrt(ax * ax + ay * ay);
+    }
+
+    final t = ((-ax * dx) + (-ay * dy)) / lengthSquared;
+    final clampedT = t.clamp(0.0, 1.0);
+    final closestX = ax + clampedT * dx;
+    final closestY = ay + clampedT * dy;
+    return math.sqrt(closestX * closestX + closestY * closestY);
   }
 }
