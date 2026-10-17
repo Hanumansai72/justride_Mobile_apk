@@ -389,6 +389,12 @@ class _DeviceCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppConstants.spacingSm),
+              Image.asset(
+                'assets/justride-device.webp',
+                height: 170,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: AppConstants.spacingSm),
               // Stats row
               Container(
                 padding: const EdgeInsets.only(top: AppConstants.spacingSm),

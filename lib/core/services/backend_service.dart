@@ -11,6 +11,8 @@ class BackendService {
   static final BackendService instance = BackendService._();
 
   final ApiClient _api = ApiClient.instance;
+  Future<ApiResponse<DeviceModel>>? _deviceRequest;
+  String? _deviceRequestToken;
 
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 1. AUTHENTICATION & USER (/api/users)
@@ -50,7 +52,8 @@ class BackendService {
     final res = await _api.post<UserModel>(
       ApiEndpoints.googleAuth,
       body: body,
-      fromJson: (json) => UserModel.fromJson(json['data'] ?? json['user'] ?? json),
+      fromJson: (json) =>
+          UserModel.fromJson(json['data'] ?? json['user'] ?? json),
     );
     if (res.success && res.data != null) {
       await _api.saveUserData(res.data!.toJson());
@@ -64,7 +67,6 @@ class BackendService {
     } catch (_) {}
     await _api.clearAuth();
   }
-
 
   Future<ApiResponse<UserModel>> register({
     required String name,
@@ -83,7 +85,6 @@ class BackendService {
       fromJson: (json) => UserModel.fromJson(json['user'] ?? json),
     );
   }
-
 
   Future<ApiResponse<void>> forgotPassword(String email) async {
     return _api.post<void>(
@@ -114,7 +115,10 @@ class BackendService {
         if (phonenumber != null) 'phonenumber': phonenumber,
         if (email != null) 'email': email,
       },
-      fromJson: (json) => UserModel.fromJson(json is Map && json.containsKey('data') ? json['data'] : (json is Map && json.containsKey('user') ? json['user'] : json)),
+      fromJson: (json) => UserModel.fromJson(json is Map &&
+              json.containsKey('data')
+          ? json['data']
+          : (json is Map && json.containsKey('user') ? json['user'] : json)),
     );
   }
 
@@ -149,14 +153,14 @@ class BackendService {
     return res;
   }
 
-
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 2. DEVICE & FIRMWARE (/api/devices)
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   Future<void> saveLocalDevice(DeviceModel device) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('justride_paired_device', jsonEncode(device.toJson()));
+    await prefs.setString(
+        'justride_paired_device', jsonEncode(device.toJson()));
     if (device.bleAddress != null && device.bleAddress!.isNotEmpty) {
       await prefs.setString('justride_saved_mac_address', device.bleAddress!);
     }
@@ -168,15 +172,33 @@ class BackendService {
     await prefs.remove('justride_saved_mac_address');
   }
 
-  Future<ApiResponse<DeviceModel>> getMyDevice() async {
+  Future<ApiResponse<DeviceModel>> getMyDevice() {
+    if (_deviceRequest != null && _deviceRequestToken == _api.token) {
+      return _deviceRequest!;
+    }
+    _deviceRequestToken = _api.token;
+    late final Future<ApiResponse<DeviceModel>> request;
+    request = _fetchMyDevice().whenComplete(() {
+      if (identical(_deviceRequest, request)) _deviceRequest = null;
+    });
+    _deviceRequest = request;
+    return request;
+  }
+
+  Future<ApiResponse<DeviceModel>> _fetchMyDevice() async {
+    final sessionToken = _api.token;
     final res = await _api.get<DeviceModel>(
       ApiEndpoints.myDevice,
       fromJson: (json) {
-        if (json == null || (json is Map && json.isEmpty)) return null as dynamic;
+        if (json == null || (json is Map && json.isEmpty)) {
+          return null as dynamic;
+        }
         final data = json is Map && json.containsKey('device')
             ? json['device']
             : (json is Map && json.containsKey('data') ? json['data'] : json);
-        if (data == null || (data is Map && data.isEmpty)) return null as dynamic;
+        if (data == null || (data is Map && data.isEmpty)) {
+          return null as dynamic;
+        }
         if (data is Map &&
             data['devicename'] == null &&
             data['deviceName'] == null &&
@@ -186,10 +208,14 @@ class BackendService {
             data['device_id'] == null) {
           return null as dynamic;
         }
-        return DeviceModel.fromJson(data is Map ? Map<String, dynamic>.from(data) : {});
+        return DeviceModel.fromJson(
+            data is Map ? Map<String, dynamic>.from(data) : {});
       },
     );
 
+    if (sessionToken != _api.token) {
+      return ApiResponse.error('Session changed during device check.');
+    }
     if (res.success) {
       final dev = res.data;
       // If no device is paired, or device is blocked / inactive / retired on the server:
@@ -214,14 +240,25 @@ class BackendService {
       return res;
     }
 
-    // Fallback to local stored device ONLY if offline and cached device is NOT blocked
+    if (!res.isTransientFailure) {
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        await unpairLocalDevice();
+        await JustRideBleService.instance.disconnectDevice();
+      }
+      return res;
+    }
+
+    // Use the local device only during transient network/service failures.
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('justride_paired_device');
     if (raw != null) {
       try {
-        final dev = DeviceModel.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        final dev =
+            DeviceModel.fromJson(jsonDecode(raw) as Map<String, dynamic>);
         if (!dev.isBlocked && dev.isActive && !dev.isRetired) {
-          return ApiResponse.success(data: dev);
+          return ApiResponse<DeviceModel>(success: false, data: dev,
+            message: res.message, statusCode: res.statusCode,
+            errors: res.errors, retryAfterSeconds: res.retryAfterSeconds);
         } else {
           await unpairLocalDevice();
           await JustRideBleService.instance.disconnectDevice();
@@ -235,9 +272,11 @@ class BackendService {
   /// If blocked or unlinked, automatically disconnects Bluetooth and wipes local cache.
   Future<bool> checkAndEnforceDeviceStatus() async {
     final res = await getMyDevice();
-    return res.success && res.data != null && !res.data!.isBlocked && res.data!.isActive;
+    return res.success &&
+        res.data != null &&
+        !res.data!.isBlocked &&
+        res.data!.isActive;
   }
-
 
   /// Step 1 â€“ Pre-check: verify the device is registered in backend and available to pair.
   /// Returns success=true + can_pair=true if the device is claimable.
@@ -274,7 +313,9 @@ class BackendService {
       fromJson: (json) {
         final data = json is Map && json.containsKey('data')
             ? Map<String, dynamic>.from(json['data'] as Map)
-            : (json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{});
+            : (json is Map
+                ? Map<String, dynamic>.from(json)
+                : <String, dynamic>{});
         if (data['BLE_ADDRESS'] == null && data['bleAddress'] == null) {
           data['BLE_ADDRESS'] = bleAddress;
         }
@@ -288,7 +329,8 @@ class BackendService {
     return res;
   }
 
-  Future<ApiResponse<Map<String, dynamic>>> checkFirmwareUpdate(String deviceId) async {
+  Future<ApiResponse<Map<String, dynamic>>> checkFirmwareUpdate(
+      String deviceId) async {
     return _api.get<Map<String, dynamic>>(
       ApiEndpoints.deviceCheckFirmware(deviceId),
       fromJson: (json) => json as Map<String, dynamic>,
@@ -325,10 +367,14 @@ class BackendService {
           'coordinates': [longitude, latitude],
         },
       },
-      fromJson: (json) => SavedPlaceModel.fromJson(json is Map && json.containsKey('data') ? json['data'] : (json is Map && json.containsKey('address') ? json['address'] : json)),
+      fromJson: (json) => SavedPlaceModel.fromJson(
+          json is Map && json.containsKey('data')
+              ? json['data']
+              : (json is Map && json.containsKey('address')
+                  ? json['address']
+                  : json)),
     );
   }
-
 
   Future<ApiResponse<void>> deleteSavedAddress(String id) async {
     return _api.delete<void>(ApiEndpoints.addressById(id));
@@ -342,8 +388,12 @@ class BackendService {
     return _api.get<List<NotificationModel>>(
       ApiEndpoints.notifications,
       fromJson: (json) {
-        final list = (json is List) ? json : (json['notifications'] as List? ?? json['data'] as List? ?? []);
-        return list.map((e) => NotificationModel.fromJson(e as Map<String, dynamic>)).toList();
+        final list = (json is List)
+            ? json
+            : (json['notifications'] as List? ?? json['data'] as List? ?? []);
+        return list
+            .map((e) => NotificationModel.fromJson(e as Map<String, dynamic>))
+            .toList();
       },
     );
   }
@@ -352,32 +402,34 @@ class BackendService {
     return _api.patch<void>(ApiEndpoints.markNotificationAsRead(id));
   }
 
-  // â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+  // â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â•
   // 4b. FIRMWARE & APP UPDATES
-  // â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+  // â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â•
 
   /// Fetches the latest published firmware release directly from database/CDN
   Future<ApiResponse<FirmwareReleaseModel>> getLatestFirmwareRelease() async {
     return _api.get<FirmwareReleaseModel>(
       ApiEndpoints.latestFirmware,
       fromJson: (json) {
-        final data = (json is Map && json.containsKey('data')) ? json['data'] : json;
+        final data =
+            (json is Map && json.containsKey('data')) ? json['data'] : json;
         return FirmwareReleaseModel.fromJson(data as Map<String, dynamic>);
       },
     );
   }
 
   /// Checks if a newer mobile app APK release is available in the database
-  Future<ApiResponse<AppReleaseModel>> getLatestAppRelease({int currentBuild = 2}) async {
+  Future<ApiResponse<AppReleaseModel>> getLatestAppRelease(
+      {int currentBuild = 2}) async {
     return _api.get<AppReleaseModel>(
       '${ApiEndpoints.appReleaseLatest}?platform=android&current_build=$currentBuild',
       fromJson: (json) {
-        final data = (json is Map && json.containsKey('data')) ? json['data'] : json;
+        final data =
+            (json is Map && json.containsKey('data')) ? json['data'] : json;
         return AppReleaseModel.fromJson(data as Map<String, dynamic>);
       },
     );
   }
-
 
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 5. SUPPORT & TICKETS (/api/support & /api/chat)
@@ -388,15 +440,19 @@ class BackendService {
       ApiEndpoints.myTickets,
       fromJson: (json) {
         final list = (json is List) ? json : (json['tickets'] as List? ?? []);
-        return list.map((e) => SupportTicketModel.fromJson(e as Map<String, dynamic>)).toList();
+        return list
+            .map((e) => SupportTicketModel.fromJson(e as Map<String, dynamic>))
+            .toList();
       },
     );
   }
 
-  Future<ApiResponse<SupportTicketModel>> getTicketDetails(String ticketId) async {
+  Future<ApiResponse<SupportTicketModel>> getTicketDetails(
+      String ticketId) async {
     return _api.get<SupportTicketModel>(
       ApiEndpoints.ticketDetails(ticketId),
-      fromJson: (json) => SupportTicketModel.fromJson(json is Map && json.containsKey('ticket') ? json['ticket'] : json),
+      fromJson: (json) => SupportTicketModel.fromJson(
+          json is Map && json.containsKey('ticket') ? json['ticket'] : json),
     );
   }
 
@@ -416,7 +472,8 @@ class BackendService {
           'priority': priority,
           if (deviceId != null) 'device_id': deviceId,
         },
-        fromJson: (json) => SupportTicketModel.fromJson(json is Map && json.containsKey('data') ? json['data'] : json),
+        fromJson: (json) => SupportTicketModel.fromJson(
+            json is Map && json.containsKey('data') ? json['data'] : json),
       );
     } else if (category == 'connection_issue') {
       return _api.post<SupportTicketModel>(
@@ -425,7 +482,8 @@ class BackendService {
           'description': message,
           if (deviceId != null) 'device_id': deviceId,
         },
-        fromJson: (json) => SupportTicketModel.fromJson(json is Map && json.containsKey('data') ? json['data'] : json),
+        fromJson: (json) => SupportTicketModel.fromJson(
+            json is Map && json.containsKey('data') ? json['data'] : json),
       );
     } else {
       return _api.post<SupportTicketModel>(
@@ -435,7 +493,8 @@ class BackendService {
           'message': message,
           'priority': priority,
         },
-        fromJson: (json) => SupportTicketModel.fromJson(json is Map && json.containsKey('data') ? json['data'] : json),
+        fromJson: (json) => SupportTicketModel.fromJson(
+            json is Map && json.containsKey('data') ? json['data'] : json),
       );
     }
   }
@@ -453,10 +512,15 @@ class BackendService {
         if (attachments != null) 'attachments': attachments,
       },
       fromJson: (json) {
-        if (json is Map && json.containsKey('messages') && json['messages'] is List && (json['messages'] as List).isNotEmpty) {
-          return ChatMessageModel.fromJson((json['messages'] as List).last as Map<String, dynamic>);
+        if (json is Map &&
+            json.containsKey('messages') &&
+            json['messages'] is List &&
+            (json['messages'] as List).isNotEmpty) {
+          return ChatMessageModel.fromJson(
+              (json['messages'] as List).last as Map<String, dynamic>);
         }
-        return ChatMessageModel.fromJson(json is Map && json.containsKey('data') ? json['data'] : json);
+        return ChatMessageModel.fromJson(
+            json is Map && json.containsKey('data') ? json['data'] : json);
       },
     );
   }
@@ -497,4 +561,3 @@ class BackendService {
     );
   }
 }
-

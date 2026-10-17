@@ -131,17 +131,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (userRes.success && userRes.data != null) {
           _user = userRes.data;
         }
-        if (devRes.success && devRes.data != null && !devRes.data!.isBlocked) {
+        if ((devRes.success || devRes.isTransientFailure) && devRes.data != null && !devRes.data!.isBlocked) {
           _device = devRes.data;
         } else {
           _device = null;
         }
       });
+      if (devRes.isTransientFailure) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(devRes.message)));
+      }
     }
   }
 
   Future<void> _verifyDeviceStatus() async {
     final devRes = await BackendService.instance.getMyDevice();
+    if (devRes.isTransientFailure) return;
     if (!mounted) return;
     setState(() {
       if (devRes.success && devRes.data != null && !devRes.data!.isBlocked) {

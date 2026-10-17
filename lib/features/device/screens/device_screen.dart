@@ -49,10 +49,12 @@ class _DeviceScreenState extends State<DeviceScreen> {
     if (mounted) {
       setState(() {
         _isLoading = false;
-        if (res.success && res.data != null) {
+        if ((res.success || res.isTransientFailure) && res.data != null) {
           _device = res.data;
         } else {
-          _device = null;
+          if (!res.isTransientFailure) {
+            _device = null;
+          }
           if (res.errors?['reason'] == 'DEVICE_BLOCKED' || res.message.contains('blocked')) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -77,11 +79,15 @@ class _DeviceScreenState extends State<DeviceScreen> {
           }
         }
       });
+      if (res.isTransientFailure) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
+      }
     }
   }
 
   Future<void> _verifyDeviceStatus() async {
     final res = await BackendService.instance.getMyDevice();
+    if (res.isTransientFailure) return;
     if (!mounted) return;
     if (!res.success || res.data == null) {
       setState(() {

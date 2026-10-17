@@ -49,26 +49,18 @@ class DeviceCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                // Bluetooth icon circle
+                // Approved circular JustRide device image
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 58,
+                  height: 58,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: connected
-                        ? AppColors.primaryContainer
-                        : AppColors.surfaceElevated,
-                    border: Border.all(
-                      color: connected ? AppColors.primary : AppColors.border,
-                      width: 1.5,
-                    ),
+                    borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+                    color: AppColors.surfaceElevated,
                   ),
-                  child: Icon(
-                    connected
-                        ? Icons.bluetooth_rounded
-                        : Icons.bluetooth_disabled_rounded,
-                    color: connected ? AppColors.primary : AppColors.textMuted,
-                    size: 22,
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.asset(
+                    'assets/justride-device.webp',
+                    fit: BoxFit.contain,
                   ),
                 ),
                 const SizedBox(width: AppConstants.spacingMd),
@@ -87,14 +79,18 @@ class DeviceCard extends StatelessWidget {
                             height: 7,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: connected ? AppColors.connected : AppColors.textMuted,
+                              color: connected
+                                  ? AppColors.connected
+                                  : AppColors.textMuted,
                             ),
                           ),
                           const SizedBox(width: 5),
                           Text(
                             connected ? 'Connected' : 'Disconnected',
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: connected ? AppColors.connected : AppColors.textMuted,
+                              color: connected
+                                  ? AppColors.connected
+                                  : AppColors.textMuted,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -114,7 +110,8 @@ class DeviceCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(width: 6),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
+                const Icon(Icons.chevron_right_rounded,
+                    color: AppColors.textMuted, size: 20),
               ],
             ),
           ),
@@ -123,5 +120,3 @@ class DeviceCard extends StatelessWidget {
     );
   }
 }
-
-

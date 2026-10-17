@@ -17,7 +17,7 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
 
   // Production / Staging Backend Host
-  static const String baseUrl = 'https://justfai-backend.vercel.app/api';
+  static const String baseUrl = 'https://backend.justride.cc/api';
 
   static const Duration timeoutDuration = Duration(seconds: 15);
 
@@ -252,7 +252,8 @@ class ApiClient {
     try {
       // Check 401 Unauthorized or 403 Session Invalidation
       if (res.statusCode == 401) {
-        debugPrint('[ApiClient] 401 Unauthorized encountered. Redirecting to Login...');
+        debugPrint(
+            '[ApiClient] 401 Unauthorized encountered. Redirecting to Login...');
         handleSessionExpired();
       }
 
@@ -265,14 +266,18 @@ class ApiClient {
         // Automatically capture and persist accessToken / token if returned by backend
         final String? token = body['accessToken'] as String? ??
             body['token'] as String? ??
-            (body['data'] is Map ? (body['data'] as Map)['accessToken'] ?? (body['data'] as Map)['token'] : null);
+            (body['data'] is Map
+                ? (body['data'] as Map)['accessToken'] ??
+                    (body['data'] as Map)['token']
+                : null);
         if (token != null && token.isNotEmpty) {
           saveAuthToken(token);
         }
 
         final dynamic rawData = body.containsKey('data') ? body['data'] : body;
-        final T? parsedData =
-            (fromJson != null && rawData != null) ? fromJson(rawData) : rawData as T?;
+        final T? parsedData = (fromJson != null && rawData != null)
+            ? fromJson(rawData)
+            : rawData as T?;
         return ApiResponse.success(
           data: parsedData,
           message: body['message'] as String? ?? 'Success',
@@ -280,13 +285,16 @@ class ApiClient {
         );
       } else {
         return ApiResponse.error(
-          body['message'] as String? ?? 'Request failed with status ${res.statusCode}',
+          body['message'] as String? ??
+              'Request failed with status ${res.statusCode}',
           statusCode: res.statusCode,
           errors: body['errors'],
+          retryAfterSeconds: int.tryParse(res.headers['retry-after'] ?? ''),
         );
       }
     } catch (e) {
-      return ApiResponse.error('Malformed response: $e', statusCode: res.statusCode);
+      return ApiResponse.error('Malformed response: $e',
+          statusCode: res.statusCode);
     }
   }
 }
@@ -298,6 +306,11 @@ class ApiResponse<T> {
   final String message;
   final int? statusCode;
   final dynamic errors;
+  final int? retryAfterSeconds;
+
+  bool get isTransientFailure =>
+      !success &&
+      (statusCode == null || statusCode == 429 || statusCode! >= 500);
 
   ApiResponse({
     required this.success,
@@ -305,6 +318,7 @@ class ApiResponse<T> {
     required this.message,
     this.statusCode,
     this.errors,
+    this.retryAfterSeconds,
   });
 
   factory ApiResponse.success({
@@ -323,11 +337,13 @@ class ApiResponse<T> {
     String message, {
     int? statusCode,
     dynamic errors,
+    int? retryAfterSeconds,
   }) =>
       ApiResponse(
         success: false,
         message: message,
         statusCode: statusCode,
         errors: errors,
+        retryAfterSeconds: retryAfterSeconds,
       );
 }
