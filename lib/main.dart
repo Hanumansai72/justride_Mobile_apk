@@ -1,3 +1,5 @@
+import 'core/constants/device_map_config.dart';
+import 'core/services/device_map_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -13,12 +15,13 @@ import 'core/services/notification_listener_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await GoogleMapsConfig.loadPlatformApiKey();
+  if (!DeviceMapConfig.enabled) await GoogleMapsConfig.loadPlatformApiKey();
   await ApiClient.instance.init();
 
   // Initialize Bluetooth, Navigation, Telephony, and Notification Services
   JustRideBleService.instance.init();
   BleNavigationService.instance.init();
+  DeviceMapService.instance.init();
   if (!kIsWeb) {
     ShareService.instance.init();
     TelephonyService.instance.init();

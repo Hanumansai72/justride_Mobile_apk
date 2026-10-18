@@ -1,3 +1,6 @@
+import '../../../core/constants/device_map_config.dart';
+import '../../../core/services/device_map_service.dart';
+import '../widgets/device_map_view.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import '../../../core/constants/google_maps_config.dart';
@@ -123,7 +126,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
     final image = await picture.toImage(size.toInt(), size.toInt());
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     final bytes = byteData!.buffer.asUint8List();
-    return BitmapDescriptor.fromBytes(bytes);
+    return BitmapDescriptor.bytes(bytes);
   }
 
   // Dark navigation map style
@@ -258,7 +261,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
             return Stack(
               children: [
                 // 1. Google Map View
-                if (kIsWeb && !GoogleMapsConfig.webMapsLoaded)
+                if (DeviceMapConfig.enabled)
+                  DeviceMapView(state: state)
+                else if (kIsWeb && !GoogleMapsConfig.webMapsLoaded)
                   const Center(
                       child: Text(
                           'Map unavailable. Check the Maps configuration or your connection.'))
@@ -298,7 +303,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                   ),
 
                 // Map Loading Screen Overlay until Google Map tiles and camera are ready
-                if (!_isMapReady && (!kIsWeb || GoogleMapsConfig.webMapsLoaded))
+                if (!DeviceMapConfig.enabled &&
+                    !_isMapReady &&
+                    (!kIsWeb || GoogleMapsConfig.webMapsLoaded))
                   Positioned.fill(
                     child: Container(
                       color: _C.bg,
@@ -375,8 +382,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                   valueListenable:
                       LocationService.instance.locationSourceNotifier,
                   builder: (context, source, _) {
-                    if (source != LocationSource.simulator)
+                    if (source != LocationSource.simulator) {
                       return const SizedBox.shrink();
+                    }
                     return SafeArea(
                       child: Align(
                         alignment: Alignment.topLeft,
@@ -442,7 +450,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                                 _isFollowingUser ? _C.primary : _C.cardBorder,
                           ),
                         ),
-                        onPressed: _centerOnUser,
+                        onPressed: DeviceMapConfig.enabled
+                            ? () => DeviceMapService.instance.recenter()
+                            : _centerOnUser,
                         child: const Icon(Icons.my_location_rounded, size: 20),
                       ),
                       const SizedBox(height: 8),
@@ -457,7 +467,13 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
-                          _mapController?.animateCamera(CameraUpdate.zoomIn());
+                          if (DeviceMapConfig.enabled) {
+                            DeviceMapService.instance
+                                .setZoom(DeviceMapService.instance.zoom + 1);
+                          } else {
+                            _mapController
+                                ?.animateCamera(CameraUpdate.zoomIn());
+                          }
                         },
                         child: const Icon(Icons.add_rounded, size: 22),
                       ),
@@ -473,7 +489,13 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
-                          _mapController?.animateCamera(CameraUpdate.zoomOut());
+                          if (DeviceMapConfig.enabled) {
+                            DeviceMapService.instance
+                                .setZoom(DeviceMapService.instance.zoom - 1);
+                          } else {
+                            _mapController
+                                ?.animateCamera(CameraUpdate.zoomOut());
+                          }
                         },
                         child: const Icon(Icons.remove_rounded, size: 22),
                       ),
@@ -489,6 +511,10 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
+                          if (DeviceMapConfig.enabled) {
+                            DeviceMapService.instance.showOverview();
+                            return;
+                          }
                           final r = NavigationService.instance.activeRoute;
                           if (r != null &&
                               r.polylinePoints.isNotEmpty &&
@@ -605,8 +631,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         valueListenable:
                             TelephonyService.instance.callInfoNotifier,
                         builder: (context, callInfo, _) {
-                          if (!callInfo.hasActiveCall)
+                          if (!callInfo.hasActiveCall) {
                             return const SizedBox.shrink();
+                          }
                           return NavigationCallOverlay(callInfo: callInfo);
                         },
                       ),

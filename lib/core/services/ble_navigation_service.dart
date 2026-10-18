@@ -1,5 +1,10 @@
+import '../constants/device_map_config.dart';
+import '../models/device_map_frame.dart';
+import 'device_map_service.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import '../models/ble_media_packet.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/ble_navigation_packet.dart';
@@ -38,6 +43,155 @@ class BleNavigationService {
 
   // FIX #3: Serialize GATT characteristic writes to prevent queue congestion.
   Future<void> _writeTail = Future<void>.value();
+  int _connectionGeneration = 0;
+  int _queuedWrites = 0;
+  int _navigationGeneration = 0;
+  Timer? _mediaTimer;
+  bool _mediaBusy = false;
+  bool _supportsProtocolV1 = false;
+  bool _supportsMaps = false, _mapSending = false;
+  int? _sentMapId;
+  DateTime _mapRetryAfter = DateTime.fromMillisecondsSinceEpoch(0);
+
+  Future<bool> _mapWrite(List<int> packet) async {
+    final navigation = _navigationGeneration,
+        connection = _connectionGeneration;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (navigation != _navigationGeneration ||
+          connection != _connectionGeneration) {
+        return false;
+      }
+      if (await _writeBytes(packet,
+          withoutResponse: false, allowFallback: false)) {
+        return true;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+    }
+    return false;
+  }
+
+  Future<void> _sendMap() async {
+    if (!DeviceMapConfig.enabled ||
+        !isReady ||
+        !_supportsMaps ||
+        _mapSending ||
+        DateTime.now().isBefore(_mapRetryAfter)) {
+      return;
+    }
+    final map = DeviceMapService.instance.frame.value;
+    final nav = NavigationService.instance;
+    if (map == null || map.revision != nav.routeRevision || !nav.isNavigating) {
+      return;
+    }
+    final generation = _navigationGeneration,
+        connection = _connectionGeneration;
+    bool current() =>
+        generation == _navigationGeneration &&
+        connection == _connectionGeneration &&
+        nav.isNavigating &&
+        nav.routeRevision == map.revision &&
+        DeviceMapService.instance.frame.value == map &&
+        isReady;
+    _mapSending = true;
+    var committed = _sentMapId == map.id;
+    final started = DateTime.now();
+    try {
+      if (!committed) {
+        if (!await _mapWrite(map.start)) throw StateError('Map start rejected');
+        final mtu = JustRideBleService.instance.connectedDevice?.mtuNow ?? 23;
+        for (final packet in map.chunks(mtu)) {
+          if (!current()) return;
+          if (!await _mapWrite(packet)) throw StateError('Map chunk rejected');
+          // A single chunk at a time shares the existing GATT queue with controls.
+          await Future<void>.delayed(Duration.zero);
+        }
+        if (!current()) return;
+        if (!await _mapWrite(map.commit)) {
+          throw StateError('Map checksum rejected');
+        }
+        committed = true;
+        _sentMapId = map.id;
+        if (DeviceMapService.instance.status.value
+            .startsWith('Device map transfer')) {
+          DeviceMapService.instance.status.value = 'Map ready';
+        }
+        debugPrint(
+            '[DeviceMap] accepted bytes=${map.compressed.length}, transfer_ms=${DateTime.now().difference(started).inMilliseconds}');
+      }
+      if (current()) {
+        final state = nav.currentState;
+        if (state.gpsAvailable) {
+          final marker = map.marker(
+              LatLng(state.currentLatitude, state.currentLongitude),
+              state.heading);
+          if (marker == null) {
+            await _mapWrite([0x19, 4]);
+          }
+          if (marker != null && !await _mapWrite(marker)) {
+            throw StateError('Map position rejected');
+          }
+        }
+      }
+    } catch (_) {
+      DeviceMapService.instance.status.value =
+          'Device map transfer interrupted; retrying';
+      _mapRetryAfter = DateTime.now().add(const Duration(seconds: 10));
+      _sentMapId = null;
+    } finally {
+      if (!committed &&
+          connection == _connectionGeneration &&
+          generation == _navigationGeneration &&
+          isReady) {
+        await _writeBytes([0x17, ...DeviceMapFrame.word(map.id)],
+            withoutResponse: false, allowFallback: false);
+      }
+      _mapSending = false;
+    }
+  }
+
+  List<int>? _lastMediaPacket;
+  static const _mediaChannel = MethodChannel('com.justride.app/system_media');
+
+  Future<void> _syncMedia({int? command}) async {
+    if (_mediaBusy || !isReady || !_supportsProtocolV1) return;
+    _mediaBusy = true;
+    final generation = _connectionGeneration;
+    try {
+      Map<Object?, Object?> snapshot = const {};
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        if (command != null && command >= 1 && command <= 6) {
+          const methods = [
+            'play',
+            'pause',
+            'next',
+            'previous',
+            'volumeUp',
+            'volumeDown'
+          ];
+          await _mediaChannel.invokeMethod<bool>(methods[command - 1]);
+        }
+        snapshot = await _mediaChannel
+                .invokeMapMethod<Object?, Object?>('getMediaSnapshot') ??
+            const {};
+      }
+      if (generation != _connectionGeneration || !isReady) return;
+      final packet = encodeMediaSnapshot(snapshot);
+      if (command != null || !listEquals(packet, _lastMediaPacket)) {
+        if (await _writeBytes(packet, withoutResponse: false)) {
+          _lastMediaPacket = packet;
+        }
+      }
+    } catch (e) {
+      debugPrint('[BleMedia] Snapshot unavailable: $e');
+      if (generation == _connectionGeneration && isReady) {
+        await _writeBytes(encodeMediaSnapshot(const {}),
+            withoutResponse: false);
+      }
+    } finally {
+      _mediaBusy = false;
+    }
+  }
+
   bool _isSendingBrightness = false;
   int? _pendingBrightnessPct;
 
@@ -59,9 +213,34 @@ class BleNavigationService {
     return scheduled;
   }
 
-  Future<bool> _writeBytes(List<int> bytes, {bool? withoutResponse}) {
+  Future<bool> _writeBytes(List<int> bytes,
+      {bool? withoutResponse, bool allowFallback = true}) {
+    if (_queuedWrites >= 16) return Future.value(false);
+    final generation = _connectionGeneration;
+    final navigationGeneration = _navigationGeneration;
+    if (_supportsProtocolV1 &&
+        bytes.isNotEmpty &&
+        ((bytes[0] >= 1 && bytes[0] <= 8) ||
+            bytes[0] == 10 ||
+            bytes[0] == 11 ||
+            bytes[0] == 17 ||
+            (bytes[0] >= 0x14 && bytes[0] <= 0x19))) {
+      bytes = [
+        0x13,
+        navigationGeneration & 255,
+        (navigationGeneration >> 8) & 255,
+        (navigationGeneration >> 16) & 255,
+        (navigationGeneration >> 24) & 255,
+        ...bytes
+      ];
+    }
+    final chr = _dataChar;
+    _queuedWrites++;
     return _enqueueWrite(() async {
-      final chr = _dataChar;
+      if (generation != _connectionGeneration ||
+          navigationGeneration != _navigationGeneration) {
+        return false;
+      }
       if (chr == null) return false;
       try {
         final useNoResponse =
@@ -72,9 +251,14 @@ class BleNavigationService {
         );
         return true;
       } catch (e) {
+        if (!allowFallback) return false;
         debugPrint(
             '[BleNav] GATT write failed (noResponse=$withoutResponse): $e. Attempting fallback...');
         try {
+          if (generation != _connectionGeneration ||
+              navigationGeneration != _navigationGeneration) {
+            return false;
+          }
           final fallbackNoResponse =
               !(withoutResponse ?? chr.properties.writeWithoutResponse);
           await chr.write(
@@ -88,7 +272,7 @@ class BleNavigationService {
           return false;
         }
       }
-    });
+    }).whenComplete(() => _queuedWrites--);
   }
 
   /// Configure whether to send JSON strings instead of compact binary
@@ -98,6 +282,10 @@ class BleNavigationService {
 
   /// Initializes the service and listens for connection state changes.
   void init() {
+    DeviceMapService.instance.status.removeListener(_onMapStatus);
+    DeviceMapService.instance.frame.removeListener(_onMapFrame);
+    DeviceMapService.instance.frame.addListener(_onMapFrame);
+    DeviceMapService.instance.status.addListener(_onMapStatus);
     // Remove any previously registered listener before adding a new one.
     if (_connListener != null) {
       JustRideBleService.instance.connectionStateNotifier
@@ -115,6 +303,31 @@ class BleNavigationService {
         JustRideBleService.instance.isDeviceConnected) {
       _scheduleNavDiscovery(connectedDevice);
     }
+  }
+
+  void _onMapStatus() {
+    if (!_supportsMaps ||
+        !isReady ||
+        !NavigationService.instance.isNavigating) {
+      return;
+    }
+    final status = DeviceMapService.instance.status.value;
+    if (status == 'Map ready') {
+      return; // Device COMMIT controls actual acceptance.
+    }
+    final code = status.contains('429')
+        ? 3
+        : status.contains('unavailable') ||
+                status.contains('interrupted') ||
+                status.contains('HTTP')
+            ? 2
+            : 0;
+    unawaited(_writeBytes([0x19, code],
+        withoutResponse: false, allowFallback: false));
+  }
+
+  void _onMapFrame() {
+    unawaited(_sendMap());
   }
 
   void _scheduleNavDiscovery(BluetoothDevice device) {
@@ -138,12 +351,20 @@ class BleNavigationService {
         _scheduleNavDiscovery(dev);
       }
     } else {
+      ++_connectionGeneration;
+      _mediaTimer?.cancel();
+      _mediaTimer = null;
+      _lastMediaPacket = null;
+      _pendingTelemetry = null;
+      _supportsProtocolV1 = false;
+      _supportsMaps = false;
+      _sentMapId = null;
+      _lastTransmittedTime = null;
       _statusSubscription?.cancel();
       _statusSubscription = null;
       _dataChar = null;
       _statusChar = null;
       _isDiscovering = false;
-      _writeTail = Future<void>.value();
       isNavCharReadyNotifier.value = false;
     }
   }
@@ -158,6 +379,7 @@ class BleNavigationService {
       return false;
     }
     _isDiscovering = true;
+    final connectionGeneration = _connectionGeneration;
     try {
       List<BluetoothService> services = device.servicesList;
       final hasNavSvc = services.any((svc) => svc.uuid
@@ -169,6 +391,10 @@ class BleNavigationService {
         debugPrint(
             '[BleNav] Discovering GATT services for ${device.remoteId.str}...');
         services = await device.discoverServices();
+      }
+      if (connectionGeneration != _connectionGeneration ||
+          JustRideBleService.instance.connectedDevice != device) {
+        return false;
       }
 
       debugPrint(
@@ -200,13 +426,24 @@ class BleNavigationService {
         if (_statusChar != null) {
           if (_statusChar!.properties.notify) {
             await _statusChar!.setNotifyValue(true);
+            if (connectionGeneration != _connectionGeneration) return false;
             await _statusSubscription?.cancel();
             _statusSubscription = _statusChar!.onValueReceived.listen((value) {
               if (value.isNotEmpty) {
                 final status = value[0];
                 debugPrint(
                     '[BleNav] Received Status Code: 0x${status.toRadixString(16).padLeft(2, '0')}');
-                if (status == 0x05) {
+                if (status == 0x14 && value.length == 2) {
+                  if (value[1] == 255) {
+                    DeviceMapService.instance.showOverview();
+                  } else if (value[1] == 254) {
+                    DeviceMapService.instance.recenter();
+                  } else {
+                    DeviceMapService.instance.setZoom(value[1]);
+                  }
+                } else if (status == 0x12 && value.length == 2) {
+                  unawaited(_syncMedia(command: value[1]));
+                } else if (status == 0x05) {
                   // NAV_STATUS_RESUME_ROUTE
                   // Import omitted; assuming this will be resolved in next chunk or it's accessible.
                   NavigationService.instance.recalculateAndResumeRoute();
@@ -219,6 +456,21 @@ class BleNavigationService {
             debugPrint('[BleNav] Subscribed to Nav Status notifications');
           }
         }
+
+        if (_statusChar?.properties.read == true) {
+          final capabilities = await _statusChar!.read();
+          if (connectionGeneration != _connectionGeneration) return false;
+          _supportsProtocolV1 = capabilities.length >= 2 &&
+              capabilities[0] == 1 &&
+              capabilities[1] >= 1;
+          _supportsMaps = _supportsProtocolV1 && capabilities[1] >= 2;
+        }
+        _mediaTimer?.cancel();
+        _mediaTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+          unawaited(_syncMedia());
+          unawaited(_sendMap());
+        });
+        unawaited(_syncMedia(command: 7));
 
         // Sync if navigation is active in any riding state:
         //   NAVIGATING, REROUTING, or PAUSED — not just NAVIGATING
@@ -245,6 +497,12 @@ class BleNavigationService {
             await sendRouteSegment(_latestRouteSegment!);
           }
           if (_latestContext != null) await sendNavContext(_latestContext!);
+        } else {
+          // A restarted app may have a saved ride belonging to this account.
+          final resumed = await navigation.recalculateAndResumeRoute();
+          if (!resumed && connectionGeneration == _connectionGeneration) {
+            await sendNavStop(navigation.currentState);
+          }
         }
       }
       return ready;
@@ -252,16 +510,45 @@ class BleNavigationService {
       debugPrint('[BleNav] Error discovering nav service: $e');
       return false;
     } finally {
-      _isDiscovering = false;
+      if (connectionGeneration == _connectionGeneration) _isDiscovering = false;
     }
   }
 
   /// Sends a navigation packet to the ESP32-S3 over BLE with change throttling.
+  NavigationState? _pendingTelemetry;
+  bool _drainingTelemetry = false;
+
   Future<bool> sendNavUpdate(
     NavigationState state, {
     BleNavOpCode opCode = BleNavOpCode.navUpdate,
     bool force = false,
   }) async {
+    if (force || opCode != BleNavOpCode.navUpdate) {
+      return _sendNavUpdate(state, opCode: opCode, force: force);
+    }
+    unawaited(_sendMap());
+    _pendingTelemetry = state;
+    if (_drainingTelemetry) return false;
+    _drainingTelemetry = true;
+    var sent = false;
+    try {
+      while (_pendingTelemetry != null) {
+        final latest = _pendingTelemetry!;
+        _pendingTelemetry = null;
+        sent = await _sendNavUpdate(latest);
+      }
+      return sent;
+    } finally {
+      _drainingTelemetry = false;
+    }
+  }
+
+  Future<bool> _sendNavUpdate(
+    NavigationState state, {
+    BleNavOpCode opCode = BleNavOpCode.navUpdate,
+    bool force = false,
+  }) async {
+    final routeGeneration = _navigationGeneration;
     final device = JustRideBleService.instance.connectedDevice;
     if (device == null) {
       // Disconnected: save state so it can be synced on reconnection.
@@ -299,12 +586,18 @@ class BleNavigationService {
       bytes,
       withoutResponse: isHighFreqUpdate ? true : null,
     );
-    if (sent) {
+    if (sent && routeGeneration == _navigationGeneration) {
       _lastTransmittedState = state;
       _lastTransmittedTime = DateTime.now();
       return true;
     }
     return false;
+  }
+
+  void beginRouteRevision() {
+    ++_navigationGeneration;
+    _sentMapId = null;
+    _pendingTelemetry = null;
   }
 
   /// Sends full state sync on reconnection or ride resumption
@@ -315,6 +608,9 @@ class BleNavigationService {
 
   /// Sends NAV_START when rider begins navigation
   Future<void> sendNavStart(NavigationState state) async {
+    ++_navigationGeneration;
+    _sentMapId = null;
+    _pendingTelemetry = null;
     debugPrint('[BleNav] Sending NAV_START to ESP32...');
     await sendNavUpdate(state, opCode: BleNavOpCode.navStart, force: true);
   }
@@ -333,6 +629,9 @@ class BleNavigationService {
 
   /// Sends NAV_STOP when rider cancels/exits ride
   Future<void> sendNavStop(NavigationState state) async {
+    ++_navigationGeneration;
+    _sentMapId = null;
+    _pendingTelemetry = null;
     debugPrint('[BleNav] Sending NAV_STOP to ESP32...');
     await sendNavUpdate(state, opCode: BleNavOpCode.navStop, force: true);
     _lastTransmittedState = null;
@@ -568,6 +867,10 @@ class BleNavigationService {
   }
 
   void dispose() {
+    DeviceMapService.instance.status.removeListener(_onMapStatus);
+    DeviceMapService.instance.frame.removeListener(_onMapFrame);
+    ++_connectionGeneration;
+    _mediaTimer?.cancel();
     _statusSubscription?.cancel();
     _statusSubscription = null;
     if (_connListener != null) {

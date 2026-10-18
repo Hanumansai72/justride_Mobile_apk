@@ -27,7 +27,6 @@ class LocationService {
   Position? _previousPosition;
   bool _isServiceEnabled = false;
   LocationPermission _permission = LocationPermission.denied;
-  static const Duration _maxFreshFixAge = Duration(seconds: 30);
   DateTime? _lastLiveFixAt;
 
   final ValueNotifier<LocationSource> locationSourceNotifier =
@@ -345,6 +344,13 @@ class LocationService {
   // ── Internal Update Handler ──────────────────────────────────────────────
 
   void _onPositionUpdate(Position pos) {
+    if (!_isFreshUsableFix(pos, maxAgeSeconds: 30) || pos.accuracy > 120 ||
+        !pos.latitude.isFinite || !pos.longitude.isFinite ||
+        pos.latitude.abs() > 90 || pos.longitude.abs() > 180) {
+      isGpsAvailableNotifier.value = false;
+      speedKmhNotifier.value = 0;
+      return;
+    }
     _lastLiveFixAt = DateTime.now();
     _currentPosition = pos;
     isGpsAvailableNotifier.value = true;

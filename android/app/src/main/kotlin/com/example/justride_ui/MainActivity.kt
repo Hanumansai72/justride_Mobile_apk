@@ -117,6 +117,14 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "getApiKey" -> result.success(BuildConfig.GOOGLE_MAPS_API_KEY)
+                    "openLocationIq" -> {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://locationiq.com")))
+                            result.success(null)
+                        } catch (_: android.content.ActivityNotFoundException) {
+                            result.error("NO_BROWSER", "No browser is available", null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -210,7 +218,20 @@ class MainActivity : FlutterActivity() {
                             ?: controller?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: ""
                         val pos = controller?.playbackState?.position?.div(1000)?.toInt() ?: 0
                         val dur = (controller?.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L).div(1000).toInt()
+                        val permission = hasNotificationListenerAccess()
+                        val actions = controller?.playbackState?.actions ?: 0L
+                        var mask = 0
+                        if (actions and android.media.session.PlaybackState.ACTION_PLAY != 0L) mask = mask or 1
+                        if (actions and android.media.session.PlaybackState.ACTION_PAUSE != 0L) mask = mask or 2
+                        if (actions and android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT != 0L) mask = mask or 4
+                        if (actions and android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L) mask = mask or 8
+                        if (permission && controller != null) mask = mask or 16
+                        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                        val volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
                         result.success(mapOf(
+                            "state" to (if (!permission) 1 else if (controller == null) 2 else if (rawState == android.media.session.PlaybackState.STATE_PLAYING) 4 else if (rawState == android.media.session.PlaybackState.STATE_PAUSED) 3 else 5),
+                            "actions" to (if (permission && controller != null) mask else 0),
+                            "volume" to (if (maxVolume > 0) volume * 100 / maxVolume else 0),
                             "playbackState" to mappedState,
                             "title" to title,
                             "artist" to artist,
@@ -500,7 +521,7 @@ class MainActivity : FlutterActivity() {
             "previous" -> android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS
             else -> 0L
         }
-        val hasAction = controller?.playbackState?.actions?.and(action) != 0L
+        val hasAction = (controller?.playbackState?.actions?.and(action) ?: 0L) != 0L
         if (controller != null && hasAction) {
             return try {
                 when (command) {
@@ -515,19 +536,8 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        val keyCode = when (command) {
-            "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
-            "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE
-            "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
-            "previous" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
-            else -> return false
-        }
-        return try {
-            sendMediaKeyEvent(audioManager, keyCode)
-            true
-        } catch (_: Exception) {
-            false
-        }
+        return false
+
     }
 
     private fun sendMediaKeyEvent(audioManager: AudioManager, keyCode: Int) {

@@ -1,3 +1,4 @@
+import '../constants/device_map_config.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -39,8 +40,10 @@ class NavigationRoute {
   final int totalDurationSeconds;
   final List<LatLng> polylinePoints;
   final List<RouteStep> steps;
+  final String provider;
 
   const NavigationRoute({
+    this.provider = 'unknown',
     required this.totalDistanceMeters,
     required this.totalDurationSeconds,
     required this.polylinePoints,
@@ -50,7 +53,10 @@ class NavigationRoute {
 
 /// Service communicating with Google Maps Platform (Routes API v2, Places, Geocoding)
 class GoogleMapsService {
-  GoogleMapsService._();
+  GoogleMapsService._() : _client = http.Client();
+  @visibleForTesting
+  GoogleMapsService.testing(this._client);
+  final http.Client _client;
   static final GoogleMapsService instance = GoogleMapsService._();
 
   /// Searches for places/addresses given user query.
@@ -69,10 +75,10 @@ class GoogleMapsService {
     final refLon =
         (pos != null && pos.longitude != 0.0) ? pos.longitude : 78.4867;
 
-    final key = GoogleMapsConfig.apiKey;
+    final key = DeviceMapConfig.enabled ? '' : GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       try {
-        final response = await http
+        final response = await _client
             .post(
               Uri.parse(GoogleMapsConfig.placesTextSearchEndpoint),
               headers: {
@@ -139,7 +145,7 @@ class GoogleMapsService {
       final photonUrl = Uri.parse(
         'https://photon.komoot.io/api/?q=${Uri.encodeComponent(cleanQuery)}&lat=$refLat&lon=$refLon&limit=10&lang=en',
       );
-      final photonRes = await http.get(photonUrl, headers: {
+      final photonRes = await _client.get(photonUrl, headers: {
         'User-Agent': 'JustRide-App/1.0',
       }).timeout(const Duration(seconds: 4));
 
@@ -237,7 +243,7 @@ class GoogleMapsService {
         final nominatimUrl = Uri.parse(
           'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(cleanQuery)}&format=json&limit=6&addressdetails=1&countrycodes=in',
         );
-        final nomRes = await http.get(nominatimUrl, headers: {
+        final nomRes = await _client.get(nominatimUrl, headers: {
           'User-Agent': 'JustRide-App/1.0 (contact@justride.app)',
         }).timeout(const Duration(seconds: 4));
 
@@ -246,8 +252,9 @@ class GoogleMapsService {
           for (final item in nomList) {
             final lat = double.tryParse(item['lat']?.toString() ?? '');
             final lon = double.tryParse(item['lon']?.toString() ?? '');
-            if (lat == null || lon == null || (lat == 0.0 && lon == 0.0))
+            if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) {
               continue;
+            }
 
             var name = item['name']?.toString() ?? cleanQuery;
             final type = (item['type']?.toString() ?? '').toLowerCase();
@@ -295,13 +302,13 @@ class GoogleMapsService {
 
   /// Reverse geocodes coordinates to a human-readable street or area address.
   Future<String?> reverseGeocode(double lat, double lng) async {
-    final key = GoogleMapsConfig.apiKey;
+    final key = DeviceMapConfig.enabled ? '' : GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       try {
         final url = Uri.parse(
           '${GoogleMapsConfig.geocodingApiEndpoint}?latlng=$lat,$lng&key=$key',
         );
-        final res = await http.get(url).timeout(const Duration(seconds: 4));
+        final res = await _client.get(url).timeout(const Duration(seconds: 4));
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           if (data['status'] == 'OK' && (data['results'] as List).isNotEmpty) {
@@ -314,7 +321,7 @@ class GoogleMapsService {
       final osmUrl = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json',
       );
-      final res = await http.get(osmUrl, headers: {
+      final res = await _client.get(osmUrl, headers: {
         'User-Agent': 'JustRide-App/1.0',
       }).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
@@ -327,12 +334,12 @@ class GoogleMapsService {
 
   /// City-only lookup for the HUD. Keep it separate from full street addresses.
   Future<String?> reverseGeocodeCity(double lat, double lng) async {
-    final key = GoogleMapsConfig.apiKey;
+    final key = DeviceMapConfig.enabled ? '' : GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       try {
         final uri = Uri.parse(
             '${GoogleMapsConfig.geocodingApiEndpoint}?latlng=$lat,$lng&key=$key');
-        final res = await http.get(uri).timeout(const Duration(seconds: 4));
+        final res = await _client.get(uri).timeout(const Duration(seconds: 4));
         if (res.statusCode == 200) {
           final results = jsonDecode(res.body)['results'] as List?;
           for (final result in results ?? const []) {
@@ -350,7 +357,7 @@ class GoogleMapsService {
     try {
       final uri = Uri.parse(
           'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lng&format=json');
-      final res = await http.get(uri, headers: {
+      final res = await _client.get(uri, headers: {
         'User-Agent': 'JustRide-App/1.0',
       }).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
@@ -418,12 +425,12 @@ class GoogleMapsService {
     debugPrint(
         '[GEOCODE] Attempting to resolve coordinates for query: "$queryText" (placeId: ${destination.placeId})');
 
-    final key = GoogleMapsConfig.apiKey;
+    final key = DeviceMapConfig.enabled ? '' : GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       // 1. If we have a Place ID, query details
       if (destination.placeId != null && destination.placeId!.isNotEmpty) {
         try {
-          final res = await http.get(
+          final res = await _client.get(
             Uri.parse(
                 GoogleMapsConfig.placeDetailsEndpoint(destination.placeId!)),
             headers: {
@@ -466,7 +473,7 @@ class GoogleMapsService {
           final geoUrl = Uri.parse(
             '${GoogleMapsConfig.geocodingApiEndpoint}?address=${Uri.encodeComponent(queryText)}&key=$key',
           );
-          final geoRes = await http.get(geoUrl);
+          final geoRes = await _client.get(geoUrl);
           debugPrint(
               '[GEOCODE] Google Geocoding HTTP status: ${geoRes.statusCode}');
           if (geoRes.statusCode == 200) {
@@ -501,7 +508,7 @@ class GoogleMapsService {
               ? refPos.longitude
               : 78.4867;
 
-          final placesRes = await http
+          final placesRes = await _client
               .post(
                 Uri.parse(GoogleMapsConfig.placesTextSearchEndpoint),
                 headers: {
@@ -578,7 +585,7 @@ class GoogleMapsService {
       final photonUrl = Uri.parse(
         'https://photon.komoot.io/api/?q=${Uri.encodeComponent(cleanQuery)}&lat=$refLat&lon=$refLon&limit=1&lang=en',
       );
-      final photonRes = await http.get(photonUrl, headers: {
+      final photonRes = await _client.get(photonUrl, headers: {
         'User-Agent': 'JustRide-App/1.0',
       }).timeout(const Duration(seconds: 5));
 
@@ -625,7 +632,7 @@ class GoogleMapsService {
       final osmUrl = Uri.parse(
         'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(cleanQuery)}&format=json&limit=1&countrycodes=in',
       );
-      final osmRes = await http.get(osmUrl, headers: {
+      final osmRes = await _client.get(osmUrl, headers: {
         'User-Agent': 'JustRide-App/1.0 (contact@justride.app)',
       }).timeout(const Duration(seconds: 5));
 
@@ -662,8 +669,9 @@ class GoogleMapsService {
   Future<NavigationRoute?> calculateRoute({
     required LatLng origin,
     required LatLng destination,
+    bool compatibleMapOnly = DeviceMapConfig.enabled,
   }) async {
-    final key = GoogleMapsConfig.apiKey;
+    final key = compatibleMapOnly ? '' : GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       // Try Google Routes API v2 first
       try {
@@ -697,7 +705,7 @@ class GoogleMapsService {
       debugPrint('[GoogleMapsService] OSRM routing error: $e');
     }
 
-    return _generateDirectRouteFallback(origin, destination);
+    return null;
   }
 
   /// Google Routes API v2 Implementation
@@ -729,16 +737,18 @@ class GoogleMapsService {
       'languageCode': 'en',
     });
 
-    final response = await http.post(
-      Uri.parse(GoogleMapsConfig.routesApiEndpoint),
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask':
-            'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps',
-      },
-      body: body,
-    );
+    final response = await _client
+        .post(
+          Uri.parse(GoogleMapsConfig.routesApiEndpoint),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': key,
+            'X-Goog-FieldMask':
+                'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps',
+          },
+          body: body,
+        )
+        .timeout(const Duration(seconds: 8));
 
     if (response.statusCode != 200) {
       debugPrint(
@@ -803,13 +813,16 @@ class GoogleMapsService {
       }
     }
 
+    if (polyPoints.length < 2 || rawStepsList.isEmpty || totalDistance <= 0) {
+      return null;
+    }
     final steps = _normalizeSteps(rawStepsList, origin, destination);
 
     return NavigationRoute(
+      provider: 'google',
       totalDistanceMeters: totalDistance,
       totalDurationSeconds: totalDuration,
-      polylinePoints:
-          polyPoints.isNotEmpty ? polyPoints : [origin, destination],
+      polylinePoints: polyPoints,
       steps: steps,
     );
   }
@@ -824,7 +837,7 @@ class GoogleMapsService {
       'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&mode=driving&language=en&key=$key',
     );
 
-    final res = await http.get(url);
+    final res = await _client.get(url).timeout(const Duration(seconds: 8));
     if (res.statusCode != 200) return null;
 
     final data = jsonDecode(res.body);
@@ -879,12 +892,16 @@ class GoogleMapsService {
       ));
     }
 
+    if (polyline.length < 2 || rawStepsList.isEmpty || totalDistance <= 0) {
+      return null;
+    }
     final steps = _normalizeSteps(rawStepsList, origin, destination);
 
     return NavigationRoute(
+      provider: 'google',
       totalDistanceMeters: totalDistance,
       totalDurationSeconds: totalDuration,
-      polylinePoints: polyline.isNotEmpty ? polyline : [origin, destination],
+      polylinePoints: polyline,
       steps: steps,
     );
   }
@@ -896,7 +913,9 @@ class GoogleMapsService {
       'https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?steps=true&overview=full&geometries=polyline',
     );
 
-    final res = await http.get(url, headers: {'User-Agent': 'JustRide/1.0'});
+    final res = await _client.get(url, headers: {
+      'User-Agent': 'JustRide/1.0'
+    }).timeout(const Duration(seconds: 8));
     if (res.statusCode != 200) return null;
 
     final data = jsonDecode(res.body);
@@ -915,27 +934,6 @@ class GoogleMapsService {
     // Suburban / mixed (15-40km): ~28 km/h
     // Semi-Highway (40-100km): ~36 km/h
     // Long-distance Highway (> 100km): ~43.5 km/h (e.g. 190km = 4h 22m, matching Google Two-Wheeler)
-    final distanceKm = totalDistance / 1000.0;
-    double avgSpeedKmh;
-    if (distanceKm <= 5.0) {
-      avgSpeedKmh = 20.0;
-    } else if (distanceKm <= 15.0) {
-      avgSpeedKmh = 22.0;
-    } else if (distanceKm <= 40.0) {
-      avgSpeedKmh = 28.0;
-    } else if (distanceKm <= 100.0) {
-      avgSpeedKmh = 36.0;
-    } else {
-      avgSpeedKmh = 43.5;
-    }
-
-    final calibratedTotalDuration =
-        (totalDistance / (avgSpeedKmh * 1000.0 / 3600.0)).round();
-    final double durationScale =
-        (totalDuration > 0 && calibratedTotalDuration > 0)
-            ? (calibratedTotalDuration / totalDuration)
-            : 1.0;
-
     final encodedPoly = route['geometry'] as String? ?? '';
     final polyline = _decodePolyline(encodedPoly);
 
@@ -946,7 +944,7 @@ class GoogleMapsService {
       for (final s in rawSteps) {
         final stepDist = (s['distance'] as num?)?.toDouble() ?? 0.0;
         final rawStepDur = (s['duration'] as num?)?.toInt() ?? 0;
-        final stepDur = (rawStepDur * durationScale).round();
+        final stepDur = rawStepDur;
         final name = (s['name'] as String?) ?? '';
         final maneuverObj = s['maneuver'] as Map<String, dynamic>? ?? {};
         final mType = (maneuverObj['type'] as String?) ?? 'turn';
@@ -998,94 +996,25 @@ class GoogleMapsService {
       }
     }
 
+    if (polyline.length < 2 || rawStepsList.isEmpty || totalDistance <= 0) {
+      return null;
+    }
     final steps = _normalizeSteps(rawStepsList, origin, destination);
 
-    final finalDuration =
-        calibratedTotalDuration > 0 ? calibratedTotalDuration : totalDuration;
+    final finalDuration = totalDuration;
 
     return NavigationRoute(
+      provider: 'osrm',
       totalDistanceMeters: totalDistance,
       totalDurationSeconds: finalDuration,
-      polylinePoints: polyline.isNotEmpty ? polyline : [origin, destination],
-      steps: steps.isNotEmpty
-          ? steps
-          : [
-              RouteStep(
-                startLocation: origin,
-                endLocation: destination,
-                distanceMeters: totalDistance,
-                durationSeconds: finalDuration,
-                maneuver: 'STRAIGHT',
-                instruction: 'Proceed to destination',
-                streetName: 'Main Road',
-                points: polyline.isNotEmpty ? polyline : [origin, destination],
-              ),
-            ],
+      polylinePoints: polyline,
+      steps: steps,
     );
   }
 
   /// Direct straight-line fallback when offline or no API key available.
   /// Uses the haversine distance between origin and destination so the
   /// preview is at least in the right ballpark.
-  NavigationRoute _generateDirectRouteFallback(
-      LatLng origin, LatLng destination) {
-    // Simplified: degree-to-metre conversion (~111km per degree lat)
-    final latDiff = (destination.latitude - origin.latitude).abs() * 111000;
-    final lngDiff = (destination.longitude - origin.longitude).abs() *
-        111000 *
-        _cosDeg((origin.latitude + destination.latitude) / 2);
-    final distSquared = latDiff * latDiff + lngDiff * lngDiff;
-    final distMeters = distSquared <= 0 ? 1000.0 : _sqrt(distSquared);
-
-    // ETA at 25 km/h urban baseline
-    final etaSecs = (distMeters / 6.94).round().clamp(60, 86400);
-
-    return NavigationRoute(
-      totalDistanceMeters: distMeters > 0 ? distMeters : 1000.0,
-      totalDurationSeconds: etaSecs,
-      polylinePoints: [origin, destination],
-      steps: [
-        RouteStep(
-          startLocation: origin,
-          endLocation: destination,
-          distanceMeters: distMeters > 0 ? distMeters : 1000.0,
-          durationSeconds: etaSecs,
-          maneuver: 'STRAIGHT',
-          instruction: 'Ride toward destination',
-          streetName: 'Direct Route',
-          points: [origin, destination],
-        ),
-        RouteStep(
-          startLocation: destination,
-          endLocation: destination,
-          distanceMeters: 0.0,
-          durationSeconds: 0,
-          maneuver: 'ARRIVE',
-          instruction: 'Arrive at destination',
-          streetName: 'Destination',
-          points: [destination],
-        ),
-      ],
-    );
-  }
-
-  static double _cosDeg(double deg) {
-    final rad = deg * (3.14159265358979 / 180.0);
-    // Simple Taylor approximation for small angles — good enough for coord math
-    return 1.0 - (rad * rad / 2.0) + (rad * rad * rad * rad / 24.0);
-  }
-
-  static double _sqrt(double v) {
-    if (v <= 0) return 0;
-    double x = v;
-    double last;
-    do {
-      last = x;
-      x = (x + v / x) / 2;
-    } while ((x - last).abs() > 0.001);
-    return x;
-  }
-
   List<LatLng> _decodePolyline(String encoded) {
     if (encoded.isEmpty) return [];
     try {

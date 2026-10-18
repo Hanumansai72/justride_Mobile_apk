@@ -1089,18 +1089,17 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
   Future<void> _runDiagnostics() async {
     setState(() => _isTesting = true);
     // Send diagnostics query packet to ESP32 over BLE
-    await BleNavigationService.instance.sendDiagnosticsRequest();
-
-    await Future.delayed(const Duration(milliseconds: 1200));
+    final sent = await BleNavigationService.instance.sendDiagnosticsRequest();
     if (mounted) {
       setState(() {
         _isTesting = false;
         _lastTested = DateTime.now();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Hardware Diagnostics Complete: All subsystems healthy!'),
+        SnackBar(
+          content: Text(sent
+              ? 'Diagnostics requested. Hardware measurements require verification.'
+              : 'Could not request diagnostics. Check the device connection.'),
           backgroundColor: _SC.primary,
         ),
       );

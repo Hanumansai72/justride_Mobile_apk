@@ -82,7 +82,14 @@ class RouteWindowTransformer {
     LatLng roadPosition = polylinePoints[closestIdx];
     double minDistanceSquared = double.infinity;
     final lngScale = math.cos(riderPosition.latitude * math.pi / 180.0);
+    double searchMeters = 0;
     for (int i = closestIdx; i < polylinePoints.length - 1; i++) {
+      if (searchMeters > 800) break;
+      searchMeters += Geolocator.distanceBetween(
+          polylinePoints[i].latitude,
+          polylinePoints[i].longitude,
+          polylinePoints[i + 1].latitude,
+          polylinePoints[i + 1].longitude);
       final a = polylinePoints[i];
       final b = polylinePoints[i + 1];
       final ax = (a.longitude - riderPosition.longitude) * lngScale;
@@ -188,16 +195,21 @@ class RouteWindowTransformer {
     final routeHeading = closestIdx < polylinePoints.length - 1
         ? _bearing(polylinePoints[closestIdx], polylinePoints[closestIdx + 1])
         : riderHeadingDeg;
-    final headingRad = (routeHeading * math.pi) / 180.0;
-    // Keep the current road segment vertical at the fixed rider pointer;
-    // GPS compass jitter must not tilt a straight road before its turn.
+    // Lock to the road near the route to suppress compass drift. Once the
+    // GPS fix is meaningfully off-route, preserve the actual rider heading.
+    final offRouteMeters = math.sqrt(minDistanceSquared) * 111139.0;
+    final viewHeading = offRouteMeters > 25 && riderHeadingDeg.isFinite
+        ? riderHeadingDeg
+        : routeHeading;
+    final headingRad = viewHeading * math.pi / 180.0;
+
     final cosHeading = math.cos(headingRad);
     final sinHeading = math.sin(headingRad);
 
     final List<ScreenPoint> screenPoints = [];
     for (final pt in sampledPoints) {
       final sp = _latLngToScreen(
-        snappedRider,
+        riderPosition,
         pt,
         cosHeading,
         sinHeading,
@@ -217,7 +229,7 @@ class RouteWindowTransformer {
     ScreenPoint? destPoint;
     if (destVisible) {
       destPoint = _latLngToScreen(
-        snappedRider,
+        riderPosition,
         destination,
         cosHeading,
         sinHeading,

@@ -24,7 +24,6 @@ class GpsAccuracyFilter {
   static const int maxConsecutiveRejectionsBeforeReset = 5;
 
   Position? _lastValidPosition;
-  int _consecutiveRejections = 0;
 
   Position? get lastValidPosition => _lastValidPosition;
 
@@ -61,18 +60,16 @@ class GpsAccuracyFilter {
     }
 
     // 3. Accuracy threshold (relaxed to 150m for quick lock while riding)
-    if (candidate.accuracy > maxAcceptableAccuracyMeters) {
-      _consecutiveRejections++;
-      if (_consecutiveRejections >= maxConsecutiveRejectionsBeforeReset) {
-        // Recovery after tunnel or GPS warmup
-        _consecutiveRejections = 0;
-        _lastValidPosition = candidate;
-        return candidate;
-      }
+    if (!candidate.accuracy.isFinite ||
+        candidate.accuracy < 0 ||
+        candidate.accuracy > maxAcceptableAccuracyMeters) {
+      return null;
+    }
+    if (_lastValidPosition != null &&
+        !candidate.timestamp.isAfter(_lastValidPosition!.timestamp)) {
       return null;
     }
 
-    // 4. Jump plausibility check
     if (_lastValidPosition != null) {
       final deltaMeters = Geolocator.distanceBetween(
         _lastValidPosition!.latitude,
@@ -94,31 +91,16 @@ class GpsAccuracyFilter {
       // When stationary or restarting from a stop, allow up to 400m leap
       final wasStationary = _lastValidPosition!.speed < 1.0;
       final isDelayedFix = deltaSeconds >= 3.0;
-      if (wasStationary &&
-          !isDelayedFix &&
-          deltaMeters > 400.0) {
-        _consecutiveRejections++;
-        if (_consecutiveRejections >= maxConsecutiveRejectionsBeforeReset) {
-          _consecutiveRejections = 0;
-          _lastValidPosition = candidate;
-          return candidate;
-        }
+      if (wasStationary && !isDelayedFix && deltaMeters > 400.0) {
         return null;
       }
 
       // Max plausible speed check: 85 m/s (~306 km/h)
       if (impliedSpeedMs > 85.0 && deltaSeconds < 5.0) {
-        _consecutiveRejections++;
-        if (_consecutiveRejections >= maxConsecutiveRejectionsBeforeReset) {
-          _consecutiveRejections = 0;
-          _lastValidPosition = candidate;
-          return candidate;
-        }
         return null;
       }
     }
 
-    _consecutiveRejections = 0;
     _lastValidPosition = candidate;
     return candidate;
   }
@@ -126,6 +108,5 @@ class GpsAccuracyFilter {
   /// Resets the internal state (e.g. at START RIDE or after complete stop)
   void reset() {
     _lastValidPosition = null;
-    _consecutiveRejections = 0;
   }
 }

@@ -61,9 +61,20 @@ class OffRouteDetector {
   OffRouteState update({
     required LatLng riderPosition,
     required double speedMs,
+    double accuracyMeters = 0,
+    DateTime? timestamp,
     required List<LatLng> polylinePoints,
   }) {
-    if (polylinePoints.isEmpty) return _state;
+    final sampledAt = timestamp ?? DateTime.now();
+    if (polylinePoints.isEmpty ||
+        !accuracyMeters.isFinite ||
+        accuracyMeters < 0 ||
+        accuracyMeters > 25 ||
+        !speedMs.isFinite ||
+        speedMs < _minSpeedForRerouteMs) {
+      reset();
+      return _state;
+    }
 
     // 1. Find minimum distance to the route geometry, not just its vertices.
     // A sparse polyline can place a rider close to a segment while remaining
@@ -99,7 +110,7 @@ class OffRouteDetector {
     if (_state == OffRouteState.onRoute) {
       _state = OffRouteState.possiblyOffRoute;
       _offRouteSampleCount = 1;
-      _offRouteStartTime = DateTime.now();
+      _offRouteStartTime = sampledAt;
       return _state;
     }
 
@@ -107,7 +118,7 @@ class OffRouteDetector {
     if (_state == OffRouteState.possiblyOffRoute) {
       _offRouteSampleCount++;
       final elapsed = _offRouteStartTime != null
-          ? DateTime.now().difference(_offRouteStartTime!).inSeconds
+          ? sampledAt.difference(_offRouteStartTime!).inSeconds
           : 0;
 
       if (_offRouteSampleCount >= _confirmationSamples &&

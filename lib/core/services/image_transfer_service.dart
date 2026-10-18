@@ -84,7 +84,8 @@ class ImageTransferService {
 
       final found = _controlChr != null && _dataChr != null;
       if (!found) {
-        debugPrint('[IMG] Image Transfer GATT Service (0xFF20) characteristics not found on device.');
+        debugPrint(
+            '[IMG] Image Transfer GATT Service (0xFF20) characteristics not found on device.');
       }
       return found;
     } catch (e) {
@@ -99,17 +100,20 @@ class ImageTransferService {
   }) async {
     if (_isTransferring) return false;
     if (rgb565Bytes.length != kTotalBytes) {
-      debugPrint('[IMG] sendImage: expected $kTotalBytes bytes, got ${rgb565Bytes.length}');
+      debugPrint(
+          '[IMG] sendImage: expected $kTotalBytes bytes, got ${rgb565Bytes.length}');
       return false;
     }
 
     _isTransferring = true;
-    _updateProgress(ImageTransferState.preparing, 0, 'Connecting to display...');
+    _updateProgress(
+        ImageTransferState.preparing, 0, 'Connecting to display...');
 
     try {
       final ok = await discoverCharacteristics(device);
       if (!ok) {
-        throw Exception('Image Transfer BLE Service (0xFF20) not found on connected JustRide unit.');
+        throw Exception(
+            'Image Transfer BLE Service (0xFF20) not found on connected JustRide unit.');
       }
 
       try {
@@ -124,7 +128,8 @@ class ImageTransferService {
           _statusSub?.cancel();
           _statusSub = _statusChr!.onValueReceived.listen((data) {
             if (data.length >= 2) {
-              debugPrint('[IMG] ESP32 status: 0x${data[0].toRadixString(16)} ${data[1]}%');
+              debugPrint(
+                  '[IMG] ESP32 status: 0x${data[0].toRadixString(16)} ${data[1]}%');
             }
           });
         } catch (e) {
@@ -151,13 +156,16 @@ class ImageTransferService {
 
       // 2. Send RGB565 data chunks
       final totalChunks = (kTotalBytes / kChunkPayload).ceil();
-      _updateProgress(ImageTransferState.transferring, 0, 'Sending image (0%)...');
+      _updateProgress(
+          ImageTransferState.transferring, 0, 'Sending image (0%)...');
 
       for (int i = 0; i < totalChunks; i++) {
         if (!_isTransferring) throw Exception('Transfer cancelled.');
 
         final start = i * kChunkPayload;
-        final end = (start + kChunkPayload > kTotalBytes) ? kTotalBytes : start + kChunkPayload;
+        final end = (start + kChunkPayload > kTotalBytes)
+            ? kTotalBytes
+            : start + kChunkPayload;
         final payload = rgb565Bytes.sublist(start, end);
 
         final packet = Uint8List(2 + payload.length);
@@ -188,7 +196,8 @@ class ImageTransferService {
         final progress = (i + 1) / totalChunks;
         final pct = (progress * 100).toInt();
         if (i % 25 == 0 || i == totalChunks - 1) {
-          _updateProgress(ImageTransferState.transferring, progress, 'Sending image ($pct%)...');
+          _updateProgress(ImageTransferState.transferring, progress,
+              'Sending image ($pct%)...');
         }
       }
 
@@ -200,7 +209,13 @@ class ImageTransferService {
         await _controlChr!.write([_kCmdFinish], withoutResponse: true);
       }
 
-      await Future.delayed(const Duration(milliseconds: 400));
+      if (_statusChr == null || !_statusChr!.properties.read) {
+        throw Exception('Device cannot confirm image verification.');
+      }
+      final status = await _statusChr!.read();
+      if (status.length < 2 || status[0] != 0x12 || status[1] != 100) {
+        throw Exception('Device did not confirm a complete image.');
+      }
 
       _updateProgress(
         ImageTransferState.success,
@@ -211,7 +226,8 @@ class ImageTransferService {
       return true;
     } catch (e) {
       debugPrint('[IMG] Transfer error: $e');
-      _updateProgress(ImageTransferState.failed, 0, 'Transfer failed', error: e.toString());
+      _updateProgress(ImageTransferState.failed, 0, 'Transfer failed',
+          error: e.toString());
       _isTransferring = false;
       try {
         await _controlChr?.write([_kCmdAbort], withoutResponse: true);
