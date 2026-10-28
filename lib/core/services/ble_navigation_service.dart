@@ -1,3 +1,4 @@
+import 'device_presence_service.dart';
 import '../models/ride_state.dart';
 import 'telephony_service.dart';
 import '../models/sensor_status.dart';
@@ -490,6 +491,10 @@ class BleNavigationService {
             await _statusSubscription?.cancel();
             _statusSubscription = _statusChar!.onValueReceived.listen((value) {
               if (value.isNotEmpty) {
+                if (connectionGeneration == _connectionGeneration &&
+                    JustRideBleService.instance.isDeviceConnected) {
+                  DevicePresenceService.instance.report(device.remoteId.str);
+                }
                 if (value[0] == 0x1a) {
                   final parsed = SensorStatus.parse(value);
                   if (parsed != null) sensorStatus.value = parsed;
