@@ -1,3 +1,6 @@
+import '../services/push_notification_service.dart';
+import '../services/bluetooth_service.dart';
+import '../utils/user_facing_error.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -16,6 +19,8 @@ import '../routes/app_routes.dart';
 class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
+  // Reuse HTTP connections instead of opening a new client for each request.
+  final http.Client _client = http.Client();
 
   // Production / Staging Backend Host
   static const String baseUrl = 'https://backend.justride.cc/api';
@@ -41,6 +46,7 @@ class ApiClient {
     _authToken = token;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
+    unawaited(PushNotificationService.instance.syncRegistration());
   }
 
   Future<void> saveUserData(Map<String, dynamic> userJson) async {
@@ -62,7 +68,23 @@ class ApiClient {
   }
 
   Future<void> clearAuth() async {
+    final oldToken = _authToken;
     _authToken = null;
+    final fid = await PushNotificationService.instance.disable();
+    if (fid != null && oldToken != null) {
+      unawaited(_client
+          .delete(
+            Uri.parse('$baseUrl/notifications/push-registration'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $oldToken'
+            },
+            body: jsonEncode({'fid': fid}),
+          )
+          .timeout(const Duration(seconds: 3))
+          .then<void>((_) {}, onError: (Object _) {}));
+    }
+    await JustRideBleService.instance.disableCompanion();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
@@ -111,12 +133,13 @@ class ApiClient {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final response = await http
+      final response = await _client
           .get(uri, headers: _headers(headers))
           .timeout(timeoutDuration);
       return _handleResponse<T>(response, fromJson);
     } catch (e) {
-      return ApiResponse.error(e.toString());
+      return ApiResponse.error(
+          'Unable to connect. Check your internet connection and try again.');
     }
   }
 
@@ -129,7 +152,7 @@ class ApiClient {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final response = await http
+      final response = await _client
           .post(
             uri,
             headers: _headers(headers),
@@ -138,7 +161,8 @@ class ApiClient {
           .timeout(timeoutDuration);
       return _handleResponse<T>(response, fromJson);
     } catch (e) {
-      return ApiResponse.error(e.toString());
+      return ApiResponse.error(
+          'Unable to connect. Check your internet connection and try again.');
     }
   }
 
@@ -151,7 +175,7 @@ class ApiClient {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final response = await http
+      final response = await _client
           .put(
             uri,
             headers: _headers(headers),
@@ -160,7 +184,8 @@ class ApiClient {
           .timeout(timeoutDuration);
       return _handleResponse<T>(response, fromJson);
     } catch (e) {
-      return ApiResponse.error(e.toString());
+      return ApiResponse.error(
+          'Unable to connect. Check your internet connection and try again.');
     }
   }
 
@@ -173,7 +198,7 @@ class ApiClient {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final response = await http
+      final response = await _client
           .patch(
             uri,
             headers: _headers(headers),
@@ -182,7 +207,8 @@ class ApiClient {
           .timeout(timeoutDuration);
       return _handleResponse<T>(response, fromJson);
     } catch (e) {
-      return ApiResponse.error(e.toString());
+      return ApiResponse.error(
+          'Unable to connect. Check your internet connection and try again.');
     }
   }
 
@@ -195,7 +221,7 @@ class ApiClient {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final response = await http
+      final response = await _client
           .delete(
             uri,
             headers: _headers(headers),
@@ -204,7 +230,8 @@ class ApiClient {
           .timeout(timeoutDuration);
       return _handleResponse<T>(response, fromJson);
     } catch (e) {
-      return ApiResponse.error(e.toString());
+      return ApiResponse.error(
+          'Unable to connect. Check your internet connection and try again.');
     }
   }
 
@@ -243,11 +270,13 @@ class ApiClient {
         ),
       );
 
-      final streamedResponse = await request.send().timeout(timeoutDuration);
+      final streamedResponse =
+          await _client.send(request).timeout(timeoutDuration);
       final response = await http.Response.fromStream(streamedResponse);
       return _handleResponse<T>(response, fromJson);
     } catch (e) {
-      return ApiResponse.error(e.toString());
+      return ApiResponse.error(
+          'Unable to connect. Check your internet connection and try again.');
     }
   }
 
@@ -292,14 +321,15 @@ class ApiClient {
       } else {
         return ApiResponse.error(
           body['message'] as String? ??
-              'Request failed with status ${res.statusCode}',
+              'Unable to complete the request. Please try again.',
           statusCode: res.statusCode,
           errors: body['errors'],
           retryAfterSeconds: int.tryParse(res.headers['retry-after'] ?? ''),
         );
       }
     } catch (e) {
-      return ApiResponse.error('Malformed response: $e',
+      return ApiResponse.error(
+          'Unable to complete the request. Please try again.',
           statusCode: res.statusCode);
     }
   }
@@ -347,7 +377,9 @@ class ApiResponse<T> {
   }) =>
       ApiResponse(
         success: false,
-        message: message,
+        message: statusCode != null && statusCode >= 500
+            ? 'The service is temporarily unavailable. Please try again later.'
+            : userFacingError(message),
         statusCode: statusCode,
         errors: errors,
         retryAfterSeconds: retryAfterSeconds,

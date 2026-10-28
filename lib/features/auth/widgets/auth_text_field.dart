@@ -30,7 +30,8 @@ class AuthTextField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+          style:
+              AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -41,7 +42,8 @@ class AuthTextField extends StatelessWidget {
           cursorColor: AppColors.primary,
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
+            hintStyle:
+                AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
             prefixIcon: Icon(prefixIcon, color: AppColors.primary, size: 20),
             suffixIcon: suffixIcon,
             filled: true,
@@ -60,7 +62,8 @@ class AuthTextField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
             ),
           ),
         ),

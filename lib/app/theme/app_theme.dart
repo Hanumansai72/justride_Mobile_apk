@@ -8,6 +8,7 @@ ThemeData buildAppTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
+    fontFamily: 'Stack Sans Text',
     scaffoldBackgroundColor: AppColors.background,
     colorScheme: const ColorScheme.dark(
       primary: AppColors.primary,
@@ -52,19 +53,26 @@ ThemeData buildAppTheme() {
       selectionColor: AppColors.primary.withValues(alpha: 0.3),
       selectionHandleColor: AppColors.primary,
     ),
-    inputDecorationTheme: const InputDecorationTheme(
+    inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: AppColors.surface,
       hintStyle: TextStyle(color: AppColors.textMuted),
       labelStyle: TextStyle(color: AppColors.textSecondary),
-      enabledBorder:
-          OutlineInputBorder(borderSide: BorderSide(color: AppColors.border)),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border)),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: AppColors.primary, width: 2)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
       errorBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: AppColors.errorText)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.errorText)),
       focusedErrorBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: AppColors.errorText, width: 2)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.errorText, width: 1.5)),
       errorStyle: TextStyle(color: AppColors.errorText),
     ),
     dialogTheme: const DialogThemeData(
@@ -134,7 +142,27 @@ ThemeData buildAppTheme() {
         foregroundColor: AppColors.background,
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        minimumSize: const Size(48, 48),
+        shape: const StadiumBorder(),
+        textStyle: AppTextStyles.button,
+      ),
+    ),
+
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.background,
+        minimumSize: const Size(48, 48),
+        shape: const StadiumBorder(),
+        textStyle: AppTextStyles.button,
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.textPrimary,
+        minimumSize: const Size(48, 48),
+        side: const BorderSide(color: AppColors.border),
+        shape: const StadiumBorder(),
         textStyle: AppTextStyles.button,
       ),
     ),

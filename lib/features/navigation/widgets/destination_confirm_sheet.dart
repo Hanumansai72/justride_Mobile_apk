@@ -143,7 +143,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
         }
       }
     } catch (e) {
-      _errorMessage = 'Route preview error: $e';
+      _errorMessage = 'Unable to load the route preview. Please try again.';
     } finally {
       if (mounted) {
         setState(() => _isLoadingPreview = false);
@@ -261,7 +261,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                             const SizedBox(width: 4),
                             Text(
                               isBleConnected
-                                  ? 'TFT HUD READY'
+                                  ? 'DEVICE READY'
                                   : 'NO HUD (TAP RECONNECT)',
                               style: GoogleFonts.jetBrainsMono(
                                 fontSize: 10,
@@ -303,8 +303,10 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                           Expanded(
                             child: Text(
                               'BLE Notice: $bleErr',
-                              style: GoogleFonts.inter(
-                                  fontSize: 12, color: AppColors.textPrimary),
+                              style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
+                                  fontSize: 12,
+                                  color: AppColors.textPrimary),
                             ),
                           ),
                         ],
@@ -356,7 +358,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                           hasZeroCoords
                               ? Icons.location_off_rounded
                               : Icons.location_on_rounded,
-                          color: hasZeroCoords ? AppColors.errorText : _C.primary,
+                          color:
+                              hasZeroCoords ? AppColors.errorText : _C.primary,
                           size: 24,
                         ),
                       ),
@@ -379,7 +382,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                             if (hasZeroCoords) ...[
                               Text(
                                 'Resolving location coordinates...',
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
                                   fontSize: 13,
                                   color: _C.amber,
                                   fontWeight: FontWeight.w500,
@@ -410,7 +414,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                             ] else ...[
                               Text(
                                 dest.displaySubtitle,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
                                   fontSize: 13,
                                   color: _C.textSec,
                                 ),
@@ -492,7 +497,10 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                     ),
                     child: Text(
                       _errorMessage!,
-                      style: GoogleFonts.inter(fontSize: 12, color: _C.amber),
+                      style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
+                          fontSize: 12,
+                          color: _C.amber),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -693,7 +701,10 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
               child: Text(value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 13, color: _C.onSurface))),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      fontSize: 13,
+                      color: _C.onSurface))),
         ],
       ),
     );

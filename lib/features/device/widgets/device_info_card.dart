@@ -320,10 +320,10 @@ class _DeviceProductImage extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 220),
           child: Image.asset(
-            'assets/justride-device.webp',
+            'assets/justride-device.png',
             fit: BoxFit.contain,
             semanticLabel:
-                'JustRide circular navigation device with silver bezel and green route',
+                'JustRide Aventura circular device with the new navigation display',
           ),
         ),
       );

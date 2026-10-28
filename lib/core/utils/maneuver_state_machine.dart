@@ -42,7 +42,7 @@ class ManeuverStateMachine {
   int get activeStepIndex => _activeStepIndex;
   String get lockedManeuver => _lockedManeuver;
 
-  /// Canonical maneuver state string matching the simulator & BLE protocol:
+  /// Canonical maneuver state string matching the BLE protocol:
   /// 'CURRENT_STRAIGHT', 'APPROACHING', 'TURN_PREVIEW', 'TURN_ACTIVE', 'TURN_COMPLETED'
   String get maneuverStateString {
     switch (_stage) {
@@ -151,56 +151,27 @@ class ManeuverStateMachine {
     required double riderHeading,
     required List<RouteStep> steps,
     double riderSpeedKmh = 0.0,
+    double? remainingAlongRouteMeters,
   }) {
     if (steps.isEmpty || _activeStepIndex >= steps.length) return false;
 
     final currentStep = steps[_activeStepIndex];
-    final nextStep = (_activeStepIndex + 1 < steps.length) ? steps[_activeStepIndex + 1] : null;
+    final nextStep = (_activeStepIndex + 1 < steps.length)
+        ? steps[_activeStepIndex + 1]
+        : null;
 
-    final distToTurn = Geolocator.distanceBetween(
+    final directDistance = Geolocator.distanceBetween(
       riderPosition.latitude,
       riderPosition.longitude,
       currentStep.endLocation.latitude,
       currentStep.endLocation.longitude,
     );
+    final distToTurn = remainingAlongRouteMeters ?? directDistance;
     _lastRiderDistToTurn = distToTurn;
 
-    // Lock the upcoming maneuver for this leg:
-    // With normalized steps, currentStep.maneuver is the action approaching at currentStep.endLocation.
-    // If currentStep is STRAIGHT/DEPART, look ahead to nextStep.
-    if (currentStep.maneuver.toUpperCase().contains('U_TURN') ||
-        currentStep.maneuver.toUpperCase().contains('UTURN')) {
-      _lockedManeuver = currentStep.maneuver;
-    } else if (currentStep.maneuver.isNotEmpty &&
-        currentStep.maneuver.toUpperCase() != 'STRAIGHT' &&
-        currentStep.maneuver.toUpperCase() != 'DEPART') {
-      _lockedManeuver = currentStep.maneuver;
-    } else if (nextStep != null && nextStep.maneuver.isNotEmpty) {
-      _lockedManeuver = nextStep.maneuver;
-    } else {
-      _lockedManeuver = currentStep.maneuver.toUpperCase().contains('ARRIVE')
-          ? currentStep.maneuver
-          : 'ARRIVE';
-    }
-
-    // Geometry Ground-Truth Sanity Check:
-    // If road geometry physically turns left but maneuver is RIGHT (or vice versa),
-    // enforce the physical road geometry turn so the HUD never shows the wrong direction.
-    if (nextStep != null && currentStep.points.length >= 2) {
-      final outgoingHeading = calculateOutgoingHeading(_activeStepIndex, steps);
-      final inBearing = Geolocator.bearingBetween(
-        currentStep.points[currentStep.points.length - 2].latitude,
-        currentStep.points[currentStep.points.length - 2].longitude,
-        currentStep.points.last.latitude,
-        currentStep.points.last.longitude,
-      );
-      final double turnAngle = ((outgoingHeading - inBearing + 540.0) % 360.0) - 180.0;
-      if (turnAngle <= -30.0 && _lockedManeuver.toUpperCase().contains('RIGHT')) {
-        _lockedManeuver = (turnAngle <= -135.0) ? 'SHARP_LEFT' : (turnAngle <= -45.0 ? 'LEFT' : 'SLIGHT_LEFT');
-      } else if (turnAngle >= 30.0 && _lockedManeuver.toUpperCase().contains('LEFT')) {
-        _lockedManeuver = (turnAngle >= 135.0) ? 'SHARP_RIGHT' : (turnAngle >= 45.0 ? 'RIGHT' : 'SLIGHT_RIGHT');
-      }
-    }
+    // Steps already describe the maneuver at their end; never look ahead twice.
+    _lockedManeuver =
+        currentStep.maneuver.isEmpty ? 'STRAIGHT' : currentStep.maneuver;
 
     // Speed-adaptive lookahead: L(v) = max(120, 60 + v_ms * 5)
     final double lookaheadMeters =
@@ -274,38 +245,7 @@ class ManeuverStateMachine {
 
         if (_activeStepIndex < steps.length) {
           final cur = steps[_activeStepIndex];
-          final nxt = (_activeStepIndex + 1 < steps.length) ? steps[_activeStepIndex + 1] : null;
-          if (cur.maneuver.toUpperCase().contains('U_TURN') ||
-              cur.maneuver.toUpperCase().contains('UTURN')) {
-            _lockedManeuver = cur.maneuver;
-          } else if (cur.maneuver.isNotEmpty &&
-              cur.maneuver.toUpperCase() != 'STRAIGHT' &&
-              cur.maneuver.toUpperCase() != 'DEPART') {
-            _lockedManeuver = cur.maneuver;
-          } else if (nxt != null && nxt.maneuver.isNotEmpty) {
-            _lockedManeuver = nxt.maneuver;
-          } else {
-            _lockedManeuver = cur.maneuver.toUpperCase().contains('ARRIVE')
-                ? cur.maneuver
-                : 'ARRIVE';
-          }
-
-          // Geometry Ground-Truth Sanity Check for advanced step
-          if (nxt != null && cur.points.length >= 2) {
-            final outgoingHeading = calculateOutgoingHeading(_activeStepIndex, steps);
-            final inBearing = Geolocator.bearingBetween(
-              cur.points[cur.points.length - 2].latitude,
-              cur.points[cur.points.length - 2].longitude,
-              cur.points.last.latitude,
-              cur.points.last.longitude,
-            );
-            final double turnAngle = ((outgoingHeading - inBearing + 540.0) % 360.0) - 180.0;
-            if (turnAngle <= -30.0 && _lockedManeuver.toUpperCase().contains('RIGHT')) {
-              _lockedManeuver = (turnAngle <= -135.0) ? 'SHARP_LEFT' : (turnAngle <= -45.0 ? 'LEFT' : 'SLIGHT_LEFT');
-            } else if (turnAngle >= 30.0 && _lockedManeuver.toUpperCase().contains('LEFT')) {
-              _lockedManeuver = (turnAngle >= 135.0) ? 'SHARP_RIGHT' : (turnAngle >= 45.0 ? 'RIGHT' : 'SLIGHT_RIGHT');
-            }
-          }
+          _lockedManeuver = cur.maneuver.isEmpty ? 'STRAIGHT' : cur.maneuver;
           final stepDist = cur.distanceMeters;
           // Close successive turn handling: if <= 70m, directly queue into TURN_PREVIEW!
           if (stepDist <= 70.0) {
@@ -384,7 +324,9 @@ class ManeuverStateMachine {
 
     // Missed Turn Detection:
     // If rider approached the turn (< 30m) and is now moving away (> 35m) without having turned:
-    if (distToTurn > _lastDistanceMeters && _minDistanceToTurn <= 30.0 && distToTurn > 35.0) {
+    if (distToTurn > _lastDistanceMeters &&
+        _minDistanceToTurn <= 30.0 &&
+        distToTurn > 35.0) {
       _increasingDistanceCount++;
       if (_increasingDistanceCount >= 2 && !isArrive) {
         _stage = ManeuverStage.missed;

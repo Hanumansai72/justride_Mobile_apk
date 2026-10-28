@@ -141,8 +141,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _isLoading = true;
       _historyFuture = RideHistoryService.instance.getPage(limit: 1);
     });
-    final userRes = await BackendService.instance.getProfile();
-    final devRes = await BackendService.instance.getMyDevice();
+    final (userRes, devRes) = await (
+      BackendService.instance.getProfile(),
+      BackendService.instance.getMyDevice(),
+    ).wait;
 
     if (mounted) {
       setState(() {

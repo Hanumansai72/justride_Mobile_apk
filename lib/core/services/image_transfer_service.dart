@@ -227,7 +227,8 @@ class ImageTransferService {
     } catch (e) {
       debugPrint('[IMG] Transfer error: $e');
       _updateProgress(ImageTransferState.failed, 0, 'Transfer failed',
-          error: e.toString());
+          error:
+              'Unable to send the image. Reconnect your device and try again.');
       _isTransferring = false;
       try {
         await _controlChr?.write([_kCmdAbort], withoutResponse: true);

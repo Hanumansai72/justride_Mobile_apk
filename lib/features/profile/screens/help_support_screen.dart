@@ -1,3 +1,4 @@
+import '../../../shared/widgets/device_connection_gate.dart';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/services/help_service.dart';
@@ -160,7 +161,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                               FilledButton.icon(
                                   onPressed: () => Navigator.push(
                                       context,
-                                      MaterialPageRoute(
+                                      DevicePageRoute(
                                           builder: (_) =>
                                               const SupportTicketScreen())),
                                   icon: const Icon(Icons.add),
@@ -262,7 +263,7 @@ class _HelpArticleCardState extends State<_HelpArticleCard> {
               TextButton(
                   onPressed: () => Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      DevicePageRoute(
                           builder: (_) => SupportTicketScreen(
                               initialCategory: article.supportCategory,
                               initialSubject: article.question,

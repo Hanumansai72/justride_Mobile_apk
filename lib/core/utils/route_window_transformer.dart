@@ -48,12 +48,11 @@ class RouteWindowSegment {
         destinationScreenPoint = null;
 }
 
-/// Slices the upcoming ~300m of route polyline ahead of the rider and transforms
+/// Frames the current approach (up to 300 m) and transforms
 /// it into a road-aligned local screen coordinate frame for the 320x240 TFT.
 class RouteWindowTransformer {
-  // A 300 m follow window gives a 100–150 m straight a visibly long road on a
-  // 320 px HUD, while still showing the turn and some of the exit road.  A
-  // 500 m fixed scale made short urban straights look like a tiny stub.
+  // Maximum look-ahead. The current maneuver sets a closer approach camera;
+  // only a short exit is revealed near the current turn.
   static const double windowDistanceMeters = 300.0;
   static const int maxPointsToSend = 14;
 
@@ -73,6 +72,8 @@ class RouteWindowTransformer {
     required List<LatLng> polylinePoints,
     required LatLng destination,
     int minimumRouteIndex = 0,
+    double? distanceToManeuverMeters,
+    double? followingLegDistanceMeters,
   }) {
     if (polylinePoints.isEmpty) return const RouteWindowSegment.empty();
 
@@ -112,6 +113,29 @@ class RouteWindowTransformer {
     }
     final snappedRider = roadPosition;
 
+    final approach = distanceToManeuverMeters != null &&
+            distanceToManeuverMeters.isFinite &&
+            distanceToManeuverMeters >= 0
+        ? distanceToManeuverMeters
+        : null;
+    // Show the current approach first. Reveal a short exit only near this turn,
+    // and stop before the following maneuver even when junctions are close.
+    final exit = approach == null
+        ? 0.0
+        : math.min(
+            (60.0 - approach).clamp(0.0, 30.0),
+            followingLegDistanceMeters != null &&
+                    followingLegDistanceMeters.isFinite
+                ? math.max(0.0, followingLegDistanceMeters * .7)
+                : 30.0);
+    final drawDistance = approach == null
+        ? windowDistanceMeters
+        : (approach + exit).clamp(5.0, windowDistanceMeters);
+    final cameraDistance = approach == null
+        ? windowDistanceMeters
+        : approach.clamp(70.0, windowDistanceMeters);
+    final pixelMeters = cameraDistance / (riderScreenY - 8);
+
     // Keep a short travelled tail behind the fixed rider anchor. The phone
     // owns progress; the ESP32 only colors the transmitted segments.
     final past = <LatLng>[];
@@ -123,12 +147,12 @@ class RouteWindowTransformer {
         roadPosition.latitude,
         roadPosition.longitude,
       );
-      if (pastDistance > 90) break;
+      if (pastDistance > math.min(25.0, cameraDistance * .12)) break;
       past.insert(0, polylinePoints[i]);
       roadPosition = polylinePoints[i];
     }
 
-    // 2. Extract upcoming points within windowDistanceMeters (~300m)
+    // Extract only the visible part of the current approach/turn.
     final List<LatLng> upcomingPoints = [snappedRider];
     double accumulatedDist = 0.0;
     LatLng prev = snappedRider;
@@ -142,9 +166,9 @@ class RouteWindowTransformer {
         pt.longitude,
       );
 
-      if (accumulatedDist + segDist > windowDistanceMeters) {
-        // Interpolate the final point at exactly windowDistanceMeters
-        final remaining = windowDistanceMeters - accumulatedDist;
+      if (accumulatedDist + segDist > drawDistance) {
+        // End the visible road at the requested approach horizon.
+        final remaining = drawDistance - accumulatedDist;
         if (segDist > 0 && remaining > 0) {
           final ratio = remaining / segDist;
           final interpLat =
@@ -206,16 +230,33 @@ class RouteWindowTransformer {
     final cosHeading = math.cos(headingRad);
     final sinHeading = math.sin(headingRad);
 
-    final List<ScreenPoint> screenPoints = [];
+    // Anchor to the projected road while GPS is within the existing 25 m
+    // tolerance. Route and rider must share the same origin.
+    final viewOrigin = offRouteMeters <= 25 ? snappedRider : riderPosition;
+    final List<ScreenPoint> projectedPoints = [];
     for (final pt in sampledPoints) {
       final sp = _latLngToScreen(
-        riderPosition,
+        viewOrigin,
         pt,
         cosHeading,
         sinHeading,
+        pixelMeters,
       );
-      screenPoints.add(sp);
+      projectedPoints.add(sp);
     }
+
+    // Fit uniformly instead of clamping vertices, which invents edge bends.
+    var fit = 1.0;
+    for (final p in projectedPoints) {
+      final dx = p.x - riderScreenX, dy = p.y - riderScreenY;
+      if (dx != 0) fit = math.min(fit, 120.0 / dx.abs());
+      if (dy < 0) fit = math.min(fit, (riderScreenY - 8) / -dy);
+      if (dy > 0) fit = math.min(fit, 24.0 / dy);
+    }
+    ScreenPoint fitted(ScreenPoint p) => ScreenPoint(
+        (riderScreenX + (p.x - riderScreenX) * fit).round(),
+        (riderScreenY + (p.y - riderScreenY) * fit).round());
+    final screenPoints = projectedPoints.map(fitted).toList();
 
     // 5. Check if destination is within the ~300m window
     final distToDest = Geolocator.distanceBetween(
@@ -225,15 +266,17 @@ class RouteWindowTransformer {
       destination.longitude,
     );
 
-    final destVisible = distToDest <= windowDistanceMeters;
+    final destVisible = upcomingPoints.last == polylinePoints.last &&
+        distToDest <= drawDistance + 2;
     ScreenPoint? destPoint;
     if (destVisible) {
-      destPoint = _latLngToScreen(
-        riderPosition,
+      destPoint = fitted(_latLngToScreen(
+        viewOrigin,
         destination,
         cosHeading,
         sinHeading,
-      );
+        pixelMeters,
+      ));
     }
 
     return RouteWindowSegment(
@@ -250,8 +293,9 @@ class RouteWindowTransformer {
     LatLng rider,
     LatLng target,
     double cosH,
-    double sinH,
-  ) {
+    double sinH, [
+    double pixelMeters = metersPerPixel,
+  ]) {
     // Convert lat/lng delta to local meters (North, East)
     final dLat = (target.latitude - rider.latitude) * 111139.0;
     final dLng = (target.longitude - rider.longitude) *
@@ -267,14 +311,10 @@ class RouteWindowTransformer {
     // Convert meters to screen pixels
     // Forward is UP on screen (smaller Y)
     // Right is RIGHT on screen (larger X)
-    final pxX = (riderScreenX + (rightMeters / metersPerPixel)).round();
-    final pxY = (riderScreenY - (forwardMeters / metersPerPixel)).round();
+    final pxX = (riderScreenX + (rightMeters / pixelMeters)).round();
+    final pxY = (riderScreenY - (forwardMeters / pixelMeters)).round();
 
-    // Clamp inside canvas bounds with margin
-    final clampedX = pxX.clamp(0, screenWidth);
-    final clampedY = pxY.clamp(26, screenHeight - 40);
-
-    return ScreenPoint(clampedX, clampedY);
+    return ScreenPoint(pxX, pxY);
   }
 
   static ScreenPoint projectPoint({
@@ -283,7 +323,9 @@ class RouteWindowTransformer {
     required double headingDeg,
   }) {
     final radians = headingDeg * math.pi / 180.0;
-    return _latLngToScreen(rider, target, math.cos(radians), math.sin(radians));
+    final p =
+        _latLngToScreen(rider, target, math.cos(radians), math.sin(radians));
+    return ScreenPoint(p.x.clamp(0, screenWidth), p.y.clamp(0, screenHeight));
   }
 
   static List<LatLng> _subsample(List<LatLng> points, int maxCount) {

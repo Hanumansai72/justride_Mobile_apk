@@ -23,7 +23,7 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 700),
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -38,10 +38,8 @@ class _SplashScreenState extends State<SplashScreen>
           curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack)),
     );
 
-    _controller.forward();
-
-    // Check authentication token before navigating
-    Future.delayed(const Duration(seconds: 2), () {
+    // Continue as soon as the logo animation finishes; no extra startup delay.
+    _controller.forward().then((_) {
       if (!mounted) return;
       if (ApiClient.instance.isAuthenticated) {
         final navigator = Navigator.of(context);
@@ -71,23 +69,32 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return FadeTransition(
-              opacity: _fadeAnimation,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: const AppLogo(
-                  iconSize: 42,
-                  fontSize: 34,
-                  showTagline: true,
-                  isStacked: false,
-                ),
-              ),
-            );
-          },
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: ScaleTransition(
+                    scale: _scaleAnimation,
+                    child: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: AppLogo(
+                        iconSize: 42,
+                        fontSize: 34,
+                        showTagline: true,
+                        isCentered: true,
+                        isStacked: false,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         ),
       ),
     );

@@ -315,7 +315,8 @@ class _GoScreenState extends State<GoScreen>
         ),
         title: Text(
           'Go',
-          style: GoogleFonts.inter(
+          style: TextStyle(
+            fontFamily: 'Stack Sans Text',
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -385,12 +386,16 @@ class _GoScreenState extends State<GoScreen>
                         TextField(
                           controller: _startController,
                           focusNode: _startFocusNode,
-                          style: GoogleFonts.inter(
-                              color: AppColors.textPrimary, fontSize: 14),
+                          style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
+                              color: AppColors.textPrimary,
+                              fontSize: 14),
                           decoration: InputDecoration(
                             hintText: 'Choose starting point...',
-                            hintStyle: GoogleFonts.inter(
-                                color: AppColors.textMuted, fontSize: 13),
+                            hintStyle: TextStyle(
+                                fontFamily: 'Stack Sans Text',
+                                color: AppColors.textMuted,
+                                fontSize: 13),
                             border: InputBorder.none,
                             isDense: true,
                             contentPadding:
@@ -416,7 +421,8 @@ class _GoScreenState extends State<GoScreen>
                           controller: _destController,
                           focusNode: _destFocusNode,
                           autofocus: widget.initialDestination == null,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             color: AppColors.textPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -424,8 +430,10 @@ class _GoScreenState extends State<GoScreen>
                           decoration: InputDecoration(
                             hintText:
                                 'Enter destination (e.g. Uppal Bus Stop)...',
-                            hintStyle: GoogleFonts.inter(
-                                color: AppColors.textMuted, fontSize: 13),
+                            hintStyle: TextStyle(
+                                fontFamily: 'Stack Sans Text',
+                                color: AppColors.textMuted,
+                                fontSize: 13),
                             border: InputBorder.none,
                             isDense: true,
                             contentPadding:
@@ -527,7 +535,8 @@ class _GoScreenState extends State<GoScreen>
                                   const SizedBox(width: 12),
                                   Text(
                                     'PREPARING MAP...',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
+                                      fontFamily: 'Stack Sans Text',
                                       fontSize: 15,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.8,
@@ -544,7 +553,8 @@ class _GoScreenState extends State<GoScreen>
                                   const SizedBox(width: 10),
                                   Text(
                                     'START RIDE',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
+                                      fontFamily: 'Stack Sans Text',
                                       fontSize: 16,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.8,
@@ -590,7 +600,8 @@ class _GoScreenState extends State<GoScreen>
           ),
           title: Text(
             item.displayTitle,
-            style: GoogleFonts.inter(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -598,7 +609,8 @@ class _GoScreenState extends State<GoScreen>
           ),
           subtitle: Text(
             item.displaySubtitle,
-            style: GoogleFonts.inter(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               color: AppColors.textMuted,
               fontSize: 12,
             ),
@@ -638,8 +650,10 @@ class _GoScreenState extends State<GoScreen>
                   const SizedBox(width: 12),
                   Text(
                     'Calculating fastest motorcycle route...',
-                    style: GoogleFonts.inter(
-                        color: AppColors.textSecondary, fontSize: 13),
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textSecondary,
+                        fontSize: 13),
                   ),
                 ],
               ),
@@ -666,7 +680,8 @@ class _GoScreenState extends State<GoScreen>
                       const SizedBox(width: 8),
                       Text(
                         'Motorcycle Route',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
                           color: AppColors.primary,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -686,8 +701,10 @@ class _GoScreenState extends State<GoScreen>
                   const SizedBox(height: 8),
                   Text(
                     'Approx. ${(_previewRoute!.totalDurationSeconds / 60).round()} mins • ${_previewRoute!.steps.length} turns',
-                    style: GoogleFonts.inter(
-                        color: AppColors.textSecondary, fontSize: 13),
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textSecondary,
+                        fontSize: 13),
                   ),
                 ],
               ),
@@ -721,7 +738,8 @@ class _GoScreenState extends State<GoScreen>
                     color: AppColors.primary, size: 14),
                 label: Text(
                   name,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     color: AppColors.textPrimary,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -753,8 +771,10 @@ class _GoScreenState extends State<GoScreen>
                 Expanded(
                   child: Text(
                     'Tip: You can also tap the mic icon in the header to speak any destination.',
-                    style: GoogleFonts.inter(
-                        color: AppColors.textSecondary, fontSize: 12),
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textSecondary,
+                        fontSize: 12),
                   ),
                 ),
               ],

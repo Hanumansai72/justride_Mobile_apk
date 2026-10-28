@@ -1,9 +1,12 @@
+import '../models/ride_state.dart';
+import 'telephony_service.dart';
+import '../models/sensor_status.dart';
+import 'system_media_bridge.dart';
 import '../constants/device_map_config.dart';
-import '../models/device_map_frame.dart';
 import 'device_map_service.dart';
+import '../models/device_map_frame.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import '../models/ble_media_packet.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -32,7 +35,7 @@ class BleNavigationService {
 
   NavigationState? _lastTransmittedState;
   RouteWindowSegment? _latestRouteSegment;
-  NavContextPacket? _latestContext;
+  final Map<int, NavContextPacket> _latestContexts = {};
   StreamSubscription<List<int>>? _statusSubscription;
   DateTime? _lastTransmittedTime;
   bool _useJson = false;
@@ -47,9 +50,20 @@ class BleNavigationService {
   int _queuedWrites = 0;
   int _navigationGeneration = 0;
   Timer? _mediaTimer;
+  Timer? _discoveryRetryTimer;
   bool _mediaBusy = false;
+  bool _mediaRefreshPending = false;
+  DateTime? _lastMediaSentAt;
   bool _supportsProtocolV1 = false;
-  bool _supportsMaps = false, _mapSending = false;
+  final sensorSupported = ValueNotifier<bool>(false);
+  final sensorStatus = ValueNotifier<SensorStatus?>(null);
+  Future<bool> requestSensorStatus({bool calibrate = false}) async {
+    if (!isReady || !sensorSupported.value) return false;
+    return _writeBytes([0x1a, calibrate ? 1 : 0],
+        withoutResponse: false, allowFallback: false);
+  }
+
+  bool _supportsMaps = false, _mapSending = false, _supportsHud = false;
   int? _sentMapId;
   DateTime _mapRetryAfter = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -150,45 +164,70 @@ class BleNavigationService {
   }
 
   List<int>? _lastMediaPacket;
-  static const _mediaChannel = MethodChannel('com.justride.app/system_media');
+  Future<void> _mediaCommandTail = Future<void>.value();
 
-  Future<void> _syncMedia({int? command}) async {
-    if (_mediaBusy || !isReady || !_supportsProtocolV1) return;
+  Future<void> _syncMedia({int? command}) {
+    if (command == null) return _performMediaSync();
+    // Serialize button presses separately from map/BLE status writes so a
+    // slow snapshot transfer cannot drop or hold up the next phone command.
+    final generation = _connectionGeneration;
+    final pending = _mediaCommandTail.then((_) async {
+      if (generation != _connectionGeneration ||
+          !isReady ||
+          !_supportsProtocolV1) {
+        return;
+      }
+      final snapshot = await readSystemMedia(command: command);
+      if (generation != _connectionGeneration) return;
+      unawaited(_performMediaSync(snapshot: snapshot, force: true));
+    });
+    _mediaCommandTail = pending.catchError((Object error) {
+      debugPrint('[BleMedia] Command failed: $error');
+    });
+    return _mediaCommandTail;
+  }
+
+  Future<void> _performMediaSync({
+    Map<Object?, Object?>? snapshot,
+    bool force = false,
+  }) async {
+    if (!isReady || !_supportsProtocolV1) return;
+    if (_mediaBusy) {
+      _mediaRefreshPending |= force;
+      return;
+    }
     _mediaBusy = true;
     final generation = _connectionGeneration;
     try {
-      Map<Object?, Object?> snapshot = const {};
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-        if (command != null && command >= 1 && command <= 6) {
-          const methods = [
-            'play',
-            'pause',
-            'next',
-            'previous',
-            'volumeUp',
-            'volumeDown'
-          ];
-          await _mediaChannel.invokeMethod<bool>(methods[command - 1]);
-        }
-        snapshot = await _mediaChannel
-                .invokeMapMethod<Object?, Object?>('getMediaSnapshot') ??
-            const {};
-      }
+      final current = snapshot ?? await readSystemMedia();
       if (generation != _connectionGeneration || !isReady) return;
-      final packet = encodeMediaSnapshot(snapshot);
-      if (command != null || !listEquals(packet, _lastMediaPacket)) {
-        if (await _writeBytes(packet, withoutResponse: false)) {
+      final packet = encodeMediaSnapshot(current);
+      // The display can reset its media state while the phone snapshot stays
+      // unchanged. Explicit refreshes and a heartbeat must bypass deduplication.
+      if (force ||
+          !listEquals(packet, _lastMediaPacket) ||
+          _lastMediaSentAt == null ||
+          DateTime.now().difference(_lastMediaSentAt!) >=
+              const Duration(seconds: 10)) {
+        if (await _writeBytes(packet, withoutResponse: false) &&
+            generation == _connectionGeneration) {
           _lastMediaPacket = packet;
+          _lastMediaSentAt = DateTime.now();
         }
       }
     } catch (e) {
       debugPrint('[BleMedia] Snapshot unavailable: $e');
       if (generation == _connectionGeneration && isReady) {
-        await _writeBytes(encodeMediaSnapshot(const {}),
+        await _writeBytes(encodeMediaSnapshot(const {'state': 7}),
             withoutResponse: false);
       }
     } finally {
       _mediaBusy = false;
+      if (_mediaRefreshPending) {
+        _mediaRefreshPending = false;
+        // Read again so a command issued during a transfer sends current state.
+        unawaited(_performMediaSync(force: true));
+      }
     }
   }
 
@@ -306,20 +345,16 @@ class BleNavigationService {
   }
 
   void _onMapStatus() {
-    if (!_supportsMaps ||
+    if (!DeviceMapConfig.enabled ||
+        !_supportsMaps ||
         !isReady ||
         !NavigationService.instance.isNavigating) {
       return;
     }
     final status = DeviceMapService.instance.status.value;
-    if (status == 'Map ready') {
-      return; // Device COMMIT controls actual acceptance.
-    }
     final code = status.contains('429')
         ? 3
-        : status.contains('unavailable') ||
-                status.contains('interrupted') ||
-                status.contains('HTTP')
+        : status.contains('unavailable') || status.contains('HTTP')
             ? 2
             : 0;
     unawaited(_writeBytes([0x19, code],
@@ -331,10 +366,26 @@ class BleNavigationService {
   }
 
   void _scheduleNavDiscovery(BluetoothDevice device) {
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (JustRideBleService.instance.connectedDevice == device &&
+    final generation = _connectionGeneration;
+    unawaited(() async {
+      final ready = await JustRideBleService.instance.waitForConnectionReady();
+      if (ready &&
+          generation == _connectionGeneration &&
+          JustRideBleService.instance.connectedDevice == device &&
           JustRideBleService.instance.isDeviceConnected) {
-        _discoverNavCharacteristics(device);
+        await _discoverNavCharacteristics(device);
+      }
+    }());
+  }
+
+  void _retryNavDiscovery(BluetoothDevice device) {
+    _discoveryRetryTimer?.cancel();
+    final generation = _connectionGeneration;
+    _discoveryRetryTimer = Timer(const Duration(seconds: 2), () {
+      if (generation == _connectionGeneration &&
+          JustRideBleService.instance.connectedDevice == device &&
+          JustRideBleService.instance.isDeviceConnected) {
+        _scheduleNavDiscovery(device);
       }
     });
   }
@@ -352,12 +403,19 @@ class BleNavigationService {
       }
     } else {
       ++_connectionGeneration;
+      _discoveryRetryTimer?.cancel();
+      _discoveryRetryTimer = null;
       _mediaTimer?.cancel();
       _mediaTimer = null;
       _lastMediaPacket = null;
+      _lastMediaSentAt = null;
+      _mediaRefreshPending = false;
       _pendingTelemetry = null;
       _supportsProtocolV1 = false;
+      sensorSupported.value = false;
+      sensorStatus.value = null;
       _supportsMaps = false;
+      _supportsHud = false;
       _sentMapId = null;
       _lastTransmittedTime = null;
       _statusSubscription?.cancel();
@@ -379,6 +437,8 @@ class BleNavigationService {
       return false;
     }
     _isDiscovering = true;
+    _discoveryRetryTimer?.cancel();
+    var setupComplete = false;
     final connectionGeneration = _connectionGeneration;
     try {
       List<BluetoothService> services = device.servicesList;
@@ -430,6 +490,11 @@ class BleNavigationService {
             await _statusSubscription?.cancel();
             _statusSubscription = _statusChar!.onValueReceived.listen((value) {
               if (value.isNotEmpty) {
+                if (value[0] == 0x1a) {
+                  final parsed = SensorStatus.parse(value);
+                  if (parsed != null) sensorStatus.value = parsed;
+                  return;
+                }
                 final status = value[0];
                 debugPrint(
                     '[BleNav] Received Status Code: 0x${status.toRadixString(16).padLeft(2, '0')}');
@@ -440,6 +505,13 @@ class BleNavigationService {
                     DeviceMapService.instance.recenter();
                   } else {
                     DeviceMapService.instance.setZoom(value[1]);
+                  }
+                } else if (status == 0x1c && value.length == 2) {
+                  if (value[1] == 1) {
+                    unawaited(TelephonyService.instance.answerCall());
+                  }
+                  if (value[1] == 2) {
+                    unawaited(TelephonyService.instance.rejectCall());
                   }
                 } else if (status == 0x12 && value.length == 2) {
                   unawaited(_syncMedia(command: value[1]));
@@ -463,18 +535,38 @@ class BleNavigationService {
           _supportsProtocolV1 = capabilities.length >= 2 &&
               capabilities[0] == 1 &&
               capabilities[1] >= 1;
-          _supportsMaps = _supportsProtocolV1 && capabilities[1] >= 2;
+          _supportsHud = _supportsProtocolV1 &&
+              capabilities[1] >= 3 &&
+              capabilities.length >= 3 &&
+              (capabilities[2] & 2) != 0;
+          _supportsMaps = _supportsProtocolV1 &&
+              capabilities.length >= 3 &&
+              capabilities[1] >= 2;
+          unawaited(TelephonyService.instance.syncDisplay());
+          sensorSupported.value =
+              capabilities.length >= 3 && (capabilities[2] & 1) != 0;
+          if (sensorSupported.value) await requestSensorStatus();
         }
         _mediaTimer?.cancel();
         _mediaTimer = Timer.periodic(const Duration(seconds: 2), (_) {
           unawaited(_syncMedia());
           unawaited(_sendMap());
+          if (sensorSupported.value &&
+              (sensorStatus.value == null ||
+                  DateTime.now().difference(sensorStatus.value!.receivedAt) >=
+                      const Duration(seconds: 2))) {
+            unawaited(requestSensorStatus());
+          }
         });
         unawaited(_syncMedia(command: 7));
+        setupComplete = true;
 
         // Sync if navigation is active in any riding state:
         //   NAVIGATING, REROUTING, or PAUSED — not just NAVIGATING
         final navigation = NavigationService.instance;
+        if (navigation.currentState.rideState == RideState.arrived) {
+          await sendNavArrived(navigation.currentState);
+        }
         if (navigation.isNavigating &&
             navigation.currentState.rideState.isActive) {
           await syncState(navigation.currentState);
@@ -491,14 +583,18 @@ class BleNavigationService {
               polylinePoints: route.polylinePoints,
               destination: LatLng(destination.latitude, destination.longitude),
               minimumRouteIndex: navigation.routeProgressIndex,
+              distanceToManeuverMeters: state.maneuverDistanceMeters,
+              followingLegDistanceMeters: state.nextManeuverDistanceMeters,
             );
             await sendRouteSegment(window);
           } else if (_latestRouteSegment != null) {
             await sendRouteSegment(_latestRouteSegment!);
           }
-          if (_latestContext != null) await sendNavContext(_latestContext!);
-        } else {
-          // A restarted app may have a saved ride belonging to this account.
+          for (final context in _latestContexts.values.toList()) {
+            await sendNavContext(context);
+          }
+        } else if (JustRideBleService.instance.isAppVisible) {
+          // Only resume a saved ride when the rider has opened the app.
           final resumed = await navigation.recalculateAndResumeRoute();
           if (!resumed && connectionGeneration == _connectionGeneration) {
             await sendNavStop(navigation.currentState);
@@ -510,7 +606,12 @@ class BleNavigationService {
       debugPrint('[BleNav] Error discovering nav service: $e');
       return false;
     } finally {
-      if (connectionGeneration == _connectionGeneration) _isDiscovering = false;
+      if (connectionGeneration == _connectionGeneration) {
+        _isDiscovering = false;
+        // A failed notification subscription/capability read used to leave
+        // isReady true with no media timer and no way to recover until reconnect.
+        if (!setupComplete) _retryNavDiscovery(device);
+      }
     }
   }
 
@@ -623,6 +724,8 @@ class BleNavigationService {
 
   /// Sends NAV_ARRIVED when destination reached
   Future<void> sendNavArrived(NavigationState state) async {
+    ++_navigationGeneration;
+    _pendingTelemetry = null;
     debugPrint('[BleNav] Sending NAV_ARRIVED to ESP32...');
     await sendNavUpdate(state, opCode: BleNavOpCode.navArrived, force: true);
   }
@@ -636,7 +739,7 @@ class BleNavigationService {
     await sendNavUpdate(state, opCode: BleNavOpCode.navStop, force: true);
     _lastTransmittedState = null;
     _latestRouteSegment = null;
-    _latestContext = null;
+    _latestContexts.clear();
   }
 
   /// Sends immediate standalone NAV_CANCEL to reset the display back to idle
@@ -764,14 +867,23 @@ class BleNavigationService {
   }
 
   Future<bool> sendNavContext(NavContextPacket context) async {
-    _latestContext = context;
+    if (context.poiType == 0) _latestContexts.clear();
+    _latestContexts[context.poiType] = context;
     if (!isReady || _dataChar == null) return false;
     return _writeBytes(context.toBinary(), withoutResponse: false);
   }
 
+  Future<bool> sendCallState(int state, int actions, String caller) async {
+    if (!isReady || !_supportsHud) return false;
+    final name = hudUtf8(caller, 47);
+    return _writeBytes([0x1c, state, actions, name.length, ...name],
+        withoutResponse: false, allowFallback: false);
+  }
+
   /// Sends strictly the latest notification (OpCode 0x0F) to the ESP32 HUD display.
   /// Overwrites and replaces any prior notification on the screen.
-  Future<bool> sendLatestNotification(String title, String message) async {
+  Future<bool> sendLatestNotification(String title, String message,
+      {String appName = "Alert"}) async {
     final device = JustRideBleService.instance.connectedDevice;
     if (device == null) {
       debugPrint(
@@ -797,6 +909,7 @@ class BleNavigationService {
     final packet = LatestNotificationPacket(
       title: title,
       message: message,
+      appName: _supportsHud ? appName : "",
     );
     final bytes = packet.toBinary();
     try {
@@ -870,7 +983,9 @@ class BleNavigationService {
     DeviceMapService.instance.status.removeListener(_onMapStatus);
     DeviceMapService.instance.frame.removeListener(_onMapFrame);
     ++_connectionGeneration;
+    _discoveryRetryTimer?.cancel();
     _mediaTimer?.cancel();
+    _mediaRefreshPending = false;
     _statusSubscription?.cancel();
     _statusSubscription = null;
     if (_connListener != null) {

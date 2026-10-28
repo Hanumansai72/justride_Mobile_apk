@@ -1,5 +1,5 @@
+import '../../../core/utils/user_facing_error.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -62,7 +62,7 @@ class _SignupScreenState extends State<SignupScreen> {
       setState(() => _isGoogleLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Unable to sign in with Google. Please try again.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -127,8 +127,10 @@ class _SignupScreenState extends State<SignupScreen> {
             backgroundColor: AppColors.primaryContainer,
             content: Text(
               'Account created successfully! Welcome to JustRide.',
-              style: GoogleFonts.inter(
-                  color: AppColors.background, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
+                  color: AppColors.background,
+                  fontWeight: FontWeight.w600),
             ),
           ),
         );
@@ -137,7 +139,9 @@ class _SignupScreenState extends State<SignupScreen> {
         // If there are detailed validation error messages from backend, format them
         if (res.errors is List && (res.errors as List).isNotEmpty) {
           final firstError = (res.errors as List).first;
-          setState(() => _errorMessage = firstError['message'] ?? res.message);
+          setState(() => _errorMessage = userFacingError(
+              firstError['message']?.toString(),
+              fallback: res.message));
         } else {
           setState(() => _errorMessage = res.message);
         }
@@ -146,7 +150,8 @@ class _SignupScreenState extends State<SignupScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Connection error: Could not reach backend server.';
+        _errorMessage =
+            'Unable to connect. Check your internet connection and try again.';
       });
     }
   }
@@ -157,19 +162,6 @@ class _SignupScreenState extends State<SignupScreen> {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // Background Glow & Aesthetic telemetry rings
-          Positioned(
-            top: -60,
-            right: -60,
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary.withValues(alpha: 0.12),
-              ),
-            ),
-          ),
           SafeArea(
             child: CustomScrollView(
               physics: const BouncingScrollPhysics(),
@@ -196,7 +188,8 @@ class _SignupScreenState extends State<SignupScreen> {
                         // Heading
                         Text(
                           'Create Account',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             fontSize: 26,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textPrimary,
@@ -267,7 +260,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                 Expanded(
                                   child: Text(
                                     _errorMessage!,
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
+                                        fontFamily: 'Stack Sans Text',
                                         fontSize: 13,
                                         color: AppColors.errorText),
                                   ),
@@ -391,10 +385,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: AppColors.background,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                    AppConstants.radiusMd),
-                              ),
+                              shape: const StadiumBorder(),
                               elevation: 0,
                             ),
                             child: _isLoading
@@ -414,7 +405,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                         'Create Account',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.inter(
+                                        style: TextStyle(
+                                          fontFamily: 'Stack Sans Text',
                                           fontSize: 16,
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.background,

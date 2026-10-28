@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:http/http.dart' as http;
@@ -81,9 +81,11 @@ class JustRideOtaService {
         }
       }
 
-      final found = _controlChr != null && _dataChr != null && _statusChr != null;
+      final found =
+          _controlChr != null && _dataChr != null && _statusChr != null;
       if (!found) {
-        debugPrint('[OTA] Error: JustRide OTA GATT Service (0xFF10) not found on device.');
+        debugPrint(
+            '[OTA] Error: JustRide OTA GATT Service (0xFF10) not found on device.');
       }
       return found;
     } catch (e) {
@@ -104,28 +106,34 @@ class JustRideOtaService {
 
     try {
       // Step 1: Download firmware binary over HTTPS
-      _updateProgress(OtaState.downloading, 0.05, 'Downloading firmware v$targetVersion...');
+      _updateProgress(OtaState.downloading, 0.05,
+          'Downloading firmware v$targetVersion...');
       debugPrint('[OTA] Fetching firmware binary from: $downloadUrl');
 
       Uint8List firmwareBytes;
       if (downloadUrl.startsWith('http')) {
         final response = await http.get(Uri.parse(downloadUrl));
         if (response.statusCode != 200) {
-          throw Exception('Failed to download firmware binary (HTTP ${response.statusCode})');
+          throw Exception(
+              'Failed to download firmware binary (HTTP ${response.statusCode})');
         }
         firmwareBytes = response.bodyBytes;
       } else {
         throw Exception('A valid firmware download URL is required.');
       }
 
-      debugPrint('[OTA] Download complete: ${firmwareBytes.length} bytes. Initiating BLE flash...');
+      debugPrint(
+          '[OTA] Download complete: ${firmwareBytes.length} bytes. Initiating BLE flash...');
 
       // Step 2: Flash to ESP32 over BLE
-      final success = await _flashRawBytes(device: device, firmwareBytes: firmwareBytes);
+      final success =
+          await _flashRawBytes(device: device, firmwareBytes: firmwareBytes);
       return success;
     } catch (e) {
       debugPrint('[OTA] Download and flash failed: $e');
-      _updateProgress(OtaState.failed, 0.0, 'Update failed', error: e.toString());
+      _updateProgress(OtaState.failed, 0.0, 'Update failed',
+          error:
+              'Unable to update your device. Keep it connected and try again.');
       _isUpdating = false;
       return false;
     }
@@ -175,19 +183,20 @@ class JustRideOtaService {
       await _statusChr!.setNotifyValue(true);
       await _statusSub?.cancel();
       _statusSub = _statusChr!.onValueReceived.listen((data) {
-          if (data.isNotEmpty) {
-            final statusCode = data[0];
-            final progressPct = data.length > 1 ? data[1] : 0;
-            debugPrint('[OTA] Notification from ESP32 -> Status: $statusCode, Pct: $progressPct%');
+        if (data.isNotEmpty) {
+          final statusCode = data[0];
+          final progressPct = data.length > 1 ? data[1] : 0;
+          debugPrint(
+              '[OTA] Notification from ESP32 -> Status: $statusCode, Pct: $progressPct%');
 
-            if (!updateStarted) return;
-            if ((statusCode == 4 && finishSent) ||
-                (statusCode >= 5 && statusCode <= 8)) {
-              if (statusCode != 4) deviceFailure = statusCode;
-              if (!finalStatus.isCompleted) finalStatus.complete(statusCode);
-            }
+          if (!updateStarted) return;
+          if ((statusCode == 4 && finishSent) ||
+              (statusCode >= 5 && statusCode <= 8)) {
+            if (statusCode != 4) deviceFailure = statusCode;
+            if (!finalStatus.isCompleted) finalStatus.complete(statusCode);
           }
-        });
+        }
+      });
 
       await Future.delayed(const Duration(milliseconds: 200));
 
@@ -207,7 +216,7 @@ class JustRideOtaService {
       // Keep chunks at safe 128 bytes for reliable GATT Write With Response across all Android versions
       const chunkSize = 128;
       final totalChunks = (size / chunkSize).ceil();
-      _updateProgress(OtaState.transferring, 0.0, 'Flashing firmware (0%)...');
+      _updateProgress(OtaState.transferring, 0.0, 'Installing update (0%)...');
 
       // Flow-controlled chunk loop:
       // withoutResponse=false (Write With Response) ensures the Android GATT stack
@@ -218,7 +227,8 @@ class JustRideOtaService {
           throw Exception('OTA update cancelled.');
         }
         if (deviceFailure != null) {
-          throw Exception('Device rejected firmware update (status $deviceFailure).');
+          throw Exception(
+              'Device rejected firmware update (status $deviceFailure).');
         }
 
         final start = i * chunkSize;
@@ -239,7 +249,8 @@ class JustRideOtaService {
             await _dataChr!.write(packet, withoutResponse: false);
             written = true;
           } catch (err) {
-            debugPrint('[OTA] Chunk $i write failed (attempt ${retry+1}/4): $err');
+            debugPrint(
+                '[OTA] Chunk $i write failed (attempt ${retry + 1}/4): $err');
             if (retry < 3) {
               await Future.delayed(Duration(milliseconds: 50 * (retry + 1)));
             } else {
@@ -253,22 +264,25 @@ class JustRideOtaService {
         if (i % 10 == 0 || i == totalChunks - 1) {
           debugPrint('[OTA] Chunk $i/$totalChunks written. Progress: $pct%');
         }
-        _updateProgress(OtaState.transferring, progress, 'Flashing firmware ($pct%)...');
+        _updateProgress(
+            OtaState.transferring, progress, 'Installing update ($pct%)...');
       }
 
-      _updateProgress(OtaState.verifying, 0.98, 'Verifying firmware partition...');
+      _updateProgress(OtaState.verifying, 0.98, 'Verifying update...');
       debugPrint('[OTA] Sending FINISH command...');
       finishSent = true;
       await _controlChr!.write([_kCmdFinish], withoutResponse: false);
       final result = await finalStatus.future.timeout(
         const Duration(seconds: 20),
-        onTimeout: () => throw TimeoutException('Device did not confirm firmware verification.'),
+        onTimeout: () => throw TimeoutException(
+            'Device did not confirm firmware verification.'),
       );
       if (result != 4) {
         throw Exception('Device rejected firmware update (status $result).');
       }
 
-      _updateProgress(OtaState.success, 1.0, 'Update successful! Restarting device...');
+      _updateProgress(
+          OtaState.success, 1.0, 'Update successful! Restarting device...');
       debugPrint('[OTA] Sending REBOOT command...');
       try {
         await _controlChr!.write([_kCmdReboot], withoutResponse: true);
@@ -282,7 +296,9 @@ class JustRideOtaService {
       return true;
     } catch (e) {
       debugPrint('[OTA] Flash error: $e');
-      _updateProgress(OtaState.failed, 0.0, 'Update failed', error: e.toString());
+      _updateProgress(OtaState.failed, 0.0, 'Update failed',
+          error:
+              'Unable to update your device. Keep it connected and try again.');
       _isUpdating = false;
       try {
         await _controlChr?.write([_kCmdAbort], withoutResponse: true);
@@ -299,7 +315,8 @@ class JustRideOtaService {
     _updateProgress(OtaState.idle, 0.0, 'Update cancelled.');
   }
 
-  void _updateProgress(OtaState state, double progress, String msg, {String? error}) {
+  void _updateProgress(OtaState state, double progress, String msg,
+      {String? error}) {
     progressNotifier.value = OtaProgress(
       state: state,
       progress: progress,

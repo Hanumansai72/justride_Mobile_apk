@@ -50,3 +50,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Firebase Android project configuration
+android/app/google-services.json
+/android/.kotlin/

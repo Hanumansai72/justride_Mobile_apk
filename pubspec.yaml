@@ -1,7 +1,7 @@
 name: justride_ui
 description: JustRide production-level Flutter UI for the ride navigation app.
 publish_to: 'none'
-version: 1.2.0+3
+version: 1.2.0+5
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -15,7 +15,6 @@ dependencies:
   image_picker: ^1.1.2
   http: ^1.6.0
   http_parser: ^4.1.2
-  web_socket_channel: ^3.0.3
   shared_preferences: ^2.5.5
   smooth_page_indicator: ^1.1.0
   google_maps_flutter: ^2.18.0
@@ -33,7 +32,16 @@ flutter:
   uses-material-design: true
   assets:
     - assets/firmware/justride_firmware.bin
-    - assets/justride-device.webp
+    - assets/justride-device.png
     - assets/justride-logo-horizontal.png
     - assets/brands/google-g.png
     - assets/help/app_faqs.json
+    - assets/fonts/stack-sans-text-OFL.txt
+
+  fonts:
+    - family: Stack Sans Text
+      fonts:
+        - asset: assets/fonts/stack-sans-text-400.ttf
+          weight: 400
+        - asset: assets/fonts/stack-sans-text-500.ttf
+          weight: 500

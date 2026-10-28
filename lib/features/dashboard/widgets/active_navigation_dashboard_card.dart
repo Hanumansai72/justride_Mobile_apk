@@ -31,7 +31,9 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(AppConstants.radiusLg),
             border: Border.all(
-              color: isRerouting ? AppColors.warning : AppColors.primary.withValues(alpha: 0.6),
+              color: isRerouting
+                  ? AppColors.warning
+                  : AppColors.primary.withValues(alpha: 0.6),
               width: 1.5,
             ),
             boxShadow: [
@@ -45,7 +47,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () => Navigator.of(context).pushNamed('/active-navigation'),
+              onTap: () =>
+                  Navigator.of(context).pushNamed('/active-navigation'),
               borderRadius: BorderRadius.circular(AppConstants.radiusLg),
               child: Padding(
                 padding: const EdgeInsets.all(AppConstants.spacingMd),
@@ -63,16 +66,22 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                               height: 8,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: isRerouting ? AppColors.warning : AppColors.primary,
+                                color: isRerouting
+                                    ? AppColors.warning
+                                    : AppColors.primary,
                               ),
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              isRerouting ? 'REROUTING...' : 'LIVE NAVIGATION ACTIVE',
+                              isRerouting
+                                  ? 'REROUTING...'
+                                  : 'LIVE NAVIGATION ACTIVE',
                               style: GoogleFonts.jetBrainsMono(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: isRerouting ? AppColors.warning : AppColors.primary,
+                                color: isRerouting
+                                    ? AppColors.warning
+                                    : AppColors.primary,
                                 letterSpacing: 1.0,
                               ),
                             ),
@@ -87,7 +96,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                 backgroundColor: AppColors.backgroundInset,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
-                                  side: const BorderSide(color: AppColors.border),
+                                  side:
+                                      const BorderSide(color: AppColors.border),
                                 ),
                                 title: Text(
                                   'Cancel Navigation?',
@@ -98,17 +108,27 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                 ),
                                 content: Text(
                                   'Stop active route guidance on both phone and JustRide display?',
-                                  style: GoogleFonts.inter(color: AppColors.textSecondary),
+                                  style: TextStyle(
+                                      fontFamily: 'Stack Sans Text',
+                                      color: AppColors.textSecondary),
                                 ),
                                 actions: [
                                   TextButton(
-                                    onPressed: () => Navigator.of(ctx).pop(false),
-                                    child: Text('KEEP RIDING', style: GoogleFonts.jetBrainsMono(color: AppColors.primary)),
+                                    onPressed: () =>
+                                        Navigator.of(ctx).pop(false),
+                                    child: Text('KEEP RIDING',
+                                        style: GoogleFonts.jetBrainsMono(
+                                            color: AppColors.primary)),
                                   ),
                                   ElevatedButton(
-                                    onPressed: () => Navigator.of(ctx).pop(true),
-                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: AppColors.textPrimary),
-                                    child: Text('CANCEL ROUTE', style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w700)),
+                                    onPressed: () =>
+                                        Navigator.of(ctx).pop(true),
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.error,
+                                        foregroundColor: AppColors.textPrimary),
+                                    child: Text('CANCEL ROUTE',
+                                        style: GoogleFonts.jetBrainsMono(
+                                            fontWeight: FontWeight.w700)),
                                   ),
                                 ],
                               ),
@@ -119,15 +139,20 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: AppColors.errorText.withValues(alpha: 0.15),
+                              color:
+                                  AppColors.errorText.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppColors.errorText.withValues(alpha: 0.4)),
+                              border: Border.all(
+                                  color: AppColors.errorText
+                                      .withValues(alpha: 0.4)),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.close_rounded, size: 13, color: AppColors.errorText),
+                                const Icon(Icons.close_rounded,
+                                    size: 13, color: AppColors.errorText),
                                 const SizedBox(width: 4),
                                 Text(
                                   'CANCEL',
@@ -154,7 +179,9 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: AppColors.primary.withValues(alpha: 0.15),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                            border: Border.all(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.4)),
                           ),
                           child: Icon(
                             ManeuverMapper.toIcon(state.maneuver),
@@ -189,8 +216,11 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                 ],
                               ),
                               Text(
-                                state.maneuverText.isNotEmpty ? state.maneuverText : 'Follow route ahead',
-                                style: GoogleFonts.inter(
+                                state.maneuverText.isNotEmpty
+                                    ? state.maneuverText
+                                    : 'Follow route ahead',
+                                style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
                                   fontSize: 13,
                                   color: AppColors.textSecondary,
                                   fontWeight: FontWeight.w500,
@@ -201,7 +231,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textMuted),
+                        const Icon(Icons.arrow_forward_ios_rounded,
+                            size: 14, color: AppColors.textMuted),
                       ],
                     ),
                     const SizedBox(height: 12),

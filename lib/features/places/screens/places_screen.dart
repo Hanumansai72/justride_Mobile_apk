@@ -184,7 +184,10 @@ class _PlacesScreenState extends State<PlacesScreen> {
                     query.isEmpty
                         ? 'No saved places yet'
                         : 'No matching places found',
-                    style: GoogleFonts.inter(color: _C.textSec, fontSize: 14),
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: _C.textSec,
+                        fontSize: 14),
                   ),
                 ],
               ),
@@ -257,14 +260,16 @@ class _PlacesScreenState extends State<PlacesScreen> {
           Expanded(
             child: TextField(
               controller: _searchController,
-              style: GoogleFonts.inter(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 15,
                 color: AppColors.textPrimary,
               ),
               cursorColor: _C.primary,
               decoration: InputDecoration(
                 hintText: 'Search saved places...',
-                hintStyle: GoogleFonts.inter(
+                hintStyle: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 15,
                   color: AppColors.textMuted,
                 ),

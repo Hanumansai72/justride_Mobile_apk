@@ -145,7 +145,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Location error: $e'),
+            content: Text(
+                'Unable to find your location. Check location access and try again.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -268,14 +269,18 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                   },
                   child: AnimatedContainer(
                     duration: AppConstants.animFast,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isSelected ? _C.primary.withValues(alpha: 0.15) : _C.cardBg,
+                      color: isSelected
+                          ? _C.primary.withValues(alpha: 0.15)
+                          : _C.cardBg,
                       border: Border.all(
                         color: isSelected ? _C.primary : _C.cardBorder,
                         width: isSelected ? 1.5 : 1,
                       ),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusSm),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -288,9 +293,11 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                         const SizedBox(width: 6),
                         Text(
                           p['label'] as String,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             fontSize: 13,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w500,
                             color: isSelected ? _C.primary : _C.onSurface,
                           ),
                         ),
@@ -337,20 +344,23 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                     child: TextField(
                       controller: _addressController,
                       onChanged: _onAddressChanged,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 14,
                         color: _C.onSurface,
                       ),
                       cursorColor: _C.primary,
                       decoration: InputDecoration(
                         hintText: 'Type address (e.g. Uppal, HITEC City)...',
-                        hintStyle: GoogleFonts.inter(
+                        hintStyle: TextStyle(
+                          fontFamily: 'Stack Sans Text',
                           fontSize: 14,
                           color: _C.textSec.withValues(alpha: 0.5),
                         ),
                         border: InputBorder.none,
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 12),
                         suffixIcon: _isSearching
                             ? const Padding(
                                 padding: EdgeInsets.all(12),
@@ -365,7 +375,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                               )
                             : _addressController.text.isNotEmpty
                                 ? IconButton(
-                                    icon: const Icon(Icons.clear_rounded, size: 18, color: _C.textSec),
+                                    icon: const Icon(Icons.clear_rounded,
+                                        size: 18, color: _C.textSec),
                                     onPressed: () {
                                       _addressController.clear();
                                       setState(() => _searchSuggestions = []);
@@ -391,23 +402,34 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _searchSuggestions.length > 5 ? 5 : _searchSuggestions.length,
-                  separatorBuilder: (_, __) => const Divider(color: AppColors.divider, height: 1),
+                  itemCount: _searchSuggestions.length > 5
+                      ? 5
+                      : _searchSuggestions.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(color: AppColors.divider, height: 1),
                   itemBuilder: (context, i) {
                     final item = _searchSuggestions[i];
                     return ListTile(
                       dense: true,
-                      leading: const Icon(Icons.place_rounded, color: _C.primary, size: 18),
+                      leading: const Icon(Icons.place_rounded,
+                          color: _C.primary, size: 18),
                       title: Text(
                         item.displayTitle,
-                        style: GoogleFonts.inter(color: _C.onSurface, fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
+                            color: _C.onSurface,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: item.address != null
                           ? Text(
                               item.address!,
-                              style: GoogleFonts.inter(color: _C.textSec, fontSize: 11),
+                              style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
+                                  color: _C.textSec,
+                                  fontSize: 11),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             )
@@ -426,7 +448,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
               onTap: _isLocatingCurrent ? null : _useCurrentLocation,
               borderRadius: BorderRadius.circular(AppConstants.radiusSm),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: _C.cardBg,
                   border: Border.all(color: _C.primary.withValues(alpha: 0.4)),
@@ -443,7 +466,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                               color: _C.primary,
                             ),
                           )
-                        : const Icon(Icons.my_location_rounded, color: _C.primary, size: 20),
+                        : const Icon(Icons.my_location_rounded,
+                            color: _C.primary, size: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -451,7 +475,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                         children: [
                           Text(
                             'Use Current GPS Location',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               color: _C.primary,
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
@@ -459,7 +484,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                           ),
                           Text(
                             'Store current device latitude & longitude automatically',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               color: _C.textSec,
                               fontSize: 12,
                             ),
@@ -467,7 +493,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_ios_rounded, color: _C.textSec, size: 14),
+                    const Icon(Icons.arrow_forward_ios_rounded,
+                        color: _C.textSec, size: 14),
                   ],
                 ),
               ),
@@ -544,11 +571,13 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.bookmark_add_rounded, color: _C.onPrimary, size: 22),
+                          const Icon(Icons.bookmark_add_rounded,
+                              color: _C.onPrimary, size: 22),
                           const SizedBox(width: 8),
                           Text(
                             'SAVE ADDRESS',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                               color: _C.onPrimary,
@@ -594,7 +623,9 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           child: Row(
-            crossAxisAlignment: maxLines > 1 ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+            crossAxisAlignment: maxLines > 1
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.center,
             children: [
               Padding(
                 padding: EdgeInsets.only(top: maxLines > 1 ? 12 : 0),
@@ -605,14 +636,16 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                 child: TextField(
                   controller: controller,
                   maxLines: maxLines,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 14,
                     color: _C.onSurface,
                   ),
                   cursorColor: _C.primary,
                   decoration: InputDecoration(
                     hintText: hint,
-                    hintStyle: GoogleFonts.inter(
+                    hintStyle: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 14,
                       color: _C.textSec.withValues(alpha: 0.5),
                     ),

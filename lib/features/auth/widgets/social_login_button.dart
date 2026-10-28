@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
 
 class SocialLoginButton extends StatelessWidget {
   const SocialLoginButton({
@@ -26,9 +25,7 @@ class SocialLoginButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 16),
           side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-          ),
+          shape: const StadiumBorder(),
           backgroundColor: AppColors.background,
         ),
         child: Row(

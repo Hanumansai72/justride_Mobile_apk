@@ -159,7 +159,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                   const SizedBox(width: 10),
                   Text(
                     'Voice Assistant',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
@@ -168,7 +169,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                 ],
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
+                icon:
+                    const Icon(Icons.close_rounded, color: AppColors.textMuted),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -191,7 +193,9 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.primary.withValues(
-                          alpha: _isProcessing ? 0.08 : (0.25 / _pulseAnimation.value),
+                          alpha: _isProcessing
+                              ? 0.08
+                              : (0.25 / _pulseAnimation.value),
                         ),
                       ),
                     ),
@@ -217,8 +221,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                                 height: 28,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 3,
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(AppColors.onPrimary),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      AppColors.onPrimary),
                                 ),
                               ),
                             )
@@ -240,10 +244,12 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
           Text(
             _statusText,
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: _isProcessing ? AppColors.primary : AppColors.textSecondary,
+              color:
+                  _isProcessing ? AppColors.primary : AppColors.textSecondary,
             ),
           ),
 
@@ -281,7 +287,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                 ),
                 label: Text(
                   place,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 12,
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w500,
@@ -312,15 +319,19 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                 Expanded(
                   child: TextField(
                     controller: _textController,
-                    style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14),
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textPrimary,
+                        fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Type place (e.g. Uppal, Charminar)...',
-                      hintStyle: GoogleFonts.inter(
-                          color: AppColors.textMuted, fontSize: 13),
+                      hintStyle: TextStyle(
+                          fontFamily: 'Stack Sans Text',
+                          color: AppColors.textMuted,
+                          fontSize: 13),
                       border: InputBorder.none,
                       isDense: true,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     onSubmitted: (val) => _handleDestinationSelected(val),
                   ),

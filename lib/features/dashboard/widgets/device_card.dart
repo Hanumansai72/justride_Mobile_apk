@@ -51,15 +51,15 @@ class DeviceCard extends StatelessWidget {
               children: [
                 // Approved circular JustRide device image
                 Container(
-                  width: 58,
-                  height: 58,
+                  width: 96,
+                  height: 96,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-                    color: AppColors.surfaceElevated,
+                    color: AppColors.transparent,
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Image.asset(
-                    'assets/justride-device.webp',
+                    'assets/justride-device.png',
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -70,7 +70,10 @@ class DeviceCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, style: AppTextStyles.headingSmall),
+                      Text(name,
+                          style: AppTextStyles.headingMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 3),
                       Row(
                         children: [
@@ -85,13 +88,17 @@ class DeviceCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 5),
-                          Text(
-                            connected ? 'Connected' : 'Disconnected',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: connected
-                                  ? AppColors.connected
-                                  : AppColors.textMuted,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              connected ? 'Connected' : 'Disconnected',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: connected
+                                    ? AppColors.connected
+                                    : AppColors.textMuted,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],

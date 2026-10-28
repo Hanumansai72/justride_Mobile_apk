@@ -27,13 +27,33 @@ class AppLogo extends StatelessWidget {
         crossAxisAlignment:
             isCentered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
         children: [
-          Image.asset(
-            'assets/justride-logo-horizontal.png',
+          SizedBox(
             width: fontSize * 8,
             height: fontSize * 2,
-            fit: BoxFit.contain,
-            alignment: Alignment.centerLeft,
-            semanticLabel: 'JustRide',
+            child: FittedBox(
+              fit: BoxFit.contain,
+              alignment: isCentered ? Alignment.center : Alignment.centerLeft,
+              // Exclude the source artwork's uneven transparent margins.
+              child: SizedBox(
+                width: 1187,
+                height: 232,
+                child: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    Positioned(
+                      left: -76,
+                      top: -84,
+                      width: 1680,
+                      height: 400,
+                      child: Image.asset(
+                        'assets/justride-logo-horizontal.png',
+                        semanticLabel: 'JustRide',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           if (showTagline) ...[
             const SizedBox(height: 4),

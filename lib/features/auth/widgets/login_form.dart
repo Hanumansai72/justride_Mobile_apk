@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -61,7 +60,8 @@ class _LoginFormState extends State<LoginForm> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Could not connect to backend server.';
+        _errorMessage =
+            'Unable to connect. Check your internet connection and try again.';
       });
     }
   }
@@ -87,8 +87,10 @@ class _LoginFormState extends State<LoginForm> {
                 Expanded(
                   child: Text(
                     _errorMessage!,
-                    style: GoogleFonts.inter(
-                        fontSize: 13, color: AppColors.errorText),
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        fontSize: 13,
+                        color: AppColors.errorText),
                   ),
                 ),
               ],
@@ -185,9 +187,7 @@ class _LoginFormState extends State<LoginForm> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: AppColors.background,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-              ),
+              shape: const StadiumBorder(),
               elevation: 0,
             ),
             child: _isLoading

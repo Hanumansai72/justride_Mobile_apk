@@ -71,7 +71,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           ),
           title: Text(
             'Edit Profile',
-            style: GoogleFonts.inter(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               color: _C.onSurface,
               fontWeight: FontWeight.w700,
               fontSize: 18,
@@ -83,11 +84,15 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               children: [
                 TextField(
                   controller: nameCtrl,
-                  style: GoogleFonts.inter(color: _C.onSurface, fontSize: 14),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: _C.onSurface,
+                      fontSize: 14),
                   cursorColor: _C.primary,
                   decoration: InputDecoration(
                     labelText: 'Full Name',
-                    labelStyle: GoogleFonts.inter(color: _C.textSec),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text', color: _C.textSec),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: _C.outlineVariant),
                     ),
@@ -99,11 +104,15 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: phoneCtrl,
-                  style: GoogleFonts.inter(color: _C.onSurface, fontSize: 14),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: _C.onSurface,
+                      fontSize: 14),
                   cursorColor: _C.primary,
                   decoration: InputDecoration(
                     labelText: 'Phone Number',
-                    labelStyle: GoogleFonts.inter(color: _C.textSec),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text', color: _C.textSec),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: _C.outlineVariant),
                     ),
@@ -118,8 +127,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child:
-                  Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
+              child: Text('CANCEL',
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text', color: _C.textSec)),
             ),
             ElevatedButton(
               onPressed: isSaving
@@ -162,7 +172,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           strokeWidth: 2, color: _C.bg),
                     )
                   : Text('SAVE',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
+                          fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -186,7 +198,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           ),
           title: Text(
             'Change Password',
-            style: GoogleFonts.inter(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               color: _C.onSurface,
               fontWeight: FontWeight.w700,
               fontSize: 18,
@@ -199,11 +212,15 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 TextField(
                   controller: currentCtrl,
                   obscureText: true,
-                  style: GoogleFonts.inter(color: _C.onSurface, fontSize: 14),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: _C.onSurface,
+                      fontSize: 14),
                   cursorColor: _C.primary,
                   decoration: InputDecoration(
                     labelText: 'Current Password',
-                    labelStyle: GoogleFonts.inter(color: _C.textSec),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text', color: _C.textSec),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: _C.outlineVariant),
                     ),
@@ -216,11 +233,15 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 TextField(
                   controller: newCtrl,
                   obscureText: true,
-                  style: GoogleFonts.inter(color: _C.onSurface, fontSize: 14),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: _C.onSurface,
+                      fontSize: 14),
                   cursorColor: _C.primary,
                   decoration: InputDecoration(
                     labelText: 'New Password',
-                    labelStyle: GoogleFonts.inter(color: _C.textSec),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text', color: _C.textSec),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: _C.outlineVariant),
                     ),
@@ -235,8 +256,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child:
-                  Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
+              child: Text('CANCEL',
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text', color: _C.textSec)),
             ),
             ElevatedButton(
               onPressed: isSaving
@@ -285,7 +307,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           strokeWidth: 2, color: _C.bg),
                     )
                   : Text('UPDATE',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
+                          fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -491,7 +515,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 child: Center(
                   child: Text(
                     initial,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 26,
                       fontWeight: FontWeight.w700,
                       color: _C.primary,
@@ -517,7 +542,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 const SizedBox(height: 2),
                 Text(
                   email,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 13,
                     color: _C.textSec,
                   ),
@@ -673,7 +699,8 @@ class _SettingsRowState extends State<_SettingsRow> {
             Expanded(
               child: Text(
                 widget.label,
-                style: GoogleFonts.inter(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: _C.onSurface,
@@ -716,7 +743,8 @@ class _ToggleRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: GoogleFonts.inter(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 color: _C.onSurface,

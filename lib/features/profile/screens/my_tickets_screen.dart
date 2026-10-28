@@ -1,3 +1,4 @@
+import '../../../shared/widgets/device_connection_gate.dart';
 import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,7 +9,6 @@ import '../../../core/services/backend_service.dart';
 import '../../../shared/widgets/app_logo.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 import 'support_ticket_screen.dart';
-
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
@@ -59,7 +59,6 @@ class MyTicketsScreen extends StatefulWidget {
   State<MyTicketsScreen> createState() => _MyTicketsScreenState();
 }
 
-
 class _MyTicketsScreenState extends State<MyTicketsScreen> {
   int _selectedFilterIndex = 0;
   final int _navIndex = 3; // Profile tab active
@@ -86,8 +85,12 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
   }
 
   List<String> get _filterOptions {
-    final openCount = _tickets.where((t) => t.status != 'CLOSED' && t.status != 'RESOLVED').length;
-    final closedCount = _tickets.where((t) => t.status == 'CLOSED' || t.status == 'RESOLVED').length;
+    final openCount = _tickets
+        .where((t) => t.status != 'CLOSED' && t.status != 'RESOLVED')
+        .length;
+    final closedCount = _tickets
+        .where((t) => t.status == 'CLOSED' || t.status == 'RESOLVED')
+        .length;
     return ['All Tickets', 'Open ($openCount)', 'Closed ($closedCount)'];
   }
 
@@ -121,8 +124,6 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
     );
   }
 
-
-
   PreferredSizeWidget _buildAppBar() {
     return PreferredSize(
       preferredSize: const Size.fromHeight(56),
@@ -152,7 +153,8 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                 isCentered: true,
               ),
               IconButton(
-                onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/profile-settings'),
                 icon: const Icon(Icons.settings_outlined,
                     color: _C.primary, size: 24),
               ),
@@ -162,7 +164,6 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
       ),
     );
   }
-
 
   Widget _buildBody() {
     return ListView(
@@ -240,11 +241,15 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
             child: Center(
               child: Column(
                 children: [
-                  const Icon(Icons.confirmation_number_outlined, color: _C.textSec, size: 48),
+                  const Icon(Icons.confirmation_number_outlined,
+                      color: _C.textSec, size: 48),
                   const SizedBox(height: 12),
                   Text(
                     'No support tickets found',
-                    style: GoogleFonts.inter(color: _C.textSec, fontSize: 14),
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: _C.textSec,
+                        fontSize: 14),
                   ),
                 ],
               ),
@@ -260,7 +265,8 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
             }
             return true;
           }).map((ticket) {
-            final isClosed = ticket.status == 'CLOSED' || ticket.status == 'RESOLVED';
+            final isClosed =
+                ticket.status == 'CLOSED' || ticket.status == 'RESOLVED';
             return Padding(
               padding: const EdgeInsets.only(bottom: AppConstants.spacingMd),
               child: _TicketCard(
@@ -268,16 +274,20 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                   id: ticket.ticketNumber,
                   title: ticket.title,
                   description: ticket.category,
-                  status: isClosed ? _TicketStatus.closed : _TicketStatus.inProgress,
+                  status: isClosed
+                      ? _TicketStatus.closed
+                      : _TicketStatus.inProgress,
                   createdDate: 'OCT 2023',
                   priorityLabel: ticket.status,
                   priorityColor: isClosed ? _C.textSec : _C.primary,
-                  priorityIcon: isClosed ? Icons.check_circle_rounded : Icons.pending_actions_rounded,
+                  priorityIcon: isClosed
+                      ? Icons.check_circle_rounded
+                      : Icons.pending_actions_rounded,
                   resolvedDate: '',
                 ),
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
+                    DevicePageRoute(
                       builder: (context) => SupportTicketScreen(
                         ticketId: ticket.id,
                       ),
@@ -291,7 +301,6 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
       ],
     );
   }
-
 
   Widget _buildFab() {
     return Padding(

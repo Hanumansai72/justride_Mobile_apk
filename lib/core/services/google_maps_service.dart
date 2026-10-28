@@ -1,4 +1,3 @@
-import '../constants/device_map_config.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -75,7 +74,7 @@ class GoogleMapsService {
     final refLon =
         (pos != null && pos.longitude != 0.0) ? pos.longitude : 78.4867;
 
-    final key = DeviceMapConfig.enabled ? '' : GoogleMapsConfig.apiKey;
+    final key = GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       try {
         final response = await _client
@@ -302,7 +301,7 @@ class GoogleMapsService {
 
   /// Reverse geocodes coordinates to a human-readable street or area address.
   Future<String?> reverseGeocode(double lat, double lng) async {
-    final key = DeviceMapConfig.enabled ? '' : GoogleMapsConfig.apiKey;
+    final key = GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       try {
         final url = Uri.parse(
@@ -334,7 +333,7 @@ class GoogleMapsService {
 
   /// City-only lookup for the HUD. Keep it separate from full street addresses.
   Future<String?> reverseGeocodeCity(double lat, double lng) async {
-    final key = DeviceMapConfig.enabled ? '' : GoogleMapsConfig.apiKey;
+    final key = GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       try {
         final uri = Uri.parse(
@@ -425,7 +424,7 @@ class GoogleMapsService {
     debugPrint(
         '[GEOCODE] Attempting to resolve coordinates for query: "$queryText" (placeId: ${destination.placeId})');
 
-    final key = DeviceMapConfig.enabled ? '' : GoogleMapsConfig.apiKey;
+    final key = GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
       // 1. If we have a Place ID, query details
       if (destination.placeId != null && destination.placeId!.isNotEmpty) {
@@ -665,11 +664,11 @@ class GoogleMapsService {
 
   /// Calculates optimal motorcycle route between origin and destination.
   /// Uses Google Routes API v2 with TWO_WHEELER travel mode, with Directions API fallback,
-  /// followed by high-speed OSRM routing fallback.
+  /// Only explicit legacy TFT requests may fall back to OSRM.
   Future<NavigationRoute?> calculateRoute({
     required LatLng origin,
     required LatLng destination,
-    bool compatibleMapOnly = DeviceMapConfig.enabled,
+    bool compatibleMapOnly = false,
   }) async {
     final key = compatibleMapOnly ? '' : GoogleMapsConfig.apiKey;
     if (key.isNotEmpty) {
@@ -693,7 +692,10 @@ class GoogleMapsService {
       }
     }
 
-    // High-fidelity fallback: OSRM Turn-by-Turn Motorcycle/Driving Routing
+    // Phone navigation must never silently substitute a different route provider.
+    if (!compatibleMapOnly) return null;
+
+    // Legacy TFT raster maps require an OSRM route.
     try {
       final osrmRoute = await _fetchOsrmRoute(origin, destination);
       if (osrmRoute != null && osrmRoute.steps.isNotEmpty) {
@@ -1038,48 +1040,9 @@ class GoogleMapsService {
         : instruction;
   }
 
-  /// Calculates incoming vs outgoing bearing difference at a junction in range [-180, +180].
-  /// Negative values correspond to LEFT turns; positive values correspond to RIGHT turns.
-  static double _computeTurnAngle(
-      List<LatLng> curPoints, List<LatLng> nextPoints) {
-    if (curPoints.isEmpty || nextPoints.isEmpty) return 0.0;
-
-    // Incoming bearing: from the last 2 distinct points of curPoints
-    final pEnd = curPoints.last;
-    LatLng pBefore = curPoints.first;
-    for (int j = curPoints.length - 2; j >= 0; j--) {
-      final pt = curPoints[j];
-      final d = Geolocator.distanceBetween(
-          pt.latitude, pt.longitude, pEnd.latitude, pEnd.longitude);
-      if (d >= 2.0) {
-        pBefore = pt;
-        break;
-      }
-    }
-    final inBearing = Geolocator.bearingBetween(
-        pBefore.latitude, pBefore.longitude, pEnd.latitude, pEnd.longitude);
-
-    // Outgoing bearing: from the first 2 distinct points of nextPoints
-    final qStart = nextPoints.first;
-    LatLng qAfter = nextPoints.last;
-    for (int j = 1; j < nextPoints.length; j++) {
-      final pt = nextPoints[j];
-      final d = Geolocator.distanceBetween(
-          qStart.latitude, qStart.longitude, pt.latitude, pt.longitude);
-      if (d >= 2.0) {
-        qAfter = pt;
-        break;
-      }
-    }
-    final outBearing = Geolocator.bearingBetween(
-        qStart.latitude, qStart.longitude, qAfter.latitude, qAfter.longitude);
-
-    return ((outBearing - inBearing + 540.0) % 360.0) - 180.0;
-  }
-
   /// Normalizes route steps so that each step's maneuver and instruction describe
   /// the turn the rider will execute when approaching that step's endLocation (the upcoming junction).
-  /// Road geometry serves as ground truth to verify and correct any contradictory API maneuver tags.
+  /// Provider maneuver metadata is retained without inferring turns from road bends.
   static List<RouteStep> _normalizeSteps(
       List<RouteStep> rawSteps, LatLng origin, LatLng destination) {
     if (rawSteps.isEmpty) return rawSteps;
@@ -1135,38 +1098,8 @@ class GoogleMapsService {
         String upcomingStreet =
             isImmediateUTurn ? cur.streetName : nxt.streetName;
 
-        // Ground-truth geometry validation
-        final turnAngle = _computeTurnAngle(cur.points, nxt.points);
-
-        // If turnAngle indicates a clear LEFT turn (<= -25 deg) but maneuver says RIGHT:
-        if (turnAngle <= -25.0 &&
-            upcomingManeuver.toUpperCase().contains('RIGHT')) {
-          debugPrint(
-              '[GoogleMapsService] ⚠ Overriding contradictory RIGHT maneuver to LEFT based on geometry (angle: ${turnAngle.toStringAsFixed(1)}°)');
-          upcomingManeuver = (turnAngle <= -135.0)
-              ? 'SHARP_LEFT'
-              : (turnAngle <= -45.0 ? 'LEFT' : 'SLIGHT_LEFT');
-        } else if (turnAngle >= 25.0 &&
-            upcomingManeuver.toUpperCase().contains('LEFT')) {
-          debugPrint(
-              '[GoogleMapsService] ⚠ Overriding contradictory LEFT maneuver to RIGHT based on geometry (angle: ${turnAngle.toStringAsFixed(1)}°)');
-          upcomingManeuver = (turnAngle >= 135.0)
-              ? 'SHARP_RIGHT'
-              : (turnAngle >= 45.0 ? 'RIGHT' : 'SLIGHT_RIGHT');
-        } else if ((upcomingManeuver == 'STRAIGHT' ||
-                upcomingManeuver.isEmpty) &&
-            !isImmediateUTurn) {
-          // If maneuver was unspecified or straight but geometry indicates a clear turn:
-          if (turnAngle <= -30.0) {
-            upcomingManeuver = (turnAngle <= -135.0)
-                ? 'SHARP_LEFT'
-                : (turnAngle <= -45.0 ? 'LEFT' : 'SLIGHT_LEFT');
-          } else if (turnAngle >= 30.0) {
-            upcomingManeuver = (turnAngle >= 135.0)
-                ? 'SHARP_RIGHT'
-                : (turnAngle >= 45.0 ? 'RIGHT' : 'SLIGHT_RIGHT');
-          }
-        }
+        // Provider actions include ramp/merge topology absent from a polyline.
+        // Do not invent or reverse maneuvers from a local bend angle.
 
         normalized.add(RouteStep(
           startLocation: cur.startLocation,

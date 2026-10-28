@@ -56,9 +56,9 @@ class DeviceMapService {
         points.any((p) {
           final pixel = mapPixel(p, _cameraCenter!, fitZoom);
           return pixel.dx < 12 ||
-              pixel.dx > 186 ||
+              pixel.dx > DeviceMapConfig.width - 12 ||
               pixel.dy < 12 ||
-              pixel.dy > 165;
+              pixel.dy > DeviceMapConfig.height - 24;
         })) {
       fitZoom--;
     }
@@ -106,8 +106,8 @@ class DeviceMapService {
         nav.currentState.rideState.name == 'paused') {
       return;
     }
-    if (route.provider != 'osrm') {
-      status.value = 'LocationIQ requires a compatible route';
+    if (route.provider != 'google') {
+      status.value = 'Google map requires a Google route';
       return;
     }
     final state = nav.currentState;
@@ -170,7 +170,7 @@ class DeviceMapService {
         zoom == requestedZoom;
     try {
       status.value = frame.value == null ? 'Loading map' : 'Updating map';
-      final bytes = await LocationIqMapImageProvider(client)
+      final bytes = await GoogleMapImageProvider(client)
           .fetch(center, requestedZoom, ApiClient.instance.token);
       if (!current()) return;
       final prepared = await prepareDeviceMap(
@@ -190,9 +190,7 @@ class DeviceMapService {
         final backoff =
             DateTime.now().add(Duration(seconds: 10 * (1 << _failures)));
         if (backoff.isAfter(_nextAttempt)) _nextAttempt = backoff;
-        status.value = e is MapImageException
-            ? 'Map HTTP ${e.status}; retrying'
-            : 'Map unavailable; retrying';
+        status.value = 'Map unavailable; retrying';
       }
     } finally {
       client.close();
@@ -209,7 +207,7 @@ class DeviceMapService {
 Future<DeviceMapFrame> prepareDeviceMap(Uint8List bytes, LatLng center,
     int zoom, NavigationRoute route, int revision, int id,
     {int routeIndex = 0, bool overview = false}) async {
-  if (route.provider != 'osrm') {
+  if (route.provider != 'google') {
     throw const FormatException('Incompatible map route');
   }
   if (bytes.length < 4 ||

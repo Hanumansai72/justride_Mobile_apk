@@ -128,7 +128,9 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                         ),
                       ),
                       child: Icon(
-                        isOffhook ? Icons.phone_in_talk_rounded : Icons.phone_callback_rounded,
+                        isOffhook
+                            ? Icons.phone_in_talk_rounded
+                            : Icons.phone_callback_rounded,
                         color: _primary,
                         size: 24,
                       ),
@@ -148,7 +150,8 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                         Flexible(
                           child: Text(
                             info.displayName,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               color: _textPrimary,
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -159,7 +162,8 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
                             color: isOffhook
                                 ? _primary.withValues(alpha: 0.15)
@@ -181,8 +185,11 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                     Text(
                       info.callerNumber.isNotEmpty
                           ? info.callerNumber
-                          : (isOffhook ? 'Call in progress' : 'Incoming phone call...'),
-                      style: GoogleFonts.inter(
+                          : (isOffhook
+                              ? 'Call in progress'
+                              : 'Incoming phone call...'),
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         color: _textSecondary,
                         fontSize: 12.5,
                       ),

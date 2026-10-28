@@ -1,22 +1,26 @@
 package com.example.justride_ui
 
+import android.companion.AssociationInfo
+import android.companion.AssociationRequest
+import android.companion.BluetoothLeDeviceFilter
+import android.companion.CompanionDeviceManager
+import android.bluetooth.le.ScanFilter
+import android.content.IntentSender
+import android.os.Handler
+import android.os.Looper
+import android.app.Activity
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioManager
-import android.media.session.MediaController
-import android.media.session.MediaSessionManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
-import android.os.SystemClock
 import android.telecom.TelecomManager
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
-import android.view.KeyEvent
 import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -25,7 +29,6 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val MEDIA_CHANNEL = "com.justride.app/system_media"
     private val CALL_CHANNEL = "com.justride.app/telephony"
     private val NOTIFICATION_CHANNEL = "com.justride.app/system_notifications"
     private val MAPS_CONFIG_CHANNEL = "com.justride.app/maps_config"
@@ -41,15 +44,109 @@ class MainActivity : FlutterActivity() {
     private var phoneStateListener: PhoneStateListener? = null
     private var telephonyCallback: Any? = null
 
+    private var companionResult: MethodChannel.Result? = null
+    private var companionAddress: String? = null
+    private val companionRequestCode=4103
+
+    override fun provideFlutterEngine(context: Context): FlutterEngine = JustRideCompanionRuntime.getEngine(context)
+    override fun shouldDestroyEngineWithHost(): Boolean = false
+    override fun onStart() {
+        super.onStart()
+        JustRideCompanionRuntime.show(this)
+        JustRideCompanionRuntime.restore(this)
+    }
+    override fun onStop() {
+        JustRideCompanionRuntime.hide(this)
+        super.onStop()
+    }
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        failCompanion("Device approval interrupted; retry from Device settings")
+        stopCallMonitoring()
+        JustRideNotificationListener.onNotificationReceived=null
+        for (name in listOf("com.justride.app/companion_setup", "com.justride.app/diagnostics",
+                CALL_CHANNEL, NOTIFICATION_CHANNEL, MAPS_CONFIG_CHANNEL, SHARE_INTENT_CHANNEL)) {
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger,name).setMethodCallHandler(null)
+        }
+        callChannel=null;notifChannel=null;shareMethodChannel=null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    private fun finishCompanion(address: String) {
+        val expected=companionAddress ?: return
+        if(!address.equals(expected,true)) {failCompanion("Wrong device selected");return}
+        try {
+            JustRideCompanionRuntime.preferences(this).edit().putString("address",address)
+                .putBoolean("enabled",true).putBoolean("paused",false).apply()
+            JustRideCompanionRuntime.observe(this,address)
+            companionResult?.success(JustRideCompanionRuntime.state(this))
+            companionResult=null;companionAddress=null
+            JustRideCompanionRuntime.publish(this)
+        } catch(e: Exception) {
+            JustRideCompanionRuntime.preferences(this).edit().putBoolean("enabled",false).apply()
+            failCompanion("Unable to observe device presence: ${e.javaClass.simpleName}")
+            JustRideCompanionRuntime.publish(this)
+        }
+    }
+    private fun failCompanion(message: String) {
+        companionResult?.error("COMPANION_SETUP",message,null)
+        companionResult=null;companionAddress=null
+    }
+    private fun enableCompanion(address: String,prompt: Boolean,result: MethodChannel.Result) {
+        if(Build.VERSION.SDK_INT<31 || !packageManager.hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
+            result.error("UNSUPPORTED","Automatic background connection requires Android 12 or later",null);return
+        }
+        if(!android.bluetooth.BluetoothAdapter.checkBluetoothAddress(address) || !JustRideCompanionRuntime.permitted(this)) {
+            result.error("PERMISSION","Pair the device and grant Nearby devices permission first",null);return
+        }
+        if(companionResult!=null){result.error("BUSY","Device approval is already open",null);return}
+        val prefs=JustRideCompanionRuntime.preferences(this)
+        val cdm=JustRideCompanionRuntime.manager(this)
+        if(cdm.associations.any {it.equals(address,true)}) {
+            companionAddress=address;companionResult=result;finishCompanion(address);return
+        }
+        if(!prompt && prefs.getString("requested_address",null).equals(address,true)) {
+            result.success(JustRideCompanionRuntime.state(this));return
+        }
+        prefs.edit().putString("requested_address",address).apply()
+        companionAddress=address;companionResult=result
+        val filter=BluetoothLeDeviceFilter.Builder().setScanFilter(ScanFilter.Builder().setDeviceAddress(address).build()).build()
+        val request=AssociationRequest.Builder().addDeviceFilter(filter).setSingleDevice(true).build()
+        try {
+            cdm.associate(request,object: CompanionDeviceManager.Callback() {
+                override fun onDeviceFound(chooserLauncher: IntentSender) {launch(chooserLauncher)}
+                override fun onAssociationPending(intentSender: IntentSender) {launch(intentSender)}
+                private fun launch(sender: IntentSender) {
+                    try {startIntentSenderForResult(sender,companionRequestCode,null,0,0,0)}
+                    catch(e: Exception){failCompanion("Unable to open Android device approval")}
+                }
+                override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                    associationInfo.deviceMacAddress?.toString()?.let {finishCompanion(it)}
+                }
+                override fun onFailure(error: CharSequence?) {failCompanion(error?.toString() ?: "Device approval cancelled")}
+            },Handler(Looper.getMainLooper()))
+        } catch(e: Exception) {failCompanion("Device approval unavailable: ${e.javaClass.simpleName}")}
+    }
+    override fun onActivityResult(requestCode: Int,resultCode: Int,data: Intent?) {
+        super.onActivityResult(requestCode,resultCode,data)
+        if(requestCode!=companionRequestCode || companionResult==null)return
+        if(resultCode!=Activity.RESULT_OK){failCompanion("Device approval cancelled");return}
+        val address=companionAddress ?: return
+        // Both callback styles converge here after Android has persisted association.
+        if(JustRideCompanionRuntime.manager(this).associations.any {it.equals(address,true)}) finishCompanion(address)
+        else failCompanion("Android did not associate the selected device")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleIncomingShareIntent(intent)
+        JustRidePushBridge.handleIntent(this, intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIncomingShareIntent(intent)
+        JustRidePushBridge.handleIntent(this, intent)
     }
 
     private fun handleIncomingShareIntent(intent: Intent?) {
@@ -85,6 +182,14 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        JustRideMediaBridge(applicationContext).attach(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,"com.justride.app/companion_setup")
+            .setMethodCallHandler { call,result ->
+                if(call.method=="enable") {
+                    try {enableCompanion(call.argument<String>("address") ?: "",call.argument<Boolean>("prompt") ?: false,result)}
+                    catch(e: Exception){result.error("COMPANION_SETUP",e.message,null)}
+                } else result.notImplemented()
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.justride.app/diagnostics")
             .setMethodCallHandler { call, result ->
                 if (call.method == "deviceInfo") {
@@ -92,6 +197,22 @@ class MainActivity : FlutterActivity() {
                         "phone_model" to "${Build.MANUFACTURER} ${Build.MODEL}",
                         "os_version" to Build.VERSION.RELEASE
                     ))
+                } else if (call.method == "appInfo") {
+                    val info = packageManager.getPackageInfo(packageName, 0)
+                    val build = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+                    result.success(mapOf("version" to info.versionName, "build" to build))
+                } else if (call.method == "openApkDownload") {
+                    val uri = android.net.Uri.parse(call.argument<String>("url") ?: "")
+                    if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.userInfo != null) {
+                        result.error("INVALID_URL", "The update download link is invalid", null)
+                    } else {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE))
+                            result.success(true)
+                        } catch (_: android.content.ActivityNotFoundException) {
+                            result.error("NO_BROWSER", "No browser is available to download the update", null)
+                        }
+                    }
                 } else result.notImplemented()
             }
         requestPostNotificationsPermission()
@@ -129,121 +250,6 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MEDIA_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                if (audioManager == null) {
-                    result.error("AUDIO_SERVICE_UNAVAILABLE", "AudioManager is null", null)
-                    return@setMethodCallHandler
-                }
-
-                when (call.method) {
-                    "playPause" -> {
-                        val controller = getActiveMediaController()
-                        val isPlaying = controller?.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING || audioManager.isMusicActive
-                        result.success(dispatchMediaCommand(audioManager, if (isPlaying) "pause" else "play", controller))
-                    }
-                    "play" -> {
-                        result.success(dispatchMediaCommand(audioManager, "play"))
-                    }
-                    "pause" -> {
-                        result.success(dispatchMediaCommand(audioManager, "pause"))
-                    }
-                    "next" -> {
-                        result.success(dispatchMediaCommand(audioManager, "next"))
-                    }
-                    "previous" -> {
-                        result.success(dispatchMediaCommand(audioManager, "previous"))
-                    }
-                    "volumeUp" -> {
-                        audioManager.adjustStreamVolume(
-                            AudioManager.STREAM_MUSIC,
-                            AudioManager.ADJUST_RAISE,
-                            AudioManager.FLAG_SHOW_UI
-                        )
-                        result.success(true)
-                    }
-                    "volumeDown" -> {
-                        audioManager.adjustStreamVolume(
-                            AudioManager.STREAM_MUSIC,
-                            AudioManager.ADJUST_LOWER,
-                            AudioManager.FLAG_SHOW_UI
-                        )
-                        result.success(true)
-                    }
-                    "isMusicActive" -> {
-                        result.success(audioManager.isMusicActive)
-                    }
-                    "hasNotificationAccess" -> result.success(hasNotificationListenerAccess())
-                    "getPlaybackState" -> {
-                        // Returns: 0=unknown, 1=playing, 2=paused, 3=stopped
-                        val controller = getActiveMediaController()
-                        val state = controller?.playbackState?.state ?: 0
-                        val mappedState = when (state) {
-                            android.media.session.PlaybackState.STATE_PLAYING -> 1
-                            android.media.session.PlaybackState.STATE_PAUSED  -> 2
-                            android.media.session.PlaybackState.STATE_STOPPED -> 3
-                            else -> if (audioManager.isMusicActive) 1 else 0
-                        }
-                        result.success(mappedState)
-                    }
-                    "getMediaTitle" -> {
-                        val controller = getActiveMediaController()
-                        val title = controller?.metadata
-                            ?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE) ?: ""
-                        result.success(title)
-                    }
-                    "getMediaArtist" -> {
-                        val controller = getActiveMediaController()
-                        val artist = controller?.metadata
-                            ?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
-                            ?: controller?.metadata
-                                ?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
-                            ?: ""
-                        result.success(artist)
-                    }
-                    "getMediaSnapshot" -> {
-                        // Snapshot of active session for atomic Dart & ESP32 synchronization
-                        val controller = getActiveMediaController()
-                        val rawState = controller?.playbackState?.state ?: 0
-                        val isAudioActive = audioManager.isMusicActive
-                        val mappedState = when (rawState) {
-                            android.media.session.PlaybackState.STATE_PLAYING -> 1
-                            android.media.session.PlaybackState.STATE_PAUSED  -> 2
-                            android.media.session.PlaybackState.STATE_STOPPED -> 3
-                            else -> if (isAudioActive) 1 else 0
-                        }
-                        val title = controller?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE) ?: ""
-                        val artist = controller?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
-                            ?: controller?.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: ""
-                        val pos = controller?.playbackState?.position?.div(1000)?.toInt() ?: 0
-                        val dur = (controller?.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L).div(1000).toInt()
-                        val permission = hasNotificationListenerAccess()
-                        val actions = controller?.playbackState?.actions ?: 0L
-                        var mask = 0
-                        if (actions and android.media.session.PlaybackState.ACTION_PLAY != 0L) mask = mask or 1
-                        if (actions and android.media.session.PlaybackState.ACTION_PAUSE != 0L) mask = mask or 2
-                        if (actions and android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT != 0L) mask = mask or 4
-                        if (actions and android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L) mask = mask or 8
-                        if (permission && controller != null) mask = mask or 16
-                        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                        val volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                        result.success(mapOf(
-                            "state" to (if (!permission) 1 else if (controller == null) 2 else if (rawState == android.media.session.PlaybackState.STATE_PLAYING) 4 else if (rawState == android.media.session.PlaybackState.STATE_PAUSED) 3 else 5),
-                            "actions" to (if (permission && controller != null) mask else 0),
-                            "volume" to (if (maxVolume > 0) volume * 100 / maxVolume else 0),
-                            "playbackState" to mappedState,
-                            "title" to title,
-                            "artist" to artist,
-                            "positionSeconds" to pos,
-                            "durationSeconds" to dur,
-                            "hasSession" to (controller != null || isAudioActive)
-                        ))
-                    }
-                    else -> result.notImplemented()
-                }
-            }
-
         // ── Telephony Call Channel ───────────────────────────────────────────
         callChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CALL_CHANNEL).apply {
             setMethodCallHandler { call, result ->
@@ -256,6 +262,7 @@ class MainActivity : FlutterActivity() {
                         stopCallMonitoring()
                         result.success(true)
                     }
+                    "getCallCapabilities" -> result.success(callCapabilities())
                     "answerCall" -> {
                         val answered = answerIncomingCall()
                         result.success(answered)
@@ -301,7 +308,8 @@ class MainActivity : FlutterActivity() {
                 notifChannel?.invokeMethod("onLatestNotification", mapOf(
                     "title" to title,
                     "message" to message,
-                    "package" to pkg
+                    "package" to pkg,
+                    "appName" to notificationAppName(pkg)
                 ))
             }
         }
@@ -310,7 +318,8 @@ class MainActivity : FlutterActivity() {
                 notifChannel?.invokeMethod("onLatestNotification", mapOf(
                     "title" to payload.title,
                     "message" to payload.message,
-                    "package" to payload.packageName
+                    "package" to payload.packageName,
+                    "appName" to notificationAppName(payload.packageName)
                 ))
             }
         }
@@ -409,142 +418,34 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun notificationAppName(pkg: String): String = try {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    } catch (_: Exception) { "Alert" }
+
+    private fun callCapabilities(): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) != PackageManager.PERMISSION_GRANTED) return 0
+        val telecom = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return 0
+        val canReject = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+            (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P || telecom.defaultDialerPackage == packageName)
+        return 1 or (if (canReject) 2 else 0)
+    }
     private fun answerIncomingCall(): Boolean {
+        if ((callCapabilities() and 1) == 0) return false
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val telecomManager = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-                if (telecomManager != null) {
-                    @Suppress("DEPRECATION")
-                    telecomManager.acceptRingingCall()
-                    return true
-                }
-            }
-            // Fallback: media key HEADSETHOOK click to answer
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            if (audioManager != null) {
-                sendMediaKeyEvent(audioManager, KeyEvent.KEYCODE_HEADSETHOOK)
-                true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            try {
-                // Secondary fallback
-                val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                if (audioManager != null) {
-                    sendMediaKeyEvent(audioManager, KeyEvent.KEYCODE_HEADSETHOOK)
-                    true
-                } else {
-                    false
-                }
-            } catch (ex: Exception) {
-                false
-            }
-        }
+            val telecom = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return false
+            @Suppress("DEPRECATION")
+            telecom.acceptRingingCall()
+            true
+        } catch (_: Exception) { false }
     }
-
     private fun rejectIncomingCall(): Boolean {
+        if ((callCapabilities() and 2) == 0) return false
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val telecomManager = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-                if (telecomManager != null) {
-                    return telecomManager.endCall()
-                }
-            }
-            // Fallback: end call key
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            if (audioManager != null) {
-                sendMediaKeyEvent(audioManager, KeyEvent.KEYCODE_ENDCALL)
-                true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            try {
-                val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                if (audioManager != null) {
-                    sendMediaKeyEvent(audioManager, KeyEvent.KEYCODE_ENDCALL)
-                    true
-                } else {
-                    false
-                }
-            } catch (ex: Exception) {
-                false
-            }
-        }
+            val telecom = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return false
+            @Suppress("DEPRECATION")
+            telecom.endCall()
+        } catch (_: Exception) { false }
     }
 
-    /**
-     * Get the highest-priority active MediaController.
-     * Priority: actively PLAYING session > any session with metadata > first session.
-     * Requires NotificationListenerService permission to be granted by the user.
-     */
-    private fun getActiveMediaController(): MediaController? {
-        return try {
-            val msm = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
-                ?: return null
-            val cn = ComponentName(this, JustRideNotificationListener::class.java)
-            val controllers = msm.getActiveSessions(cn)
-            controllers.firstOrNull { ctrl ->
-                ctrl.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
-            } ?: controllers.firstOrNull { ctrl ->
-                val title = ctrl.metadata?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
-                !title.isNullOrEmpty()
-            } ?: controllers.firstOrNull()
-        } catch (e: SecurityException) {
-            // Notification listener permission not granted — fall back to key events
-            null
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun hasNotificationListenerAccess(): Boolean {
-        val component = ComponentName(this, JustRideNotificationListener::class.java)
-        val enabled = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
-        return enabled.split(":").any { entry ->
-            ComponentName.unflattenFromString(entry)?.packageName == component.packageName
-        }
-    }
-
-    /**
-     * A MediaController is the most reliable path for Spotify and YouTube Music.
-     * Key events are retained only when Android exposes no usable session/action;
-     * sending both causes duplicate skips in several players.
-     */
-    private fun dispatchMediaCommand(audioManager: AudioManager, command: String, existingController: MediaController? = null): Boolean {
-        val controller = existingController ?: getActiveMediaController()
-        val action = when (command) {
-            "play" -> android.media.session.PlaybackState.ACTION_PLAY
-            "pause" -> android.media.session.PlaybackState.ACTION_PAUSE
-            "next" -> android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT
-            "previous" -> android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS
-            else -> 0L
-        }
-        val hasAction = (controller?.playbackState?.actions?.and(action) ?: 0L) != 0L
-        if (controller != null && hasAction) {
-            return try {
-                when (command) {
-                    "play" -> controller.transportControls.play()
-                    "pause" -> controller.transportControls.pause()
-                    "next" -> controller.transportControls.skipToNext()
-                    "previous" -> controller.transportControls.skipToPrevious()
-                }
-                true
-            } catch (_: Exception) {
-                false
-            }
-        }
-
-        return false
-
-    }
-
-    private fun sendMediaKeyEvent(audioManager: AudioManager, keyCode: Int) {
-        val eventTime = SystemClock.uptimeMillis()
-        val downEvent = KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0)
-        val upEvent   = KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP,   keyCode, 0)
-        audioManager.dispatchMediaKeyEvent(downEvent)
-        audioManager.dispatchMediaKeyEvent(upEvent)
-    }
 }

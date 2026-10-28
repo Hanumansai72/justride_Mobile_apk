@@ -1,78 +1,88 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// JustRide typography tokens built on the Inter typeface.
+/// The customer's Stack Sans typeface is bundled for offline use in the app.
 abstract final class AppTextStyles {
   // ── Display ────────────────────────────────────────────────────────────────
-  static TextStyle get displayLarge => GoogleFonts.inter(
+  static TextStyle get displayLarge => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 32,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w500,
         color: AppColors.textPrimary,
         letterSpacing: -0.5,
       );
 
-  static TextStyle get displayMedium => GoogleFonts.inter(
+  static TextStyle get displayMedium => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 26,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w500,
         color: AppColors.textPrimary,
         letterSpacing: -0.3,
       );
 
   // ── Headings ───────────────────────────────────────────────────────────────
-  static TextStyle get headingLarge => GoogleFonts.inter(
+  static TextStyle get headingLarge => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 22,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w500,
         color: AppColors.textPrimary,
       );
 
-  static TextStyle get headingMedium => GoogleFonts.inter(
+  static TextStyle get headingMedium => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 18,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
         color: AppColors.textPrimary,
       );
 
-  static TextStyle get headingSmall => GoogleFonts.inter(
+  static TextStyle get headingSmall => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 15,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
         color: AppColors.textPrimary,
       );
 
   // ── Body ───────────────────────────────────────────────────────────────────
-  static TextStyle get bodyLarge => GoogleFonts.inter(
-        fontSize: 14,
+  static TextStyle get bodyLarge => TextStyle(
+        fontFamily: 'Stack Sans Text',
+        fontSize: 15,
         fontWeight: FontWeight.w400,
         color: AppColors.textPrimary,
       );
 
-  static TextStyle get bodyMedium => GoogleFonts.inter(
-        fontSize: 13,
+  static TextStyle get bodyMedium => TextStyle(
+        fontFamily: 'Stack Sans Text',
+        fontSize: 14,
         fontWeight: FontWeight.w400,
         color: AppColors.textSecondary,
       );
 
-  static TextStyle get bodySmall => GoogleFonts.inter(
+  static TextStyle get bodySmall => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 11,
         fontWeight: FontWeight.w400,
         color: AppColors.textSecondary,
       );
 
   // ── Labels ─────────────────────────────────────────────────────────────────
-  static TextStyle get labelLarge => GoogleFonts.inter(
+  static TextStyle get labelLarge => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
         letterSpacing: 0.5,
       );
 
-  static TextStyle get labelMedium => GoogleFonts.inter(
+  static TextStyle get labelMedium => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 11,
         fontWeight: FontWeight.w500,
         color: AppColors.textSecondary,
         letterSpacing: 0.4,
       );
 
-  static TextStyle get labelSmall => GoogleFonts.inter(
+  static TextStyle get labelSmall => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 10,
         fontWeight: FontWeight.w400,
         color: AppColors.textMuted,
@@ -80,14 +90,16 @@ abstract final class AppTextStyles {
       );
 
   // ── Brand ──────────────────────────────────────────────────────────────────
-  static TextStyle get brandLogo => GoogleFonts.inter(
+  static TextStyle get brandLogo => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 26,
         fontWeight: FontWeight.w800,
         color: AppColors.textPrimary,
         letterSpacing: -0.5,
       );
 
-  static TextStyle get brandTagline => GoogleFonts.inter(
+  static TextStyle get brandTagline => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 9,
         fontWeight: FontWeight.w500,
         color: AppColors.textSecondary,
@@ -95,23 +107,26 @@ abstract final class AppTextStyles {
       );
 
   // ── Primary Accent ─────────────────────────────────────────────────────────
-  static TextStyle get accentLarge => GoogleFonts.inter(
+  static TextStyle get accentLarge => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: AppColors.primary,
       );
 
-  static TextStyle get accentMedium => GoogleFonts.inter(
+  static TextStyle get accentMedium => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: AppColors.primary,
       );
 
   // ── CTA / Button ───────────────────────────────────────────────────────────
-  static TextStyle get button => GoogleFonts.inter(
+  static TextStyle get button => TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 14,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w500,
         color: AppColors.background,
-        letterSpacing: 1.2,
+        letterSpacing: 0,
       );
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../app/theme/app_colors.dart';
-import '../../../app/theme/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
+import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_text_styles.dart';
+import '../../core/constants/app_constants.dart';
 
 /// Re-usable animated battery indicator widget.
 ///

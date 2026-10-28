@@ -59,7 +59,7 @@ class GoogleAuthService {
           (accessToken == null || accessToken.isEmpty)) {
         return const GoogleAuthResult(
           success: false,
-          message: 'Failed to retrieve Google credentials from device.',
+          message: 'Unable to sign in with Google. Please try again.',
         );
       }
 
@@ -81,14 +81,14 @@ class GoogleAuthService {
           success: false,
           message: res.message.isNotEmpty
               ? res.message
-              : 'Backend authentication failed.',
+              : 'Unable to sign in. Please try again.',
         );
       }
     } catch (e, stack) {
       debugPrint('[GoogleAuthService] Exception: $e\n$stack');
-      return GoogleAuthResult(
+      return const GoogleAuthResult(
         success: false,
-        message: 'Google Sign-In error: $e',
+        message: 'Unable to sign in with Google. Please try again.',
       );
     }
   }

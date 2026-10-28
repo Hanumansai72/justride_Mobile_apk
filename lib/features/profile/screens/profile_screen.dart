@@ -1,6 +1,6 @@
+import '../../../shared/widgets/device_connection_gate.dart';
 import 'help_support_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -59,7 +59,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           title: Text(
             'Edit Profile',
-            style: GoogleFonts.inter(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 18,
@@ -71,13 +72,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 TextField(
                   controller: nameCtrl,
-                  style: GoogleFonts.inter(
-                      color: AppColors.textPrimary, fontSize: 14),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: AppColors.textPrimary,
+                      fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Full Name',
-                    labelStyle:
-                        GoogleFonts.inter(color: AppColors.textSecondary),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textSecondary),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: AppColors.border),
                     ),
@@ -89,13 +93,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: phoneCtrl,
-                  style: GoogleFonts.inter(
-                      color: AppColors.textPrimary, fontSize: 14),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: AppColors.textPrimary,
+                      fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Phone Number',
-                    labelStyle:
-                        GoogleFonts.inter(color: AppColors.textSecondary),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textSecondary),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: AppColors.border),
                     ),
@@ -111,7 +118,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
               child: Text('CANCEL',
-                  style: GoogleFonts.inter(color: AppColors.textSecondary)),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: AppColors.textSecondary)),
             ),
             ElevatedButton(
               onPressed: isSaving
@@ -157,7 +166,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     )
                   : Text('SAVE',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
+                          fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -181,7 +192,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           title: Text(
             'Change Password',
-            style: GoogleFonts.inter(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 18,
@@ -194,13 +206,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextField(
                   controller: currentCtrl,
                   obscureText: true,
-                  style: GoogleFonts.inter(
-                      color: AppColors.textPrimary, fontSize: 14),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: AppColors.textPrimary,
+                      fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'Current Password',
-                    labelStyle:
-                        GoogleFonts.inter(color: AppColors.textSecondary),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textSecondary),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: AppColors.border),
                     ),
@@ -213,13 +228,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextField(
                   controller: newCtrl,
                   obscureText: true,
-                  style: GoogleFonts.inter(
-                      color: AppColors.textPrimary, fontSize: 14),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: AppColors.textPrimary,
+                      fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
                     labelText: 'New Password',
-                    labelStyle:
-                        GoogleFonts.inter(color: AppColors.textSecondary),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textSecondary),
                     enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: AppColors.border),
                     ),
@@ -235,7 +253,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
               child: Text('CANCEL',
-                  style: GoogleFonts.inter(color: AppColors.textSecondary)),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
+                      color: AppColors.textSecondary)),
             ),
             ElevatedButton(
               onPressed: isSaving
@@ -287,7 +307,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     )
                   : Text('UPDATE',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
+                          fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -433,7 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.headset_mic_outlined,
             title: 'Help Center',
             subtitle: 'FAQs, report problems and connect with support',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            onTap: () => Navigator.of(context).push(DevicePageRoute(
                 builder: (_) =>
                     const HelpSupportScreen(initialCategory: 'Account'))),
           ),

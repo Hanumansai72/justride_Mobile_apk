@@ -319,8 +319,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       const SizedBox(height: 12),
                       Text(
                         'No ${_chips[_selectedChip]} notifications at the moment',
-                        style:
-                            GoogleFonts.inter(color: _C.textSec, fontSize: 14),
+                        style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
+                            color: _C.textSec,
+                            fontSize: 14),
                       ),
                     ],
                   ),

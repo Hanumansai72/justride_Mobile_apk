@@ -123,7 +123,7 @@
     "steps": [
       "Open Device Settings and choose Unlink Device.",
       "Request the unlink code, then enter the code sent to your registered email.",
-      "Wait for the backend to confirm the unlink. This releases the device for another account; deleting only a phone Bluetooth entry does not release account ownership."
+      "Wait for JustRide to confirm the unlink. This releases the device for another account; deleting only a phone Bluetooth entry does not release account ownership."
     ],
     "keywords": "unlink remove unpair release email otp",
     "route": "/device-settings",
@@ -253,7 +253,7 @@
     "steps": [
       "Open Recent on Home or the ride history screen to view rides stored for your account.",
       "The latest saved ride is also shown on Home. Refresh after ending a ride.",
-      "Sign in with the same account on another phone to view its backend-stored rides. Unsynced local rides are not available on the new phone."
+      "Sign in with the same account on another phone to view its saved rides. Unsynced local rides are not available on the new phone."
     ],
     "keywords": "history previous rides recent latest new phone",
     "route": "/trips",
@@ -266,7 +266,7 @@
     "steps": [
       "Confirm you are signed in to the account that recorded the ride.",
       "Reconnect to the internet and reopen ride history so pending uploads can retry.",
-      "Older app versions did not store all rides on the backend. An interrupted or unsaved ride may be unavailable; support cannot promise recovery of records that were never saved."
+      "Older app versions did not store all rides in your account. An interrupted or unsaved ride may be unavailable; support cannot promise recovery of records that were never saved."
     ],
     "keywords": "missing history lost ride recover pending sync restart",
     "route": "/trips",

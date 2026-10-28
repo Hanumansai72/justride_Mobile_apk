@@ -112,14 +112,7 @@ class TelephonyService {
         callerName: number.isNotEmpty ? 'Caller: $number' : 'Incoming Call',
       );
 
-      if (newStatus == PhoneCallStatus.ringing) {
-        // Cellular calls are also shown on the HUD, even if the system call
-        // notification itself is suppressed by the phone manufacturer.
-        await BleNavigationService.instance.sendLatestNotification(
-          'Incoming call',
-          number.isEmpty ? 'Phone call' : number,
-        );
-      }
+      await syncDisplay();
     } else if (call.method == 'onCallPermissionChanged') {
       final args = call.arguments as Map<dynamic, dynamic>?;
       final granted = args?['granted'] == true;
@@ -128,56 +121,33 @@ class TelephonyService {
     }
   }
 
-  /// Accepts / answers the ringing call
-  Future<bool> answerCall() async {
+  Future<void> syncDisplay() async {
+    int actions = 0;
     try {
-      debugPrint('[TelephonyService] Answering incoming call...');
-      final bool success = await _channel.invokeMethod('answerCall') ?? false;
-      if (success) {
-        callInfoNotifier.value = callInfoNotifier.value.copyWith(
-          status: PhoneCallStatus.offhook,
-        );
-      }
-      return success;
+      actions = await _channel.invokeMethod<int>('getCallCapabilities') ?? 0;
+    } catch (_) {}
+    final info = callInfoNotifier.value;
+    await BleNavigationService.instance
+        .sendCallState(info.status.index, actions, info.displayName);
+  }
+
+  Future<bool> answerCall() async {
+    if (!callInfoNotifier.value.isRinging) return false;
+    try {
+      return await _channel.invokeMethod<bool>('answerCall') ?? false;
     } catch (e) {
       debugPrint('[TelephonyService] answerCall error: $e');
       return false;
     }
   }
 
-  /// Rejects / hangs up the ringing or active call
   Future<bool> rejectCall() async {
+    if (!callInfoNotifier.value.hasActiveCall) return false;
     try {
-      debugPrint('[TelephonyService] Rejecting call...');
-      final bool success = await _channel.invokeMethod('rejectCall') ?? false;
-      // Only reset UI to idle if the native rejection actually succeeded
-      if (success) {
-        callInfoNotifier.value =
-            const IncomingCallInfo(status: PhoneCallStatus.idle);
-      }
-      return success;
+      return await _channel.invokeMethod<bool>('rejectCall') ?? false;
     } catch (e) {
       debugPrint('[TelephonyService] rejectCall error: $e');
-      // Reset state on exception — call state is indeterminate after an error
-      callInfoNotifier.value =
-          const IncomingCallInfo(status: PhoneCallStatus.idle);
       return false;
     }
-  }
-
-  /// Test helper for simulating an incoming call in debug/demo
-  void simulateIncomingCall(
-      {String number = '+91 98765 43210', String name = 'John Rider'}) {
-    callInfoNotifier.value = IncomingCallInfo(
-      status: PhoneCallStatus.ringing,
-      callerNumber: number,
-      callerName: name,
-    );
-  }
-
-  /// Test helper for dismissing a simulated call
-  void simulateEndCall() {
-    callInfoNotifier.value =
-        const IncomingCallInfo(status: PhoneCallStatus.idle);
   }
 }

@@ -13,11 +13,11 @@ class MapImageException implements Exception {
   const MapImageException(this.status, this.retryAfter);
 }
 
-/// Uses the authenticated JustRide proxy. No LocationIQ credential in the app.
-class LocationIqMapImageProvider implements MapImageProvider {
+/// Uses the authenticated JustRide proxy. No Google server credential in the app.
+class GoogleMapImageProvider implements MapImageProvider {
   final http.Client client;
   final Uri endpoint;
-  LocationIqMapImageProvider(this.client, {Uri? endpoint})
+  GoogleMapImageProvider(this.client, {Uri? endpoint})
       : endpoint = endpoint ?? Uri.parse(DeviceMapConfig.endpoint);
 
   @override
@@ -35,6 +35,8 @@ class LocationIqMapImageProvider implements MapImageProvider {
       'longitude': '${center.longitude}',
       'zoom': '$zoom',
       'style': 'dark',
+      'width': '${DeviceMapConfig.width}',
+      'height': '${DeviceMapConfig.height}',
     });
     final request = http.Request('GET', uri)
       ..headers.addAll({

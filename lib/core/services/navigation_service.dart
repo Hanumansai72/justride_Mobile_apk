@@ -1,4 +1,3 @@
-import '../constants/device_map_config.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,14 +8,12 @@ import '../models/navigation_state.dart';
 import '../models/navigation_session.dart';
 import '../models/ride_state.dart';
 import '../models/ble_navigation_packet.dart';
-import '../utils/speed_filter.dart';
 import '../utils/gps_accuracy_filter.dart';
 import '../utils/maneuver_state_machine.dart';
 import '../utils/route_window_transformer.dart';
 import '../utils/off_route_detector.dart';
 import 'google_maps_service.dart';
 import 'location_service.dart';
-import 'simulator_location_service.dart';
 import 'ble_navigation_service.dart';
 import 'bluetooth_service.dart';
 import 'ride_history_service.dart';
@@ -63,6 +60,29 @@ class NavigationService {
   LatLng? _lastContextFetchPosition;
   bool _contextFetchInFlight = false;
   String _cityName = '';
+  final Map<int, Destination> _hudPois = {};
+  Map<int, Destination> get hudPois => Map.unmodifiable(_hudPois);
+  DateTime? _lastPoiPublish;
+  Future<void> _publishHudPois(LatLng rider, double heading) async {
+    for (var type = 1; type <= 2; type++) {
+      final place = _hudPois[type];
+      final distance = place == null
+          ? 0.0
+          : _calculateDistanceMeters(
+              rider, LatLng(place.latitude, place.longitude));
+      await BleNavigationService.instance.sendNavContext(NavContextPacket(
+          city: _cityName,
+          poiType: type,
+          poiDistanceMeters: distance.round(),
+          poiName: place?.displayTitle ?? '',
+          poiPoint: place == null
+              ? null
+              : RouteWindowTransformer.projectPoint(
+                  rider: rider,
+                  target: LatLng(place.latitude, place.longitude),
+                  headingDeg: heading)));
+    }
+  }
 
   // ── State ──────────────────────────────────────────────────────────────────
   NavigationState _currentState = NavigationState.idle();
@@ -79,6 +99,7 @@ class NavigationService {
   final OffRouteDetector _offRouteDetector = OffRouteDetector();
   // Arrival confirmation counter — requires 2 samples < 30m to avoid
   // triggering on a momentary GPS jump near the destination.
+  DateTime? _arrivalCandidateSince;
   int _arrivalConfirmCount = 0;
 
   // ── Ride session tracking ──────────────────────────────────────────────────
@@ -116,20 +137,26 @@ class NavigationService {
       polylinePoints: _activeRoute!.polylinePoints,
       destination: _destination!,
       minimumRouteIndex: _routeProgressIndex,
+      distanceToManeuverMeters: _currentState.maneuverDistanceMeters,
+      followingLegDistanceMeters: _currentState.nextManeuverDistanceMeters,
     );
     _routeProgressIndex = window.routeIndex;
     return window;
   }
 
   Future<void> _refreshNavContextIfNeeded(LatLng rider, double heading) async {
-    if (DeviceMapConfig.enabled ||
-        _routeLoader != null ||
+    if (_routeLoader != null ||
         _contextFetchInFlight ||
         !_isNavigating ||
         _activeRoute == null) {
       return;
     }
     final now = DateTime.now();
+    if (_lastPoiPublish == null ||
+        now.difference(_lastPoiPublish!) >= const Duration(seconds: 5)) {
+      _lastPoiPublish = now;
+      unawaited(_publishHudPois(rider, heading));
+    }
     final moved = _lastContextFetchPosition == null
         ? double.infinity
         : _calculateDistanceMeters(_lastContextFetchPosition!, rider);
@@ -152,12 +179,10 @@ class NavigationService {
         GoogleMapsService.instance.searchPlaces('petrol station'),
         GoogleMapsService.instance.searchPlaces('motorcycle repair'),
       ]);
-      Destination? best;
-      var bestType = 0;
-      var bestDistance = 0.0;
-      var bestScore = double.infinity;
+      final selected = <int, Destination>{};
       final points = route.polylinePoints;
       for (var type = 1; type <= 2; type++) {
+        var bestScore = double.infinity;
         for (final place in results[type - 1]) {
           final location = LatLng(place.latitude, place.longitude);
           final riderDistance = _calculateDistanceMeters(rider, location);
@@ -176,28 +201,16 @@ class NavigationService {
           }
           final score = riderDistance + routeDistance + (type == 1 ? 0 : 100);
           if (score < bestScore) {
-            best = place;
-            bestType = type;
-            bestDistance = riderDistance;
+            selected[type] = place;
             bestScore = score;
           }
         }
       }
       if (!_isNavigating || !identical(_activeRoute, route)) return;
-      final poiPoint = best != null && bestDistance <= 300
-          ? RouteWindowTransformer.projectPoint(
-              rider: rider,
-              target: LatLng(best.latitude, best.longitude),
-              headingDeg: heading,
-            )
-          : null;
-      await BleNavigationService.instance.sendNavContext(NavContextPacket(
-        city: _cityName,
-        poiType: bestType,
-        poiDistanceMeters: bestDistance.round(),
-        poiName: best?.displayTitle ?? '',
-        poiPoint: poiPoint,
-      ));
+      _hudPois
+        ..clear()
+        ..addAll(selected);
+      await _publishHudPois(rider, heading);
     } catch (e) {
       debugPrint('[NavService] Optional city/POI lookup failed: $e');
     } finally {
@@ -298,6 +311,7 @@ class NavigationService {
 
       _activeRoute = route;
       _routeProgressIndex = 0;
+      _hudPois.clear();
       _lastContextFetchAt = null;
       _currentStepIndex = 0;
       _isNavigating = true;
@@ -307,6 +321,7 @@ class NavigationService {
       _rerouteFailures = 0;
       _nextRerouteAllowedAt = null;
       _offRouteDetector.reset();
+      _arrivalCandidateSince = null;
       _arrivalConfirmCount = 0;
 
       activeRouteNotifier.value = route;
@@ -329,8 +344,7 @@ class NavigationService {
 
       // 5. Build initial NavigationState
       //    Speed MUST be 0.0 via SpeedFilter — do NOT multiply pos.speed blindly.
-      final initialSpeed =
-          SpeedFilter.toKmh(currentPos.speed.clamp(0.0, 300.0));
+      final initialSpeed = LocationService.instance.lastSpeedKmh;
       final firstStep = route.steps[0];
       final nextStep = route.steps.length > 1 ? route.steps[1] : null;
       final bleOk = JustRideBleService.instance.isDeviceConnected;
@@ -542,19 +556,24 @@ class NavigationService {
       _sessionSpeedSamples++;
     }
 
-    // 1. Arrival detection: require 2 consecutive samples within 30m to
+    // 1. Arrival requires the final route segment, slow speed and a five-second dwell to
     //    avoid false arrival from GPS noise near the destination.
     final distanceToFinalDest =
         _calculateDistanceMeters(riderLatLng, _destination!);
     if (distanceToFinalDest <= 30.0 &&
         pos.accuracy <= 25 &&
-        _currentStepIndex >= _activeRoute!.steps.length - 2) {
+        currentSpeed <= 10 &&
+        _currentStepIndex == _activeRoute!.steps.length - 1 &&
+        _remainingStepDistance(riderLatLng, _activeRoute!.steps.last) <= 25) {
+      _arrivalCandidateSince ??= pos.timestamp;
       _arrivalConfirmCount++;
-      if (_arrivalConfirmCount >= 2) {
+      if (_arrivalConfirmCount >= 5 &&
+          pos.timestamp.difference(_arrivalCandidateSince!).inSeconds >= 5) {
         _onArrived(pos, bleConnected);
         return;
       }
     } else {
+      _arrivalCandidateSince = null;
       _arrivalConfirmCount = 0;
     }
 
@@ -568,6 +587,8 @@ class NavigationService {
       riderHeading: currentHeading,
       steps: steps,
       riderSpeedKmh: currentSpeed,
+      remainingAlongRouteMeters: _remainingStepDistance(
+          riderLatLng, steps[_currentStepIndex.clamp(0, steps.length - 1)]),
     );
 
     _currentStepIndex = _maneuverFsm.activeStepIndex.clamp(0, steps.length - 1);
@@ -672,31 +693,13 @@ class NavigationService {
       }
     }
 
-    // Section 29: Synchronize canonical maneuver state with simulator if active,
-    // or rely on local ManeuverStateMachine on real phone GPS.
-    final simPacket =
-        LocationService.instance.locationSource == LocationSource.simulator
-            ? SimulatorLocationService.instance.latestPacketNotifier.value
-            : null;
-
-    final String effectiveManeuver =
-        simPacket != null && simPacket.maneuver.isNotEmpty
-            ? simPacket.maneuver
-            : _maneuverFsm.displayManeuver;
-    final int effectiveManeuverId =
-        simPacket != null && simPacket.maneuverId > 0
-            ? simPacket.maneuverId
-            : (_currentStepIndex + 1);
-    final String effectiveManeuverState =
-        simPacket != null && simPacket.maneuverState != 'NONE'
-            ? simPacket.maneuverState
-            : _maneuverFsm.maneuverStateString;
+    final String effectiveManeuver = _maneuverFsm.displayManeuver;
+    final int effectiveManeuverId = _currentStepIndex + 1;
+    final String effectiveManeuverState = _maneuverFsm.maneuverStateString;
     double effectiveManeuverDist =
-        simPacket != null && simPacket.maneuverDistance > 0
-            ? simPacket.maneuverDistance
-            : (_maneuverFsm.stage == ManeuverStage.turning && distToTurn <= 10
-                ? 0.0
-                : distToTurn);
+        _maneuverFsm.stage == ManeuverStage.turning && distToTurn <= 10
+            ? 0.0
+            : distToTurn;
 
     // 8. Determine ride state: STATIONARY when speed < 3.0 km/h
     final RideState activeRideState;
@@ -712,8 +715,7 @@ class NavigationService {
     // When parked or stopped at a signal, GPS coordinates drift by ±2-5m.
     // Freeze distance to prevent the HUD/app numbers from jumping around.
     if (activeRideState == RideState.stationary &&
-        _currentState.maneuverDistanceMeters > 0 &&
-        simPacket == null) {
+        _currentState.maneuverDistanceMeters > 0) {
       final prevLat = previousPos?.latitude ?? pos.latitude;
       final prevLng = previousPos?.longitude ?? pos.longitude;
       final driftMeters = Geolocator.distanceBetween(
@@ -727,6 +729,8 @@ class NavigationService {
         remainingDist = _currentState.remainingDistanceMeters;
       }
     }
+
+    final maneuverChanged = _currentState.maneuverId != effectiveManeuverId;
 
     // 9. Update NavigationState — single source of truth
     _currentState = NavigationState(
@@ -758,7 +762,7 @@ class NavigationService {
     unawaited(_refreshNavContextIfNeeded(riderLatLng, activeHeading));
 
     // 10. Update the map window as the rider moves or rotates at an intersection.
-    // Eight metres makes the pointer visibly follow low-speed city travel without flooding BLE.
+    // Refresh the display after 3 m of GPS movement or a new current maneuver.
     // 15 degrees heading change rotates the displayed road geometry to match rider perspective.
     final double headingDelta = _lastTransmittedRouteWindowHeading == null
         ? 360.0
@@ -772,7 +776,9 @@ class NavigationService {
             riderLatLng.longitude,
           );
 
-    if (distDelta >= 8.0 || (headingDelta >= 15.0 && headingDelta <= 345.0)) {
+    if (maneuverChanged ||
+        distDelta >= 3.0 ||
+        (headingDelta >= 15.0 && headingDelta <= 345.0)) {
       _lastTransmittedRouteWindowRiderPos = riderLatLng;
       _lastTransmittedRouteWindowHeading = activeHeading;
       final window = _routeWindow(riderLatLng, activeHeading);
@@ -868,6 +874,7 @@ class NavigationService {
         _rerouteFailures = 0;
         _activeRoute = newRoute;
         _routeProgressIndex = 0;
+        _hudPois.clear();
         _lastContextFetchAt = null;
         _currentStepIndex = 0;
         final firstStep = newRoute.steps[0];
@@ -1083,6 +1090,7 @@ class NavigationService {
     _paused = false;
     _isNavigating = false;
     _routeProgressIndex = 0;
+    _hudPois.clear();
     _lastContextFetchAt = null;
     _cityName = '';
     _isRerouting = false;

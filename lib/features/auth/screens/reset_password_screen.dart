@@ -93,8 +93,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             children: [
               IconButton(
                 onPressed: () {},
-                icon: const Icon(Icons.menu_rounded,
-                    color: _C.textSec, size: 24),
+                icon:
+                    const Icon(Icons.menu_rounded, color: _C.textSec, size: 24),
               ),
               // AppLogo identical to all other screens
               const AppLogo(
@@ -336,11 +336,15 @@ class _PasswordFieldState extends State<_PasswordField> {
                 controller: widget.controller,
                 obscureText: widget.obscure,
                 onChanged: widget.onChanged,
-                style: GoogleFonts.inter(fontSize: 16, color: _C.onSurface),
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
+                    fontSize: 16,
+                    color: _C.onSurface),
                 cursorColor: _C.primary,
                 decoration: InputDecoration(
                   hintText: widget.hint,
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 16,
                     color: _C.textSec.withValues(alpha: 0.4),
                   ),
@@ -383,8 +387,7 @@ class _StrengthBar extends StatelessWidget {
             margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
             decoration: BoxDecoration(
               color: active ? _C.primary : _C.surfaceVariant,
-              borderRadius:
-                  BorderRadius.circular(AppConstants.radiusCircle),
+              borderRadius: BorderRadius.circular(AppConstants.radiusCircle),
             ),
           ),
         );
@@ -434,12 +437,12 @@ class _ResetButtonState extends State<_ResetButton> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.refresh_rounded,
-                  color: _C.onPrimary, size: 20),
+              const Icon(Icons.refresh_rounded, color: _C.onPrimary, size: 20),
               const SizedBox(width: AppConstants.spacingSm),
               Text(
                 'Reset Password',
-                style: GoogleFonts.poppins(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: _C.onPrimary,

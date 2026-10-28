@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import '../../../core/services/notification_listener_service.dart';
+import '../widgets/sensor_status_card.dart';
 import '../../../shared/widgets/contextual_help_button.dart';
 import '../../../app/theme/app_colors.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -211,6 +214,41 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
           ),
           const SizedBox(height: AppConstants.spacingMd),
 
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+            ValueListenableBuilder<bool>(
+                valueListenable: JustRideBleService.instance.companionEnabled,
+                builder: (context, enabled, _) => SwitchListTile(
+                    title: const Text('Connect when device powers on'),
+                    subtitle: const Text('Reconnect without opening JustRide'),
+                    value: enabled,
+                    onChanged: (value) async {
+                      if (!value) {
+                        await JustRideBleService.instance.disableCompanion();
+                        return;
+                      }
+                      final ok =
+                          await JustRideBleService.instance.enableCompanion();
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(JustRideBleService
+                                    .instance.companionError.value ??
+                                'Pair your JustRide device first')));
+                      }
+                    })),
+          ValueListenableBuilder<bool>(
+              valueListenable:
+                  NotificationListenerService.instance.displayEnabled,
+              builder: (context, enabled, _) => SwitchListTile(
+                  title: const Text('Notifications on device'),
+                  subtitle:
+                      const Text('Show phone notifications for 2 seconds'),
+                  value: enabled,
+                  onChanged: (value) => NotificationListenerService.instance
+                      .setDisplayEnabled(value))),
+          const SizedBox(height: AppConstants.spacingMd),
+          const SensorStatusCard(),
+          const SizedBox(height: AppConstants.spacingMd),
+
           // Hardware Diagnostics Section (Bluetooth, GPS, Display, Battery)
           const _HardwareDiagnosticsCard(),
           const SizedBox(height: AppConstants.spacingMd),
@@ -246,7 +284,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
             const SizedBox(width: 8),
             Text(
               'Restart Device?',
-              style: GoogleFonts.inter(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
@@ -256,12 +295,15 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
         ),
         content: Text(
           'This will restart the JustRide motorcycle cockpit HUD display.',
-          style: GoogleFonts.inter(color: _SC.textSec, fontSize: 14),
+          style: TextStyle(
+              fontFamily: 'Stack Sans Text', color: _SC.textSec, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('CANCEL', style: GoogleFonts.inter(color: _SC.textSec)),
+            child: Text('CANCEL',
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text', color: _SC.textSec)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -285,7 +327,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
             ),
             child: Text(
               'RESTART',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+              style: TextStyle(
+                  fontFamily: 'Stack Sans Text', fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -309,7 +352,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
             const SizedBox(width: 8),
             Text(
               'Reset to Defaults?',
-              style: GoogleFonts.inter(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
@@ -319,12 +363,15 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
         ),
         content: Text(
           'This will reset the HUD display brightness (70%), recenter navigation camera, and return to Home screen.',
-          style: GoogleFonts.inter(color: _SC.textSec, fontSize: 14),
+          style: TextStyle(
+              fontFamily: 'Stack Sans Text', color: _SC.textSec, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('CANCEL', style: GoogleFonts.inter(color: _SC.textSec)),
+            child: Text('CANCEL',
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text', color: _SC.textSec)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -348,7 +395,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
             ),
             child: Text(
               'RESET',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+              style: TextStyle(
+                  fontFamily: 'Stack Sans Text', fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -361,6 +409,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
 class _DeviceIdentityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final ble = JustRideBleService.instance;
+    final device = ble.connectedDevice;
     return Container(
       decoration: BoxDecoration(
         color: _SC.cardBg,
@@ -416,16 +466,18 @@ class _DeviceIdentityCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'JustRide HUD',
+                            device?.platformName.isNotEmpty == true
+                                ? device!.platformName
+                                : 'JustRide device',
                             style: AppTextStyles.headingMedium.copyWith(
                               color: AppColors.textPrimary,
                               fontSize: 20,
                             ),
                           ),
                           const SizedBox(height: 6),
-                          _LabelCaps(text: 'SERIAL: JR-A7F3K9'),
-                          const SizedBox(height: 2),
-                          _LabelCaps(text: 'FIRMWARE: v2.1.0'),
+                          _LabelCaps(
+                              text:
+                                  'BLE: ${device?.remoteId.str ?? 'Unavailable'}'),
                         ],
                       ),
                     ),
@@ -450,18 +502,13 @@ class _DeviceIdentityCard extends StatelessWidget {
                         children: [
                           _PulsingDot(),
                           const SizedBox(width: 6),
-                          _LabelCaps(text: 'CONNECTED', color: _SC.primary),
+                          _LabelCaps(
+                              text: ble.isDeviceConnected
+                                  ? 'CONNECTED'
+                                  : 'DISCONNECTED',
+                              color: _SC.primary),
                         ],
                       ),
-                    ),
-                    // Battery
-                    Row(
-                      children: [
-                        const Icon(Icons.battery_full_rounded,
-                            color: _SC.textSec, size: 16),
-                        const SizedBox(width: 4),
-                        _LabelCaps(text: '98%'),
-                      ],
                     ),
                   ],
                 ),
@@ -767,8 +814,8 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
         JustRideOtaService.instance.progressNotifier.value = OtaProgress(
           state: OtaState.failed,
           progress: 0.0,
-          statusMessage: 'Firmware file missing',
-          error: 'Could not load firmware binary: $err',
+          statusMessage: 'Update unavailable',
+          error: 'Unable to prepare the update. Restart the app and try again.',
         );
       }
     }();
@@ -995,7 +1042,8 @@ class _GlowButton extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: GoogleFonts.poppins(
+          style: TextStyle(
+            fontFamily: 'Stack Sans Text',
             fontSize: 14,
             fontWeight: FontWeight.w700,
             color: _SC.onPrimary,
@@ -1143,7 +1191,8 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
                     children: [
                       Text(
                         'Hardware Diagnostics',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
@@ -1153,7 +1202,8 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
                         _lastTested == null
                             ? 'Bluetooth, GPS, Display, Battery'
                             : 'Last tested just now',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
                           color: _SC.textSec,
                           fontSize: 12,
                         ),
@@ -1188,7 +1238,8 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
                           const SizedBox(width: 4),
                           Text(
                             'Self-Test',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
@@ -1263,7 +1314,8 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
@@ -1272,7 +1324,8 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
                 const SizedBox(height: 2),
                 Text(
                   statusText,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     color: _SC.textSec,
                     fontSize: 11,
                   ),

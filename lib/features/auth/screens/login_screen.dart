@@ -49,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isGoogleLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Unable to sign in with Google. Please try again.'),
           backgroundColor: AppColors.error,
         ),
       );

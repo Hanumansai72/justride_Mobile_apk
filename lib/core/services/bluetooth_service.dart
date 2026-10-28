@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -7,13 +8,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Senior-Grade Real-Time Bluetooth Service for JustRide HUD and IoT hardware.
 /// - Continuously re-scans for JustRide devices.
 /// - Strictly filters: ONLY devices with "justride" in their name are shown.
-/// - On connect: immediately writes phone real-time (HH:MM:SS) to firmware GATT CTS (0x1805 / 0x2A2B).
+/// - On connect: writes the full local calendar and clock to GATT CTS (0x1805 / 0x2A2B).
 /// - On disconnect / device reset: detects disconnection, cancels timers, clears state,
 ///   and immediately restarts scanning so the device shows as available again.
 /// - Full reconnect support with live status logging.
 class JustRideBleService {
   JustRideBleService._();
   static final JustRideBleService instance = JustRideBleService._();
+
+  /// Bluetooth SIG Current Time: year LE, date, clock, weekday, fraction, reason.
+  @visibleForTesting
+  static List<int> encodeCurrentTime(DateTime now) => [
+        now.year & 0xff,
+        (now.year >> 8) & 0xff,
+        now.month,
+        now.day,
+        now.hour,
+        now.minute,
+        now.second,
+        now.weekday,
+        0,
+        1,
+      ];
 
   // ─── Internal state ──────────────────────────────────────────────────────────
   StreamSubscription<List<ScanResult>>? _scanSub;
@@ -28,8 +44,150 @@ class JustRideBleService {
   bool _isReconnecting = false;
   bool _isSyncingTime = false;
   bool _disposed = false;
+  bool _initialized = false;
+  bool _startingScan = false;
+  Future<bool>? _connectionAttempt;
+  String? _connectionTarget;
   // true only when the user explicitly pressed Disconnect – suppresses auto-reconnect
   bool _userInitiatedDisconnect = false;
+
+  static const _companion = MethodChannel('com.justride.app/companion');
+  static const _companionSetup =
+      MethodChannel('com.justride.app/companion_setup');
+  final companionEnabled = ValueNotifier<bool>(false);
+  final companionSupported = ValueNotifier<bool>(false);
+  final companionError = ValueNotifier<String?>(null);
+  bool _companionReady = false, _appVisible = true, _devicePresent = false;
+  bool Function() _authenticated = () => false;
+  bool get _android =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _mayScan => !_android || (_companionReady && _appVisible);
+  bool get isAppVisible => _appVisible;
+
+  Future<void> initializeCompanion(
+      {required Future<void> Function() onShowApp,
+      required bool Function() authenticated}) async {
+    _authenticated = authenticated;
+    if (!_android) {
+      _companionReady = true;
+      return;
+    }
+    Future<void> apply(Map<dynamic, dynamic> state) async {
+      companionEnabled.value = state['enabled'] == true;
+      companionSupported.value = state['supported'] == true;
+      _appVisible = state['visible'] == true;
+      _devicePresent = state['present'] == true;
+      _userInitiatedDisconnect = state['paused'] == true;
+      _companionReady = true;
+      if (_appVisible) await onShowApp();
+      if (!_appVisible) await stopScan();
+      if (companionEnabled.value &&
+          _devicePresent &&
+          !_userInitiatedDisconnect &&
+          _autoReconnectEnabled &&
+          authenticated() &&
+          !isDeviceConnected) {
+        final address = state['address']?.toString();
+        if (address != null && address.isNotEmpty) {
+          unawaited(_connectCompanion(address));
+        }
+      } else if (_appVisible &&
+          authenticated() &&
+          !isDeviceConnected &&
+          !_userInitiatedDisconnect) {
+        final address = await loadSavedBleAddress();
+        if (address != null &&
+            _autoReconnectEnabled &&
+            !_userInitiatedDisconnect &&
+            authenticated()) {
+          unawaited(reconnect(targetBleAddress: address));
+        } else {
+          unawaited(_startOneScan());
+        }
+      }
+    }
+
+    _companion.setMethodCallHandler((call) async {
+      if (call.method == 'state') {
+        await apply(Map<dynamic, dynamic>.from(call.arguments as Map));
+      }
+    });
+    try {
+      await apply(
+          await _companion.invokeMapMethod<dynamic, dynamic>('ready') ?? {});
+    } on MissingPluginException {
+      // Older installed native shell / unsupported host: foreground BLE still works.
+      _companionReady = true;
+    } catch (e) {
+      companionError.value = 'Background connection setup unavailable';
+      _companionReady = true;
+    }
+  }
+
+  Future<void> _connectCompanion(String address) async {
+    if (!_authenticated() ||
+        _userInitiatedDisconnect ||
+        !companionEnabled.value ||
+        !_devicePresent ||
+        _disposed ||
+        !_autoReconnectEnabled ||
+        isDeviceConnected ||
+        adapterStateNotifier.value != BluetoothAdapterState.on) {
+      return;
+    }
+    if (_lastConnectedDeviceId == null) await loadSavedBleAddress();
+    if (!_authenticated() ||
+        _userInitiatedDisconnect ||
+        !companionEnabled.value) {
+      return;
+    }
+    if (_normalizeMac(address) != _normalizeMac(_lastConnectedDeviceId ?? '')) {
+      return;
+    }
+    await connectDevice(BluetoothDevice.fromId(address),
+        configureCompanion: false);
+  }
+
+  Future<bool> enableCompanion({bool prompt = true, String? address}) async {
+    if (!_android) return false;
+    final target = address ?? await loadSavedBleAddress();
+    if (target == null) return false;
+    // Existing installs may already have a GATT connection. Android's approval
+    // scan needs the device advertising, so briefly release that link first.
+    final reconnect = prompt && isDeviceConnected && !companionEnabled.value;
+    final device = reconnect ? _connectedDevice : null;
+    if (reconnect) await disconnectDevice(restartScan: false);
+    try {
+      companionError.value = null;
+      final state = await _companionSetup.invokeMapMethod<dynamic, dynamic>(
+          'enable', {'address': target, 'prompt': prompt});
+      companionEnabled.value = state?['enabled'] == true;
+      companionSupported.value = state?['supported'] == true;
+      return companionEnabled.value;
+    } catch (e) {
+      companionError.value =
+          'Unable to set up background connection. Please try again.';
+      return false;
+    } finally {
+      if (device != null && _authenticated()) {
+        await connectDevice(device, configureCompanion: false);
+      }
+    }
+  }
+
+  Future<void> disableCompanion({bool forgetDevice = false}) async {
+    _userInitiatedDisconnect = true;
+    _devicePresent = false;
+    companionEnabled.value = false;
+    _cancelRescan();
+    if (_android) {
+      try {
+        await _companion.invokeMethod<void>('disable');
+      } catch (_) {}
+    }
+    if (forgetDevice) _lastConnectedDeviceId = null;
+    await disconnectDevice(restartScan: false);
+  }
 
   // ─── JustRide device identity ─────────────────────────────────────────────────
   // Firmware advertises name as 'JUSTRIDE' (all caps). Used for name-based scan filter.
@@ -60,6 +218,8 @@ class JustRideBleService {
   // INIT – call once from screen initState or app startup
   // =========================================================================
   void init() {
+    if (_initialized && !_disposed) return;
+    _initialized = true;
     _disposed = false;
 
     // Preload verified saved MAC address from storage for instant recognition
@@ -68,7 +228,17 @@ class JustRideBleService {
     _adapterSub?.cancel();
     _adapterSub = FlutterBluePlus.adapterState.listen((state) {
       adapterStateNotifier.value = state;
+      if (state == BluetoothAdapterState.off) {
+        connectionStateNotifier.value = BluetoothConnectionState.disconnected;
+      }
+      if (state == BluetoothAdapterState.on &&
+          companionEnabled.value &&
+          _devicePresent) {
+        final address = _lastConnectedDeviceId;
+        if (address != null) unawaited(_connectCompanion(address));
+      }
       if (!kIsWeb &&
+          _mayScan &&
           state == BluetoothAdapterState.on &&
           !FlutterBluePlus.isScanningNow) {
         _startOneScan();
@@ -78,7 +248,11 @@ class JustRideBleService {
     _isScanSub?.cancel();
     _isScanSub = FlutterBluePlus.isScanning.listen((scanning) {
       isScanningNotifier.value = scanning;
-      if (!kIsWeb && !scanning && !_disposed && _connectedDevice == null) {
+      if (!kIsWeb &&
+          _mayScan &&
+          !scanning &&
+          !_disposed &&
+          _connectedDevice == null) {
         // 2s pause between scans prevents Android BLE scan throttling (5 scans per 30s limit)
         _scheduleRescan(delay: const Duration(seconds: 2));
       }
@@ -103,63 +277,91 @@ class JustRideBleService {
   // INTERNAL: Fire one scan window and listen for results
   // =========================================================================
   Future<void> _startOneScan() async {
-    if (_disposed) return;
+    if (_disposed ||
+        !_mayScan ||
+        _connectionAttempt != null ||
+        isDeviceConnected ||
+        _startingScan ||
+        FlutterBluePlus.isScanningNow) {
+      return;
+    }
+    _startingScan = true;
+    try {
+      await loadSavedBleAddress();
+      if (_disposed ||
+          !_mayScan ||
+          _connectionAttempt != null ||
+          isDeviceConnected) return;
 
-    await _safeStopScan();
+      _scanSub?.cancel();
+      _scanSub = FlutterBluePlus.scanResults.listen(
+        (results) {
+          if (_disposed) return;
+          final Map<String, ScanResult> uniqueMap = {};
+          for (final r in results) {
+            // Accept the device if: (a) name matches 'JUSTRIDE', OR
+            // (b) the MAC matches our saved paired device (handles empty advName on Android 12+)
+            if (_isJustRideResult(r)) {
+              uniqueMap[r.device.remoteId.str] = r;
 
-    _scanSub?.cancel();
-    _scanSub = FlutterBluePlus.scanResults.listen(
-      (results) {
-        if (_disposed) return;
-        final Map<String, ScanResult> uniqueMap = {};
-        for (final r in results) {
-          // Accept the device if: (a) name matches 'JUSTRIDE', OR
-          // (b) the MAC matches our saved paired device (handles empty advName on Android 12+)
-          if (_isJustRideResult(r)) {
-            uniqueMap[r.device.remoteId.str] = r;
-
-            // Auto-reconnect if this was our previously connected device
-            // BUT ONLY if the user didn't explicitly disconnect
-            if (_autoReconnectEnabled &&
-                !_userInitiatedDisconnect &&
-                _lastConnectedDeviceId != null &&
-                _normalizeMac(r.device.remoteId.str) ==
-                    _normalizeMac(_lastConnectedDeviceId!) &&
-                _connectedDevice == null &&
-                !_isReconnecting) {
-              debugPrint(
-                  '[BLE] Re-discovered previously paired device ${r.device.remoteId.str}! Auto-reconnecting...');
-              _isReconnecting = true;
-              connectDevice(r.device).then((_) {
-                _isReconnecting = false;
-              });
+              // Auto-reconnect if this was our previously connected device
+              // BUT ONLY if the user didn't explicitly disconnect
+              if (_autoReconnectEnabled &&
+                  _authenticated() &&
+                  !_userInitiatedDisconnect &&
+                  _lastConnectedDeviceId != null &&
+                  _normalizeMac(r.device.remoteId.str) ==
+                      _normalizeMac(_lastConnectedDeviceId!) &&
+                  _connectedDevice == null &&
+                  !_isReconnecting) {
+                debugPrint(
+                    '[BLE] Re-discovered previously paired device ${r.device.remoteId.str}! Auto-reconnecting...');
+                _isReconnecting = true;
+                connectDevice(r.device, configureCompanion: false).then((_) {
+                  _isReconnecting = false;
+                });
+              }
             }
           }
-        }
-        final newList = uniqueMap.values.toList();
-        if (!_listEquals(justRideDevicesNotifier.value, newList)) {
-          justRideDevicesNotifier.value = newList;
-        }
-      },
-      onError: (e) => debugPrint('[BLE] Scan error: $e'),
-    );
-
-    try {
-      await FlutterBluePlus.startScan(
-        withNames: kIsWeb ? [_kDeviceName] : [],
-        webOptionalServices: kIsWeb
-            ? [Guid('1805'), Guid('180f'), Guid('ff10'), Guid('ff30')]
-            : [],
-        timeout: _kScanWindow,
-        androidUsesFineLocation: false,
+          final newList = uniqueMap.values.toList();
+          if (!_listEquals(justRideDevicesNotifier.value, newList)) {
+            justRideDevicesNotifier.value = newList;
+          }
+        },
+        onError: (e) => debugPrint('[BLE] Scan error: $e'),
       );
-    } catch (e) {
-      debugPrint('[BLE] startScan error: $e');
+
+      try {
+        await FlutterBluePlus.startScan(
+          withNames: kIsWeb ? [_kDeviceName] : [],
+          webOptionalServices: kIsWeb
+              ? [Guid('1805'), Guid('180f'), Guid('ff10'), Guid('ff30')]
+              : [],
+          timeout: _kScanWindow,
+          androidUsesFineLocation: false,
+        );
+      } catch (e) {
+        debugPrint('[BLE] startScan error: $e');
+      }
+    } finally {
+      _startingScan = false;
     }
   }
 
   void _scheduleRescan({Duration delay = const Duration(seconds: 1)}) {
     if (kIsWeb) return;
+    if (!_mayScan) {
+      _rescanTimer?.cancel();
+      final address = _lastConnectedDeviceId;
+      if (companionEnabled.value &&
+          _devicePresent &&
+          address != null &&
+          !_userInitiatedDisconnect) {
+        _rescanTimer =
+            Timer(const Duration(seconds: 5), () => _connectCompanion(address));
+      }
+      return;
+    }
     _rescanTimer?.cancel();
     _rescanTimer = Timer(delay, () {
       if (!_disposed && _connectedDevice == null) _startOneScan();
@@ -198,6 +400,36 @@ class JustRideBleService {
   Future<bool> connectDevice(
     BluetoothDevice device, {
     Duration timeout = const Duration(seconds: 20),
+    bool configureCompanion = true,
+  }) async {
+    final id = device.remoteId.str;
+    final pending = _connectionAttempt;
+    if (pending != null) {
+      if (_connectionTarget == id) return await pending;
+      return false;
+    }
+    if (_connectedDevice?.remoteId == device.remoteId && device.isConnected) {
+      return true;
+    }
+    _userInitiatedDisconnect = false;
+    _connectionTarget = id;
+    final attempt = _connectDevice(device,
+        timeout: timeout, configureCompanion: configureCompanion);
+    _connectionAttempt = attempt;
+    try {
+      return await attempt;
+    } finally {
+      if (identical(_connectionAttempt, attempt)) {
+        _connectionAttempt = null;
+        _connectionTarget = null;
+      }
+    }
+  }
+
+  Future<bool> _connectDevice(
+    BluetoothDevice device, {
+    required Duration timeout,
+    required bool configureCompanion,
   }) async {
     try {
       debugPrint(
@@ -206,6 +438,16 @@ class JustRideBleService {
 
       // Stop any running scan before connecting (vital for Android GATT stability)
       await stopScan();
+      if (_android && configureCompanion && _appVisible) {
+        try {
+          await _companion.invokeMethod<void>('resume');
+        } catch (_) {}
+        // Approve while advertising, before establishing the GATT connection.
+        await enableCompanion(prompt: false, address: device.remoteId.str);
+      }
+      if (_userInitiatedDisconnect || _disposed) {
+        throw StateError('Connection cancelled');
+      }
       await Future.delayed(const Duration(milliseconds: 150));
 
       // Guard: only treat as disconnection if the device was actually connected
@@ -214,14 +456,12 @@ class JustRideBleService {
       _connectionStateSub = device.connectionState.listen((state) {
         debugPrint(
             '[BLE] Connection state for ${device.remoteId.str} -> $state');
-        connectionStateNotifier.value = state;
-
         if (state == BluetoothConnectionState.connected) {
           wasConnected = true;
           _connectedDevice = device;
-          _lastConnectedDeviceId = device.remoteId.str;
           lastBleErrorNotifier.value = null;
         } else if (state == BluetoothConnectionState.disconnected) {
+          connectionStateNotifier.value = state;
           if (wasConnected) {
             wasConnected = false;
             final errStr =
@@ -231,7 +471,8 @@ class JustRideBleService {
             _timeSyncTimer?.cancel();
             _timeSyncTimer = null;
             if (!_userInitiatedDisconnect) {
-              lastBleErrorNotifier.value = errStr;
+              lastBleErrorNotifier.value =
+                  'Your JustRide device disconnected. Keep it nearby and powered on.';
             }
 
             // Automatically restart scan so the device appears as available again in UI
@@ -248,7 +489,11 @@ class JustRideBleService {
         license: License.nonprofit,
         timeout: timeout,
         autoConnect: false,
+        mtu: null, // Negotiate once below, after the link is established.
       );
+      if (_userInitiatedDisconnect || _disposed) {
+        throw StateError('Connection cancelled');
+      }
 
       // Request high priority connection for responsive link
       try {
@@ -271,17 +516,16 @@ class JustRideBleService {
       await Future.delayed(const Duration(milliseconds: 200));
 
       // 2. Discover all GATT services once sequentially so servicesList is complete
-      try {
-        final svcs = await device.discoverServices();
-        debugPrint(
-            '[BLE] ✓ Discovered ${svcs.length} GATT services on ${device.remoteId.str}');
-      } catch (e) {
-        debugPrint('[BLE] Initial discoverServices error: $e');
-      }
+      final svcs = await device.discoverServices();
+      if (svcs.isEmpty) throw StateError('No GATT services discovered');
+      debugPrint(
+          '[BLE] ✓ Discovered ${svcs.length} GATT services on ${device.remoteId.str}');
 
+      if (_userInitiatedDisconnect || _disposed || !device.isConnected) {
+        throw StateError('Connection no longer active');
+      }
       _connectedDevice = device;
       _lastConnectedDeviceId = device.remoteId.str;
-      connectionStateNotifier.value = BluetoothConnectionState.connected;
       lastBleErrorNotifier.value = null;
       debugPrint('[BLE] ✓ Successfully connected to ${device.remoteId.str}');
 
@@ -294,6 +538,10 @@ class JustRideBleService {
 
       // Complete the first clock write immediately
       await syncCurrentTime(device);
+      if (_userInitiatedDisconnect || _disposed || !device.isConnected) {
+        throw StateError('Connection no longer active');
+      }
+      connectionStateNotifier.value = BluetoothConnectionState.connected;
 
       // Periodic time sync every 60 seconds while device stays connected
       _timeSyncTimer?.cancel();
@@ -306,7 +554,8 @@ class JustRideBleService {
     } catch (e) {
       final err = 'Connect failed for ${device.remoteId.str}: $e';
       debugPrint('[BLE] $err');
-      lastBleErrorNotifier.value = err;
+      lastBleErrorNotifier.value =
+          'Unable to connect. Keep your device nearby and powered on, then try again.';
       try {
         await device.disconnect();
       } catch (_) {}
@@ -460,7 +709,8 @@ class JustRideBleService {
               ? 'Could not find device ($target). Ensure the JustRide display is powered on and within range.'
               : 'Could not find any JustRide device nearby. Ensure the display is powered on.';
           debugPrint('[BLE] Reconnect scan timed out: $diag');
-          lastBleErrorNotifier.value = diag;
+          lastBleErrorNotifier.value =
+              'No JustRide device found. Check that your device is nearby and powered on.';
           completer.complete(false);
         }
       });
@@ -513,7 +763,8 @@ class JustRideBleService {
     } catch (e) {
       final msg = 'Reconnect error: $e';
       debugPrint('[BLE] $msg');
-      lastBleErrorNotifier.value = msg;
+      lastBleErrorNotifier.value =
+          'Unable to reconnect. Check Bluetooth and try again.';
       return false;
     } finally {
       _isReconnecting = false;
@@ -567,6 +818,11 @@ class JustRideBleService {
   /// Sets _userInitiatedDisconnect = true so auto-reconnect is suppressed.
   Future<void> disconnectDevice({bool restartScan = true}) async {
     _userInitiatedDisconnect = true; // suppress auto-reconnect
+    if (_android) {
+      try {
+        await _companion.invokeMethod<void>('pause');
+      } catch (_) {}
+    }
     _isReconnecting = false;
     try {
       _timeSyncTimer?.cancel();
@@ -592,7 +848,11 @@ class JustRideBleService {
     }
   }
 
-  bool get isDeviceConnected => _connectedDevice != null;
+  bool get isDeviceConnected =>
+      connectionStateNotifier.value == BluetoothConnectionState.connected &&
+      _connectedDevice?.isConnected == true;
+  Future<bool> waitForConnectionReady() =>
+      _connectionAttempt ?? Future<bool>.value(isDeviceConnected);
   BluetoothDevice? get connectedDevice => _connectedDevice;
   String? get lastConnectedDeviceId => _lastConnectedDeviceId;
 
@@ -640,6 +900,7 @@ class JustRideBleService {
       }
 
       final now = DateTime.now();
+      final timePacket = encodeCurrentTime(now);
       final timeStr = '${now.hour.toString().padLeft(2, '0')}:'
           '${now.minute.toString().padLeft(2, '0')}:'
           '${now.second.toString().padLeft(2, '0')}';
@@ -648,7 +909,7 @@ class JustRideBleService {
       bool writeSucceeded = false;
       try {
         await timeChr.write(
-          utf8.encode(timeStr),
+          timePacket,
           withoutResponse: false,
         );
         writeSucceeded = true;
@@ -657,7 +918,7 @@ class JustRideBleService {
             '[BLE] Confirmed CTS write failed: $e1. Retrying with writeWithoutResponse...');
         try {
           await timeChr.write(
-            utf8.encode(timeStr),
+            timePacket,
             withoutResponse: true,
           );
           writeSucceeded = true;
@@ -748,5 +1009,6 @@ class JustRideBleService {
     _isScanSub?.cancel();
     _adapterSub?.cancel();
     _connectedDevice = null;
+    connectionStateNotifier.value = BluetoothConnectionState.disconnected;
   }
 }

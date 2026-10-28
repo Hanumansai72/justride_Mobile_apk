@@ -201,6 +201,7 @@ class BackendService {
   }
 
   Future<void> unpairLocalDevice() async {
+    await JustRideBleService.instance.disableCompanion(forgetDevice: true);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('justride_paired_device');
     await prefs.remove('justride_saved_mac_address');

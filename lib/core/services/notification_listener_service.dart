@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -34,10 +35,26 @@ class NotificationListenerService {
       ValueNotifier<LatestNotificationInfo?>(null);
 
   bool _isInitialized = false;
+  final displayEnabled = ValueNotifier<bool>(false);
+  late final Future<void> _settingsReady = _loadSettings();
+  Future<void> _loadSettings() async {
+    displayEnabled.value = (await SharedPreferences.getInstance())
+            .getBool('hud_notifications_enabled') ??
+        false;
+  }
+
+  Future<void> setDisplayEnabled(bool value) async {
+    await _settingsReady;
+    await (await SharedPreferences.getInstance())
+        .setBool('hud_notifications_enabled', value);
+    displayEnabled.value = value;
+    if (value && !await isAccessGranted()) await openNotificationSettings();
+  }
 
   void init() {
     if (_isInitialized) return;
     _isInitialized = true;
+    unawaited(_settingsReady);
     _channel.setMethodCallHandler(_handleNativeMethodCall);
     debugPrint('[NotificationListenerService] Initialized.');
   }
@@ -75,11 +92,13 @@ class NotificationListenerService {
     );
     latestNotificationNotifier.value = info;
     return await BleNavigationService.instance
-        .sendLatestNotification(title, message);
+        .sendLatestNotification(title, message, appName: "JustRide");
   }
 
   Future<void> _handleNativeMethodCall(MethodCall call) async {
     if (call.method == 'onLatestNotification') {
+      await _settingsReady;
+      if (!displayEnabled.value) return;
       final args = call.arguments as Map<dynamic, dynamic>?;
       if (args != null) {
         final title = args['title']?.toString() ?? '';
@@ -99,8 +118,9 @@ class NotificationListenerService {
 
         // The BLE service waits for its initial characteristic discovery when a
         // display is connected, so an early notification is not discarded.
-        await BleNavigationService.instance
-            .sendLatestNotification(title, message);
+        await BleNavigationService.instance.sendLatestNotification(
+            title, message,
+            appName: args['appName']?.toString() ?? 'Alert');
       }
     }
   }

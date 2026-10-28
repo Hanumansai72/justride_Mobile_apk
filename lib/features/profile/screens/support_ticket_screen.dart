@@ -339,7 +339,7 @@ class _SupportTicketScreenState extends State<SupportTicketScreen> {
             title: const Text('Include a diagnostic report (optional)',
                 style: TextStyle(fontSize: 14)),
             subtitle: const Text(
-                'App version, cached firmware version, platform, and Android phone model/OS when available. No location, passwords or notification contents.',
+                'App and device versions, and phone model and software version when available. No location, passwords or notification contents.',
                 style: TextStyle(fontSize: 12))),
         if (_diagnosticsConsent) ...[
           TextField(

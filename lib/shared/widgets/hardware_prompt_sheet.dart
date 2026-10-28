@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/bluetooth_service.dart';
 
@@ -99,7 +98,8 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
     _refreshHardwareStates();
 
     // Periodic safety poll every 1.5s while sheet is open (e.g. when user toggles quick-settings)
-    _periodicCheckTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+    _periodicCheckTimer =
+        Timer.periodic(const Duration(milliseconds: 1500), (_) {
       _refreshHardwareStates();
     });
   }
@@ -251,8 +251,11 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      allResolved ? 'All Services Connected' : 'Enable Services to Continue',
-                      style: GoogleFonts.inter(
+                      allResolved
+                          ? 'All Services Connected'
+                          : 'Enable Services to Continue',
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         color: _textPrimary,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
@@ -263,7 +266,8 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
                       allResolved
                           ? 'Bluetooth and GPS are active. Resuming JustRide...'
                           : 'Turn on Bluetooth and GPS for live HUD & navigation.',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         color: _textSecondary,
                         fontSize: 12.5,
                       ),
@@ -280,7 +284,7 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
           _buildServiceCard(
             title: 'Bluetooth',
             description: _btOff
-                ? 'Required to communicate with JustRide ESP32 HUD.'
+                ? 'Required to connect to your JustRide device.'
                 : 'Bluetooth is connected and ready.',
             isOff: _btOff,
             isLoading: _isEnablingBt,
@@ -325,7 +329,8 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
               children: [
                 Text(
                   allResolved ? 'Continue with App' : 'Dismiss & Continue',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),
@@ -381,7 +386,8 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         color: _textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -389,14 +395,16 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1.5),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         isOff ? 'OFF' : 'ON',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
                           color: statusColor,
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -408,7 +416,8 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
                 const SizedBox(height: 2),
                 Text(
                   description,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     color: _textSecondary,
                     fontSize: 11.5,
                   ),
@@ -424,7 +433,8 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
                 backgroundColor: _primary,
                 foregroundColor: _onPrimary,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -440,7 +450,8 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
                     )
                   : Text(
                       actionLabel,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),

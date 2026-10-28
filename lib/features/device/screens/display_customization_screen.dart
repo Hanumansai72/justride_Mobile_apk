@@ -70,7 +70,8 @@ class _DisplayCustomizationScreenState
     try {
       final picked = await _imagePicker.pickImage(
         source: source,
-        imageQuality: 100, // 100% quality - we do nearest-neighbor scaling for QR safety
+        imageQuality:
+            100, // 100% quality - we do nearest-neighbor scaling for QR safety
       );
       if (picked == null) return;
       final bytes = await picked.readAsBytes();
@@ -79,7 +80,8 @@ class _DisplayCustomizationScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open image: $e'),
+            content:
+                Text('Unable to open this image. Please choose another image.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -117,7 +119,8 @@ class _DisplayCustomizationScreenState
       setState(() => _isConverting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Image processing error: $e'),
+          content: Text(
+              'Unable to prepare this image. Please choose another image.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -133,7 +136,8 @@ class _DisplayCustomizationScreenState
       );
       if (mounted && res.success && res.data != null) {
         setState(() {
-          _backendUploadedUrl = res.data!['url'] as String? ?? res.data!['secure_url'] as String?;
+          _backendUploadedUrl =
+              res.data!['url'] as String? ?? res.data!['secure_url'] as String?;
           _isBackingUpToBackend = false;
         });
       } else {
@@ -152,7 +156,8 @@ class _DisplayCustomizationScreenState
     if (device == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No device connected. Please pair your JustRide device first.'),
+          content: Text(
+              'No device connected. Please pair your JustRide device first.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -206,7 +211,8 @@ class _DisplayCustomizationScreenState
         ),
         title: Text(
           'Reset Display Image?',
-          style: GoogleFonts.inter(
+          style: TextStyle(
+            fontFamily: 'Stack Sans Text',
             color: _C.onSurface,
             fontWeight: FontWeight.w700,
             fontSize: 18,
@@ -214,12 +220,15 @@ class _DisplayCustomizationScreenState
         ),
         content: Text(
           'This will remove the custom image from your JustRide device and cloud storage, restoring the default speedometer HUD.',
-          style: GoogleFonts.inter(color: _C.textSec, fontSize: 14),
+          style: TextStyle(
+              fontFamily: 'Stack Sans Text', color: _C.textSec, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('CANCEL', style: GoogleFonts.inter(color: _C.textSec)),
+            child: Text('CANCEL',
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text', color: _C.textSec)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -227,7 +236,10 @@ class _DisplayCustomizationScreenState
               backgroundColor: _C.errorContainer,
               foregroundColor: _C.error,
             ),
-            child: Text('RESET', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            child: Text('RESET',
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -257,7 +269,7 @@ class _DisplayCustomizationScreenState
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Custom image removed from device and backend! Default display restored.'),
+          content: Text('Custom image removed. Default display restored.'),
           backgroundColor: AppColors.primaryContainer,
         ),
       );
@@ -296,7 +308,8 @@ class _DisplayCustomizationScreenState
               ),
               Text(
                 'Display Customization',
-                style: GoogleFonts.inter(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
                   color: _C.primary,
@@ -373,7 +386,7 @@ class _DisplayCustomizationScreenState
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Hardware-Optimized: 320×240 (4:3), 150 KB RGB565',
+                                'Image ready for your JustRide display',
                                 style: GoogleFonts.jetBrainsMono(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -402,7 +415,8 @@ class _DisplayCustomizationScreenState
                                   : (_backendUploadedUrl != null
                                       ? 'Cloud backup synced'
                                       : 'Ready for device transfer'),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 fontSize: 11,
                                 color: _C.textSec,
                               ),
@@ -421,7 +435,8 @@ class _DisplayCustomizationScreenState
                   decoration: BoxDecoration(
                     color: _C.surfContLow,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: _C.outlineVariant.withValues(alpha: 0.5)),
+                    border: Border.all(
+                        color: _C.outlineVariant.withValues(alpha: 0.5)),
                   ),
                   child: Row(
                     children: [
@@ -432,7 +447,8 @@ class _DisplayCustomizationScreenState
                         child: Text(
                           'Swipe RIGHT on your JustRide screen anytime to view this picture. '
                           'Swipe LEFT or TAP to return to navigation.',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             fontSize: 12,
                             color: _C.textSec,
                             height: 1.3,
@@ -529,7 +545,8 @@ class _DisplayCustomizationScreenState
                     child: RawImage(
                       image: _previewImage,
                       fit: BoxFit.contain,
-                      filterQuality: FilterQuality.none, // Pixel-perfect QR display
+                      filterQuality:
+                          FilterQuality.none, // Pixel-perfect QR display
                     ),
                   )
                 : _buildHudMock(),
@@ -742,7 +759,8 @@ class _DisplayCustomizationScreenState
                   const Icon(Icons.photo_library_outlined, color: _C.primary),
               title: Text(
                 'Choose from Gallery',
-                style: GoogleFonts.inter(color: _C.onSurface),
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text', color: _C.onSurface),
               ),
               onTap: () {
                 Navigator.pop(context);
@@ -753,7 +771,8 @@ class _DisplayCustomizationScreenState
               leading: const Icon(Icons.camera_alt_outlined, color: _C.primary),
               title: Text(
                 'Take a Photo',
-                style: GoogleFonts.inter(color: _C.onSurface),
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text', color: _C.onSurface),
               ),
               onTap: () {
                 Navigator.pop(context);
@@ -795,7 +814,8 @@ class _TransferProgressDialogState extends State<_TransferProgressDialog> {
               children: [
                 Text(
                   'Sending Image to Device',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: _C.onSurface,
@@ -827,7 +847,8 @@ class _TransferProgressDialogState extends State<_TransferProgressDialog> {
                     },
                     child: Text(
                       'Cancel',
-                      style: GoogleFonts.inter(color: _C.error),
+                      style: TextStyle(
+                          fontFamily: 'Stack Sans Text', color: _C.error),
                     ),
                   ),
               ],
@@ -877,9 +898,8 @@ class _ActionCardState extends State<_ActionCard> {
               ? (widget.isDestructive ? _C.errorContainer : _C.surfVariant)
               : _C.surfCont,
           border: Border.all(
-            color: widget.isDestructive && _pressed
-                ? _C.error
-                : _C.outlineVariant,
+            color:
+                widget.isDestructive && _pressed ? _C.error : _C.outlineVariant,
           ),
           borderRadius: BorderRadius.circular(AppConstants.radiusLg),
         ),
@@ -968,7 +988,8 @@ class _ApplyButtonState extends State<_ApplyButton> {
                   widget.enabled
                       ? 'Upload to Device (Swipe Right on Screen)'
                       : 'Pick an image first',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: _C.onPrimary,
@@ -1011,7 +1032,8 @@ class _ResetButton extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   'Reset',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: _C.error,

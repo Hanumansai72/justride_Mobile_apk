@@ -1,47 +1,23 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import '../utils/speed_filter.dart';
-import 'simulator_location_service.dart';
-
-enum LocationSource {
-  realGps,
-  simulator,
-}
 
 /// Service responsible for GPS acquisition, speed, heading, and permission management.
 ///
-/// Supports two transparent modes:
-///   1. [LocationSource.realGps] - Actual hardware GPS from device.
-///   2. [LocationSource.simulator] - High-frequency WebSocket stream from JustRide Web Ride Simulator.
-///
 /// Speed is always passed through [SpeedFilter] before being emitted.
-class LocationService {
+class LocationService with WidgetsBindingObserver {
   LocationService._();
   static final LocationService instance = LocationService._();
 
   StreamSubscription<Position>? _positionSub;
-  StreamSubscription<Position>? _simSub;
   Timer? _gpsWatchdog;
   Position? _currentPosition;
   Position? _previousPosition;
   bool _isServiceEnabled = false;
   LocationPermission _permission = LocationPermission.denied;
   DateTime? _lastLiveFixAt;
-
-  final ValueNotifier<LocationSource> locationSourceNotifier =
-      ValueNotifier<LocationSource>(LocationSource.realGps);
-
-  LocationSource get locationSource => locationSourceNotifier.value;
-
-  void setLocationSource(LocationSource source) {
-    if (locationSourceNotifier.value == source) return;
-    locationSourceNotifier.value = source;
-    debugPrint('[LocationService] Location source switched to: $source');
-    if (_positionSub != null || _simSub != null) {
-      startTracking(distanceFilterMeters: _activeDistanceFilterMeters);
-    }
-  }
 
   /// Stateful speed filter — reused across updates to track previous speed.
   final SpeedFilter _speedFilter = SpeedFilter();
@@ -103,38 +79,6 @@ class LocationService {
 
   /// Gets immediate current GPS position (high accuracy, up to 10s timeout).
   Future<Position?> getCurrentPosition() async {
-    if (locationSource == LocationSource.simulator) {
-      final simPacket =
-          SimulatorLocationService.instance.latestPacketNotifier.value;
-      if (simPacket != null) {
-        final simPos = simPacket.toPosition();
-        _onPositionUpdate(simPos);
-        return simPos;
-      }
-      await SimulatorLocationService.instance.connect();
-      final freshPacket =
-          SimulatorLocationService.instance.latestPacketNotifier.value;
-      if (freshPacket != null) {
-        final simPos = freshPacket.toPosition();
-        _onPositionUpdate(simPos);
-        return simPos;
-      }
-      final fallbackPos = Position(
-        latitude: 17.4370,
-        longitude: 78.5800,
-        timestamp: DateTime.now(),
-        accuracy: 2.0,
-        altitude: 500.0,
-        altitudeAccuracy: 5.0,
-        heading: 0.0,
-        headingAccuracy: 5.0,
-        speed: 0.0,
-        speedAccuracy: 0.5,
-      );
-      _onPositionUpdate(fallbackPos);
-      return fallbackPos;
-    }
-
     final hasPerm = await ensurePermissions();
     if (!hasPerm) return null;
 
@@ -149,9 +93,11 @@ class LocationService {
         _onPositionUpdate(pos);
         return pos;
       }
-      debugPrint('[LocationService] Current GPS fix is stale or inaccurate. Falling back to last known.');
+      debugPrint(
+          '[LocationService] Current GPS fix is stale or inaccurate. Falling back to last known.');
       final lastKnown = await Geolocator.getLastKnownPosition();
-      if (lastKnown != null && _isFreshUsableFix(lastKnown, maxAgeSeconds: 1800)) {
+      if (lastKnown != null &&
+          _isFreshUsableFix(lastKnown, maxAgeSeconds: 1800)) {
         _onPositionUpdate(lastKnown);
         return lastKnown;
       }
@@ -160,7 +106,8 @@ class LocationService {
     } catch (e) {
       debugPrint('[LocationService] getCurrentPosition error: $e');
       final lastKnown = await Geolocator.getLastKnownPosition();
-      if (lastKnown != null && _isFreshUsableFix(lastKnown, maxAgeSeconds: 1800)) {
+      if (lastKnown != null &&
+          _isFreshUsableFix(lastKnown, maxAgeSeconds: 1800)) {
         _onPositionUpdate(lastKnown);
         return lastKnown;
       }
@@ -175,8 +122,10 @@ class LocationService {
   ///
   /// Uses foreground service notification on Android to keep GPS active.
   /// Uses automotive navigation mode on iOS.
-  int _activeDistanceFilterMeters = 0;
   Timer? _recoveryTimer;
+  LocationSettings? _trackingSettings;
+  bool _trackingActive = false, _streamNeedsRecovery = false;
+  int _trackingGeneration = 0;
 
   // ── Continuous Tracking ──────────────────────────────────────────────────
 
@@ -184,47 +133,16 @@ class LocationService {
   ///
   /// Uses foreground service notification on Android to keep GPS active.
   /// Uses automotive navigation mode on iOS.
-  /// Seamlessly falls back to standard LocationSettings if platform-specific FGS fails.
+  /// Retains foreground settings for the entire ride, including GPS recovery.
   Future<bool> startTracking({
     int distanceFilterMeters = 0,
     int intervalMs = 400,
   }) async {
-    if (locationSource == LocationSource.simulator) {
-      await stopTracking();
-      _activeDistanceFilterMeters = distanceFilterMeters;
-      _speedFilter.reset();
-      _previousPosition = null;
-      _lastLiveFixAt = DateTime.now();
-      isGpsAvailableNotifier.value = true;
-
-      await SimulatorLocationService.instance.connect();
-      _simSub?.cancel();
-      _simSub = SimulatorLocationService.instance.positionStream.listen(
-        (pos) {
-          final packet =
-              SimulatorLocationService.instance.latestPacketNotifier.value;
-          if (packet != null && !packet.gpsAvailable) {
-            isGpsAvailableNotifier.value = false;
-            speedKmhNotifier.value = 0.0;
-          } else {
-            isGpsAvailableNotifier.value = true;
-            _onPositionUpdate(pos);
-          }
-        },
-        onError: (err) {
-          debugPrint('[LocationService] Simulator stream error: $err');
-          isGpsAvailableNotifier.value = false;
-          speedKmhNotifier.value = 0.0;
-        },
-      );
-      return true;
-    }
-
     final hasPerm = await ensurePermissions();
     if (!hasPerm) return false;
 
     await stopTracking();
-    _activeDistanceFilterMeters = distanceFilterMeters;
+    final trackingGeneration = _trackingGeneration;
     _speedFilter.reset();
     _previousPosition = null;
     _lastLiveFixAt = DateTime.now();
@@ -237,7 +155,8 @@ class LocationService {
         distanceFilter: distanceFilterMeters,
         intervalDuration: Duration(milliseconds: intervalMs),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationText: 'JustRide active motorcycle navigation is running in background.',
+          notificationText:
+              'JustRide active motorcycle navigation is running in background.',
           notificationTitle: 'JustRide Active Navigation',
           notificationIcon: AndroidResource(name: 'ic_launcher'),
           enableWakeLock: true,
@@ -260,15 +179,17 @@ class LocationService {
     }
 
     try {
-      _startStream(settings);
+      _trackingSettings = settings;
+      _trackingActive = true;
+      WidgetsBinding.instance.addObserver(this);
+      await _startStream(settings);
+      if (!_trackingActive || trackingGeneration != _trackingGeneration) {
+        return false;
+      }
     } catch (e) {
-      debugPrint(
-          '[LocationService] Platform-specific settings failed, falling back to standard: $e');
-      final fallbackSettings = LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: distanceFilterMeters,
-      );
-      _startStream(fallbackSettings);
+      debugPrint('[LocationService] Unable to start ride location stream: $e');
+      if (trackingGeneration == _trackingGeneration) await stopTracking();
+      return false;
     }
 
     // Watchdog: detect loss of satellite fix. Android may batch an otherwise
@@ -276,6 +197,7 @@ class LocationService {
     // declaring GPS lost during a normal bridge/urban-canyon interruption.
     // Accommodates cold start, bridges, intersections, and proactively polls.
     _gpsWatchdog = Timer.periodic(const Duration(seconds: 4), (_) async {
+      if (!_trackingActive || trackingGeneration != _trackingGeneration) return;
       final lastFix = _lastLiveFixAt;
       if (lastFix != null &&
           DateTime.now().difference(lastFix) > const Duration(seconds: 45)) {
@@ -293,7 +215,10 @@ class LocationService {
               timeLimit: Duration(seconds: 4),
             ),
           );
-          if (fix.accuracy.isFinite && fix.accuracy <= 120.0) {
+          if (_trackingActive &&
+              trackingGeneration == _trackingGeneration &&
+              fix.accuracy.isFinite &&
+              fix.accuracy <= 120.0) {
             _onPositionUpdate(fix);
           }
         } catch (_) {}
@@ -303,11 +228,15 @@ class LocationService {
     return true;
   }
 
-  void _startStream(LocationSettings settings) {
-    _positionSub?.cancel();
+  Future<void> _startStream(LocationSettings settings) async {
+    final generation = _trackingGeneration;
+    await _positionSub?.cancel();
+    if (!_trackingActive || generation != _trackingGeneration) return;
     _positionSub =
         Geolocator.getPositionStream(locationSettings: settings).listen(
       (pos) {
+        _streamNeedsRecovery = false;
+        _recoveryTimer?.cancel();
         _onPositionUpdate(pos);
         debugPrint('[LocationService] Live fix: '
             '${pos.latitude.toStringAsFixed(6)},${pos.longitude.toStringAsFixed(6)} '
@@ -320,33 +249,55 @@ class LocationService {
         speedKmhNotifier.value = 0.0;
         _scheduleRecovery();
       },
+      onDone: _scheduleRecovery,
       cancelOnError: false,
     );
   }
 
   void _scheduleRecovery() {
     _recoveryTimer?.cancel();
-    _recoveryTimer = Timer(const Duration(seconds: 2), () {
+    if (!_trackingActive || _trackingSettings == null) return;
+    _streamNeedsRecovery = true;
+    // Keep the existing foreground service/stream alive while off-screen.
+    // Recreating a location FGS from the background may be rejected by Android.
+    // Transient errors can recover on the same stream; the watchdog keeps polling.
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    final generation = _trackingGeneration;
+    _recoveryTimer = Timer(const Duration(seconds: 2), () async {
+      if (!_trackingActive ||
+          generation != _trackingGeneration ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
       debugPrint(
-          '[LocationService] Attempting GPS stream auto-recovery with standard settings...');
+          '[LocationService] Recovering GPS with the active ride settings.');
       try {
-        final fallbackSettings = LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: _activeDistanceFilterMeters,
-        );
-        _startStream(fallbackSettings);
+        await _startStream(_trackingSettings!);
       } catch (e) {
         debugPrint('[LocationService] Recovery failed: $e');
+        _scheduleRecovery();
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _streamNeedsRecovery) {
+      _scheduleRecovery();
+    }
   }
 
   // ── Internal Update Handler ──────────────────────────────────────────────
 
   void _onPositionUpdate(Position pos) {
-    if (!_isFreshUsableFix(pos, maxAgeSeconds: 30) || pos.accuracy > 120 ||
-        !pos.latitude.isFinite || !pos.longitude.isFinite ||
-        pos.latitude.abs() > 90 || pos.longitude.abs() > 180) {
+    if (!_isFreshUsableFix(pos, maxAgeSeconds: 30) ||
+        pos.accuracy > 120 ||
+        !pos.latitude.isFinite ||
+        !pos.longitude.isFinite ||
+        pos.latitude.abs() > 90 ||
+        pos.longitude.abs() > 180) {
       isGpsAvailableNotifier.value = false;
       speedKmhNotifier.value = 0;
       return;
@@ -355,25 +306,13 @@ class LocationService {
     _currentPosition = pos;
     isGpsAvailableNotifier.value = true;
 
-    // ── Speed: use GPS Doppler when trustworthy, otherwise displacement ──
-    // SpeedFilter applies:
-    //   1. m/s → km/h conversion
-    //   2. Stationary deadband (< 2.5 km/h → 0.0)
-    //   3. Spike rejection (> 80 km/h jump → use last valid)
-    //   4. Accuracy check (speedAccuracy > 5 m/s → 0.0)
-    final distanceSpeedMs = _calculateDistanceSpeedMs(pos);
-    final rawSpeedIsUsable = pos.speed.isFinite &&
-        pos.speed >= 0.5 &&
-        (pos.speedAccuracy.isNaN || pos.speedAccuracy <= 5.0);
-    final chosenSpeedMs = rawSpeedIsUsable ? pos.speed : distanceSpeedMs;
+    // Respect a valid zero-speed fix. GPS coordinate drift must never
+    // override it, and inaccurate/missing speed is not inferred from position.
     final filtered = _speedFilter.process(
-      rawSpeedMs: chosenSpeedMs,
-      // A displacement speed is derived from two GPS positions, so the phone
-      // supplied Doppler-accuracy field must not invalidate it.
-      speedAccuracy: rawSpeedIsUsable ? pos.speedAccuracy : null,
+      rawSpeedMs: pos.speed,
+      speedAccuracy: pos.speedAccuracy,
     );
-    // filtered is null only if speed is NaN/infinite (GPS totally invalid)
-    speedKmhNotifier.value = filtered ?? 0.0;
+    speedKmhNotifier.value = filtered ?? 0;
 
     // ── Heading: vector bearing from movement or sensor ──────────────────
     final kmh = speedKmhNotifier.value;
@@ -412,31 +351,6 @@ class LocationService {
     positionNotifier.value = pos;
   }
 
-  /// Derives speed from distance/time when Android reports zero, -1, or poor
-  /// Doppler accuracy. A small movement threshold avoids reporting GPS drift
-  /// as motorcycle motion while parked.
-  double? _calculateDistanceSpeedMs(Position pos) {
-    final previous = _previousPosition;
-    if (previous == null) return null;
-
-    final elapsedMs =
-        pos.timestamp.difference(previous.timestamp).inMilliseconds;
-    if (elapsedMs < 500 || elapsedMs > 15000) return null;
-
-    final distanceMeters = Geolocator.distanceBetween(
-      previous.latitude,
-      previous.longitude,
-      pos.latitude,
-      pos.longitude,
-    );
-    final minMotionMeters =
-        2.0 + ((previous.accuracy + pos.accuracy).clamp(0.0, 20.0) * 0.25);
-    if (distanceMeters < minMotionMeters) return 0.0;
-
-    final speedMs = distanceMeters / (elapsedMs / 1000.0);
-    return speedMs.isFinite && speedMs <= 70.0 ? speedMs : null;
-  }
-
   bool _isFreshUsableFix(Position pos, {int maxAgeSeconds = 120}) {
     final age = DateTime.now().toUtc().difference(pos.timestamp.toUtc()).abs();
     return age.inSeconds <= maxAgeSeconds &&
@@ -447,12 +361,15 @@ class LocationService {
   // ── Cleanup ──────────────────────────────────────────────────────────────
 
   Future<void> stopTracking() async {
+    _trackingActive = false;
+    ++_trackingGeneration;
+    _trackingSettings = null;
+    _streamNeedsRecovery = false;
+    WidgetsBinding.instance.removeObserver(this);
     _recoveryTimer?.cancel();
     _recoveryTimer = null;
     await _positionSub?.cancel();
     _positionSub = null;
-    await _simSub?.cancel();
-    _simSub = null;
     _gpsWatchdog?.cancel();
     _gpsWatchdog = null;
     _lastLiveFixAt = null;

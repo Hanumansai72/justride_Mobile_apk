@@ -80,9 +80,9 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
 
     // Initialize BLE and start real-time scan for JustRide devices
     _bleService.init();
-    if (!kIsWeb) _startScanning();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+      if (!kIsWeb) _startScanning();
       _checkHardwareIfOff();
     });
   }
@@ -118,6 +118,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
   }
 
   Future<void> _connectToDiscoveredDevice(ScanResult result) async {
+    if (_connectingDeviceId != null) return;
     final devId = result.device.remoteId.str;
     final devName = JustRideBleService.getDeviceName(result);
 
@@ -162,7 +163,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 Expanded(
                   child: Text(
                     errorMsg,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600),
                   ),
@@ -197,8 +199,10 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Backend pairing failed: ',
-                    style: GoogleFonts.inter(color: AppColors.textPrimary),
+                    'Unable to pair your device. Please try again.',
+                    style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
+                        color: AppColors.textPrimary),
                   ),
                 ),
               ],
@@ -229,8 +233,9 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
               child: Text(
                 connected
                     ? 'Paired & synced! $devName is connected.'
-                    : 'Paired on server. BLE connect failed — try again.',
-                style: GoogleFonts.inter(
+                    : 'Device paired. Unable to connect right now. Please try again.',
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   color: _C.onPrimary,
                   fontWeight: FontWeight.w600,
                 ),
@@ -241,7 +246,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
       ),
     );
 
-    Navigator.of(context).pushReplacementNamed('/device');
+    if (connected) Navigator.of(context).pushReplacementNamed('/device');
   }
 
   void _openManualPairingDialog() {
@@ -282,7 +287,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 const SizedBox(height: 18),
                 Text(
                   'Enter JustRide Device ID',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: _C.onSurface,
@@ -291,7 +297,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 const SizedBox(height: 6),
                 Text(
                   'Find the serial number on your JustRide HUD hardware or packaging.',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 13,
                     color: _C.textSec,
                   ),
@@ -302,7 +309,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   style: GoogleFonts.jetBrainsMono(color: _C.onSurface),
                   decoration: InputDecoration(
                     labelText: 'Device ID',
-                    labelStyle: GoogleFonts.inter(color: _C.textSec),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text', color: _C.textSec),
                     prefixIcon:
                         const Icon(Icons.qr_code_rounded, color: _C.primary),
                     filled: true,
@@ -325,7 +333,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   style: GoogleFonts.jetBrainsMono(color: _C.onSurface),
                   decoration: InputDecoration(
                     labelText: 'Pairing PIN (Default: 1234)',
-                    labelStyle: GoogleFonts.inter(color: _C.textSec),
+                    labelStyle: TextStyle(
+                        fontFamily: 'Stack Sans Text', color: _C.textSec),
                     prefixIcon:
                         const Icon(Icons.pin_rounded, color: _C.primary),
                     filled: true,
@@ -436,7 +445,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                           )
                         : Text(
                             'Pair Device',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                             ),
@@ -493,7 +503,9 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (canPop)
+              if (!widget.showBottomNav)
+                const SizedBox(width: 48)
+              else if (canPop)
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close_rounded,
@@ -512,12 +524,15 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 showTagline: false,
                 isCentered: true,
               ),
-              IconButton(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed('/profile-settings'),
-                icon: const Icon(Icons.settings_outlined,
-                    color: _C.textSec, size: 24),
-              ),
+              if (widget.showBottomNav)
+                IconButton(
+                  onPressed: () =>
+                      Navigator.of(context).pushNamed('/profile-settings'),
+                  icon: const Icon(Icons.settings_outlined,
+                      color: _C.textSec, size: 24),
+                )
+              else
+                const SizedBox(width: 48),
             ],
           ),
         ),
@@ -559,7 +574,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                           children: [
                             Text(
                               'Bluetooth is Turned Off',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
@@ -568,7 +584,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                             const SizedBox(height: 2),
                             Text(
                               'Enable Bluetooth to discover JustRide devices.',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 color: _C.textSec,
                                 fontSize: 12,
                               ),
@@ -598,6 +615,16 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
             },
           ),
 
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Image.asset(
+              'assets/justride-device.png',
+              width: 180,
+              height: 180,
+              fit: BoxFit.contain,
+              semanticLabel: 'JustRide Aventura circular navigation device',
+            ),
+          ),
           // ── Header ──────────────────────────────────────────────────────
           Text(
             'Connect Your JustRide',
@@ -635,7 +662,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
+                  Flexible(
+                      child: Text(
                     isScanning
                         ? 'Scanning for JustRide devices in real time...'
                         : 'Scan paused. Tap radar to rescan.',
@@ -646,7 +674,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                           isScanning ? FontWeight.w600 : FontWeight.normal,
                     ),
                     textAlign: TextAlign.center,
-                  ),
+                  )),
                 ],
               );
             },
@@ -660,39 +688,12 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
           ),
           const SizedBox(height: AppConstants.spacingLg),
 
-          // ── Filter Notice Badge ────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _C.surfCont,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _C.outlineVariant),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.filter_alt_outlined,
-                    color: _C.primary, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  'Filtering ONLY "JustRide" Bluetooth devices',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
-                    color: _C.textSec,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingLg),
-
           // ── Real-Time Detected JustRide Device(s) List ───────────────────
           ValueListenableBuilder<List<ScanResult>>(
             valueListenable: _bleService.justRideDevicesNotifier,
             builder: (context, discoveredDevices, _) {
               if (discoveredDevices.isEmpty) {
-                return _buildEmptyState();
+                return const SizedBox.shrink();
               }
 
               return Column(
@@ -749,77 +750,6 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
   }
 
   // ── Empty State when no JustRide device has appeared yet ────────────────────
-  Widget _buildEmptyState() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: _C.surfCont,
-        border: Border.all(color: _C.outlineVariant),
-        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-      ),
-      padding: const EdgeInsets.all(AppConstants.spacingLg),
-      child: Column(
-        children: [
-          Icon(Icons.radar_rounded,
-              color: _C.primary.withValues(alpha: 0.6), size: 40),
-          const SizedBox(height: 12),
-          Text(
-            kIsWeb
-                ? 'Connect your JustRide device'
-                : 'Searching for JustRide Devices...',
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: _C.onSurface,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            kIsWeb
-                ? 'Use Chrome or Edge and select Choose device to grant Bluetooth access. Keep your JustRide device nearby.'
-                : 'Ensure your JustRide HUD or module is turned on and within 10 meters. Other nearby Bluetooth devices are automatically filtered out.',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: _C.textSec,
-              height: 1.4,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<bool>(
-            valueListenable: _bleService.isScanningNotifier,
-            builder: (context, isScanning, _) {
-              return OutlinedButton.icon(
-                onPressed: _startScanning,
-                icon: Icon(
-                  isScanning ? Icons.sync : Icons.refresh_rounded,
-                  size: 16,
-                  color: _C.primary,
-                ),
-                label: Text(
-                  isScanning
-                      ? 'Scanning...'
-                      : (kIsWeb ? 'Choose device' : 'Rescan Now'),
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _C.primary,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: _C.primary),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── Radar ──────────────────────────────────────────────────────────────────
   Widget _buildRadar() {
     const size = 230.0;
@@ -1051,7 +981,7 @@ class _RadarRing extends StatelessWidget {
       animation: controller,
       builder: (_, __) {
         final t = controller.value;
-        final scale = 1.0 + 0.5 * t;
+        final scale = 0.65 + 0.35 * t;
         final opacity = baseOpacity * (1.0 - t) + 0.2 * t;
         return Transform.scale(
           scale: scale,
@@ -1175,7 +1105,8 @@ class _ConnectButtonState extends State<_ConnectButton> {
                     const SizedBox(width: 8),
                     Text(
                       'Connect JustRide',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: _C.onPrimary,

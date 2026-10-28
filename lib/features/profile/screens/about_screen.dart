@@ -2,6 +2,8 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../core/models/app_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -29,6 +31,11 @@ class AboutScreen extends StatefulWidget {
 class _AboutScreenState extends State<AboutScreen> {
   AppReleaseModel? _latestApkRelease;
   bool _isChecking = false;
+  bool _isOpeningDownload = false;
+  String? _updateStatus;
+  String? _installedVersion;
+  int? _installedBuild;
+  static const _platform = MethodChannel('com.justride.app/diagnostics');
 
   @override
   void initState() {
@@ -37,22 +44,77 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Future<void> _checkAppUpdate() async {
-    setState(() => _isChecking = true);
+    if (_isChecking) return;
+    setState(() {
+      _isChecking = true;
+      _latestApkRelease = null;
+      _updateStatus = null;
+    });
     try {
-      final res = await BackendService.instance.getLatestAppRelease(
-        currentBuild: AppConstants.appBuildNumber,
-      );
-      if (res.success &&
-          res.data != null &&
-          res.data!.buildNumber > AppConstants.appBuildNumber) {
-        if (mounted) {
-          setState(() {
-            _latestApkRelease = res.data;
-          });
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        final info =
+            await _platform.invokeMapMethod<String, dynamic>('appInfo');
+        _installedBuild = (info?['build'] as num?)?.toInt();
+        _installedVersion = info?['version'] as String?;
+        if (_installedBuild == null) {
+          throw StateError('Installed build unavailable');
         }
+      } else {
+        _installedBuild = AppConstants.appBuildNumber;
+        _installedVersion = AppConstants.appVersion;
       }
-    } catch (_) {}
-    if (mounted) setState(() => _isChecking = false);
+      final res = await BackendService.instance.getLatestAppRelease(
+        currentBuild: _installedBuild!,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (!res.success) {
+          _updateStatus = res.message;
+        } else if (res.data == null || res.data!.id.isEmpty) {
+          _updateStatus = 'No app update has been published yet.';
+        } else if (res.data!.buildNumber > _installedBuild!) {
+          _latestApkRelease = res.data;
+          _updateStatus = 'A newer app version is available.';
+        } else {
+          _updateStatus = 'Your app is up to date.';
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() =>
+            _updateStatus = 'Could not check for updates. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isChecking = false);
+    }
+  }
+
+  Future<void> _openDownload() async {
+    if (_isOpeningDownload) return;
+    final uri = Uri.tryParse(_latestApkRelease?.downloadUrl ?? '');
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      setState(() => _updateStatus =
+          'This release has no valid download link. Please contact support.');
+      return;
+    }
+    setState(() => _isOpeningDownload = true);
+    try {
+      await _platform.invokeMethod('openApkDownload', {'url': uri.toString()});
+      if (mounted) {
+        setState(() => _updateStatus =
+            'Download opened in your browser. Install the APK after it finishes.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _updateStatus =
+            'Could not open the update download. Please try again on Android.');
+      }
+    } finally {
+      if (mounted) setState(() => _isOpeningDownload = false);
+    }
   }
 
   @override
@@ -151,7 +213,7 @@ class _AboutScreenState extends State<AboutScreen> {
               borderRadius: BorderRadius.circular(AppConstants.radiusCircle),
             ),
             child: Text(
-              '${AppConstants.appVersion} (Build ${AppConstants.appBuildNumber})',
+              '${_installedVersion ?? AppConstants.appVersion} (Build ${_installedBuild ?? '…'})',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -206,33 +268,22 @@ class _AboutScreenState extends State<AboutScreen> {
           ],
           _LinkTile(
             icon: Icons.system_update_alt_rounded,
-            label: _isChecking
-                ? 'Checking for Updates...'
-                : (_latestApkRelease != null
-                    ? 'Download Latest APK'
-                    : 'Check for App Updates'),
-            onTap: () {
-              if (_latestApkRelease != null &&
-                  _latestApkRelease!.downloadUrl != null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                        'Downloading APK: ${_latestApkRelease!.downloadUrl}'),
-                    backgroundColor: AppColors.primaryContainer,
-                  ),
-                );
-              } else {
-                _checkAppUpdate();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content:
-                        Text('You are already running the latest version!'),
-                    backgroundColor: AppColors.primaryContainer,
-                  ),
-                );
-              }
-            },
+            label: _isOpeningDownload
+                ? 'Opening download...'
+                : _isChecking
+                    ? 'Checking for Updates...'
+                    : (_latestApkRelease != null
+                        ? 'Download Latest APK'
+                        : 'Check for App Updates'),
+            onTap: _isChecking || _isOpeningDownload
+                ? null
+                : (_latestApkRelease != null ? _openDownload : _checkAppUpdate),
           ),
+          if (_updateStatus != null) ...[
+            const SizedBox(height: AppConstants.spacingSm),
+            Text(_updateStatus!,
+                style: AppTextStyles.bodyMedium.copyWith(color: _C.textSec)),
+          ],
           const SizedBox(height: AppConstants.spacingSm),
           _LinkTile(
             icon: Icons.description_outlined,
@@ -260,7 +311,7 @@ class _LinkTile extends StatefulWidget {
   });
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   State<_LinkTile> createState() => _LinkTileState();

@@ -391,44 +391,31 @@ class NavContextPacket {
 ///   [2 .. 2+T-1]   : Title bytes (UTF-8)
 ///   [2+T]          : Message Length (M)
 ///   [3+T .. end]   : Message bytes (UTF-8)
+List<int> hudUtf8(String value, int limit) {
+  final bytes = <int>[];
+  for (final rune in value.runes) {
+    final next = utf8.encode(String.fromCharCode(rune));
+    if (bytes.length + next.length > limit) break;
+    bytes.addAll(next);
+  }
+  return bytes;
+}
+
 class LatestNotificationPacket {
-  final String title;
-  final String message;
-
-  const LatestNotificationPacket({
-    required this.title,
-    required this.message,
-  });
-
+  final String title, message, appName;
+  const LatestNotificationPacket(
+      {required this.title, required this.message, this.appName = ''});
   Uint8List toBinary() {
-    final titleBytes =
-        utf8.encode(title.length > 31 ? title.substring(0, 31) : title);
-    final messageBytes =
-        utf8.encode(message.length > 63 ? message.substring(0, 63) : message);
-
-    final totalLen = 3 + titleBytes.length + messageBytes.length;
-    final data = ByteData(totalLen);
-
-    // Byte 0: OpCode 0x0F
-    data.setUint8(0, BleNavOpCode.latestNotification.value);
-
-    // Byte 1: Title Length
-    data.setUint8(1, titleBytes.length);
-
-    // Bytes 2 .. : Title UTF-8
-    int offset = 2;
-    for (int i = 0; i < titleBytes.length; i++) {
-      data.setUint8(offset++, titleBytes[i]);
-    }
-
-    // Next Byte: Message Length
-    data.setUint8(offset++, messageBytes.length);
-
-    // Message UTF-8
-    for (int i = 0; i < messageBytes.length; i++) {
-      data.setUint8(offset++, messageBytes[i]);
-    }
-
-    return data.buffer.asUint8List();
+    final t = hudUtf8(title, 31),
+        m = hudUtf8(message, 63),
+        a = hudUtf8(appName, 23);
+    return Uint8List.fromList([
+      0x0f,
+      t.length,
+      ...t,
+      m.length,
+      ...m,
+      if (a.isNotEmpty) ...[a.length, ...a]
+    ]);
   }
 }

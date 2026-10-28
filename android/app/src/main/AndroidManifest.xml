@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Network Permissions -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
@@ -9,6 +10,7 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
     <!-- Allows Geolocator's foreground navigation service to hold the CPU/GPS
          wake lock requested in LocationService while the screen is off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
@@ -24,16 +26,35 @@
     <!-- Android 13+: required before the app's own notification controls can be enabled. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <!-- Telephony for Incoming Calls on Navigation Screen -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
+
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:label="JUSTRIDE"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+
+        <service android:name=".JustRideCompanionService" android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter><action android:name="android.companion.CompanionDeviceService" /></intent-filter>
+        </service>
+        <receiver android:name=".JustRideCompanionReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.bluetooth.adapter.action.STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Google Maps Android API Key (Injected via Gradle manifestPlaceholders) -->
         <meta-data
@@ -118,12 +139,18 @@
             </intent-filter>
         </service>
 
-        <!-- Geolocator background location foreground service (Android 14+ requirement) -->
+        <!-- One active-ride service keeps GPS and Bluetooth device transfer
+             in the foreground when the rider switches apps. -->
         <service
             android:name="com.baseflow.geolocator.GeolocatorLocationService"
-            android:foregroundServiceType="location"
+            android:foregroundServiceType="location|connectedDevice"
+            tools:replace="android:foregroundServiceType"
             android:exported="false"
             android:enabled="true" />
+        <meta-data android:name="firebase_messaging_installation_id_enabled" android:value="true" />
+        <service android:name=".JustRidePushService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

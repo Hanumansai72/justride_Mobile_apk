@@ -216,7 +216,8 @@ class _HomeScreenState extends State<HomeScreen>
 
           Text(
             'Enter destination to see instant suggestions down below, or leave Start empty to use your live phone GPS.',
-            style: GoogleFonts.inter(fontSize: 13, color: _C.textSec),
+            style: TextStyle(
+                fontFamily: 'Stack Sans Text', fontSize: 13, color: _C.textSec),
           ),
           const SizedBox(height: AppConstants.spacingSm),
           _SearchField(
@@ -375,7 +376,7 @@ class _DeviceCard extends StatelessWidget {
               ),
               const SizedBox(height: AppConstants.spacingSm),
               Image.asset(
-                'assets/justride-device.webp',
+                'assets/justride-device.png',
                 height: 170,
                 fit: BoxFit.contain,
               ),
@@ -577,8 +578,10 @@ class _SearchFieldState extends State<_SearchField> {
                               color: _focused ? _C.primary : _C.textSec)),
                       TextField(
                         controller: widget.controller,
-                        style: GoogleFonts.inter(
-                            fontSize: 15, color: _C.onSurface),
+                        style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
+                            fontSize: 15,
+                            color: _C.onSurface),
                         cursorColor: _C.primary,
                         textInputAction: TextInputAction.next,
                         onSubmitted: widget.onSubmitted,
@@ -588,7 +591,8 @@ class _SearchFieldState extends State<_SearchField> {
                         },
                         decoration: InputDecoration(
                           hintText: widget.hintText,
-                          hintStyle: GoogleFonts.inter(
+                          hintStyle: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 14,
                               color: _C.textSec.withValues(alpha: 0.5)),
                           border: InputBorder.none,
@@ -674,7 +678,8 @@ class _SearchFieldState extends State<_SearchField> {
                             place.displayTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: _C.onSurface,
@@ -684,7 +689,8 @@ class _SearchFieldState extends State<_SearchField> {
                             place.displaySubtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 11,
                               color: _C.textSec,
                             ),
@@ -861,7 +867,8 @@ class _StartRideButtonState extends State<_StartRideButton> {
                 const SizedBox(width: AppConstants.spacingSm),
                 Text(
                   'Start Ride',
-                  style: GoogleFonts.poppins(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: _C.onPrimary,

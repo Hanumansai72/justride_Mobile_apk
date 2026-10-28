@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/widgets/device_connection_gate.dart';
 
 // Screens
 import '../../features/splash/screens/splash_screen.dart';
@@ -61,32 +62,41 @@ abstract final class AppRoutes {
   static const String deleteAccount = '/delete-account';
 
   /// Map of all named routes to widget builders
-  static Map<String, WidgetBuilder> get routes => {
-        splash: (context) => const SplashScreen(),
-        login: (context) => const LoginScreen(),
-        signup: (context) => const SignupScreen(),
-        forgotPassword: (context) => const ForgotPasswordScreen(),
-        resetPassword: (context) => const ResetPasswordScreen(),
-        dashboard: (context) => const DashboardScreen(),
-        home: (context) => const HomeScreen(),
-        places: (context) => const PlacesScreen(),
-        addPlace: (context) => const AddPlaceScreen(),
-        trips: (context) => const TripsScreen(),
-        activeNavigation: (context) => const ActiveNavigationScreen(),
-        go: (context) => const GoScreen(),
-        device: (context) => const DeviceScreen(),
-        deviceSettings: (context) => const DeviceSettingsScreen(),
-        devicePairing: (context) => const DevicePairingScreen(),
-        displayCustomization: (context) => const DisplayCustomizationScreen(),
-        profile: (context) => const ProfileScreen(),
-        profileSettings: (context) => const ProfileScreen(),
-        notifications: (context) => const NotificationsScreen(),
-        helpSupport: (context) => const HelpSupportScreen(),
-        myTickets: (context) => const MyTicketsScreen(),
-        supportTicket: (context) => const SupportTicketScreen(),
-        about: (context) => const AboutScreen(),
-        terms: (context) => const LegalScreen(isPrivacy: false),
-        privacy: (context) => const LegalScreen(isPrivacy: true),
-        deleteAccount: (context) => const DeleteAccountScreen(),
-      };
+  static Map<String, WidgetBuilder> get routes {
+    final pages = <String, WidgetBuilder>{
+      splash: (context) => const SplashScreen(),
+      login: (context) => const LoginScreen(),
+      signup: (context) => const SignupScreen(),
+      forgotPassword: (context) => const ForgotPasswordScreen(),
+      resetPassword: (context) => const ResetPasswordScreen(),
+      dashboard: (context) => const DashboardScreen(),
+      home: (context) => const HomeScreen(),
+      places: (context) => const PlacesScreen(),
+      addPlace: (context) => const AddPlaceScreen(),
+      trips: (context) => const TripsScreen(),
+      activeNavigation: (context) => const ActiveNavigationScreen(),
+      go: (context) => const GoScreen(),
+      device: (context) => const DeviceScreen(),
+      deviceSettings: (context) => const DeviceSettingsScreen(),
+      devicePairing: (context) => const DevicePairingScreen(),
+      displayCustomization: (context) => const DisplayCustomizationScreen(),
+      profile: (context) => const ProfileScreen(),
+      profileSettings: (context) => const ProfileScreen(),
+      notifications: (context) => const NotificationsScreen(),
+      helpSupport: (context) => const HelpSupportScreen(),
+      myTickets: (context) => const MyTicketsScreen(),
+      supportTicket: (context) => const SupportTicketScreen(),
+      about: (context) => const AboutScreen(),
+      terms: (context) => const LegalScreen(isPrivacy: false),
+      privacy: (context) => const LegalScreen(isPrivacy: true),
+      deleteAccount: (context) => const DeleteAccountScreen(),
+    };
+    const publicPages = {splash, login, signup, forgotPassword, resetPassword};
+    return pages.map((name, builder) => MapEntry(
+          name,
+          publicPages.contains(name)
+              ? builder
+              : (context) => DeviceConnectionGate(builder: builder),
+        ));
+  }
 }

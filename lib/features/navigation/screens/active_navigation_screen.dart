@@ -1,6 +1,4 @@
-import '../../../core/constants/device_map_config.dart';
-import '../../../core/services/device_map_service.dart';
-import '../widgets/device_map_view.dart';
+import '../../../core/models/ride_state.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import '../../../core/constants/google_maps_config.dart';
@@ -10,10 +8,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/navigation_state.dart';
-import '../../../core/models/simulated_location_packet.dart';
 import '../../../core/services/navigation_service.dart';
 import '../../../core/services/location_service.dart';
-import '../../../core/services/simulator_location_service.dart';
 import '../../../core/services/bluetooth_service.dart';
 import '../../../core/services/telephony_service.dart';
 import '../widgets/navigation_call_overlay.dart';
@@ -188,6 +184,27 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         body: ValueListenableBuilder<NavigationState>(
           valueListenable: NavigationService.instance.navigationStateNotifier,
           builder: (context, state, _) {
+            if (state.rideState == RideState.arrived) {
+              return SafeArea(
+                  child: Center(
+                      child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.flag_rounded,
+                      color: AppColors.primary, size: 64),
+                  const SizedBox(height: 24),
+                  const Text("You've Reached Your Destination",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 28, color: AppColors.textPrimary)),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                      onPressed: () => Navigator.of(context)
+                          .pushReplacementNamed('/dashboard'),
+                      child: const Text('Done')),
+                ]),
+              )));
+            }
             final route = NavigationService.instance.activeRoute;
             final isBleConnected =
                 JustRideBleService.instance.isDeviceConnected;
@@ -261,49 +278,49 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
             return Stack(
               children: [
                 // 1. Google Map View
-                if (DeviceMapConfig.enabled)
-                  DeviceMapView(state: state)
-                else if (kIsWeb && !GoogleMapsConfig.webMapsLoaded)
+                if (!GoogleMapsConfig.hasApiKey ||
+                    (kIsWeb && !GoogleMapsConfig.webMapsLoaded))
                   const Center(
                       child: Text(
-                          'Map unavailable. Check the Maps configuration or your connection.'))
+                          'Map unavailable. Check your internet connection and try again.'))
                 else
-                  GoogleMap(
-                    onMapCreated: _onMapCreated,
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(
-                        state.currentLatitude != 0
-                            ? state.currentLatitude
-                            : (route?.polylinePoints.isNotEmpty == true
-                                ? route!.polylinePoints.first.latitude
-                                : 0),
-                        state.currentLongitude != 0
-                            ? state.currentLongitude
-                            : (route?.polylinePoints.isNotEmpty == true
-                                ? route!.polylinePoints.first.longitude
-                                : 0),
-                      ),
-                      zoom: 17.0,
-                    ),
-                    style: _darkMapStyle,
-                    markers: markers,
-                    polylines: polylines,
-                    myLocationEnabled:
-                        false, // Using custom directional rider marker
-                    myLocationButtonEnabled: false,
-                    compassEnabled: false,
-                    zoomControlsEnabled: false,
-                    mapToolbarEnabled: false,
-                    onCameraMoveStarted: () {
-                      // Rider touched the map, temporarily stop auto-centering
+                  Listener(
+                    onPointerMove: (_) {
                       if (_isFollowingUser) {
                         setState(() => _isFollowingUser = false);
                       }
                     },
+                    child: GoogleMap(
+                      onMapCreated: _onMapCreated,
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(
+                          state.currentLatitude != 0
+                              ? state.currentLatitude
+                              : (route?.polylinePoints.isNotEmpty == true
+                                  ? route!.polylinePoints.first.latitude
+                                  : 0),
+                          state.currentLongitude != 0
+                              ? state.currentLongitude
+                              : (route?.polylinePoints.isNotEmpty == true
+                                  ? route!.polylinePoints.first.longitude
+                                  : 0),
+                        ),
+                        zoom: 17.0,
+                      ),
+                      style: _darkMapStyle,
+                      markers: markers,
+                      polylines: polylines,
+                      myLocationEnabled:
+                          false, // Using custom directional rider marker
+                      myLocationButtonEnabled: false,
+                      compassEnabled: false,
+                      zoomControlsEnabled: false,
+                      mapToolbarEnabled: false,
+                    ),
                   ),
 
                 // Map Loading Screen Overlay until Google Map tiles and camera are ready
-                if (!DeviceMapConfig.enabled &&
+                if (GoogleMapsConfig.hasApiKey &&
                     !_isMapReady &&
                     (!kIsWeb || GoogleMapsConfig.webMapsLoaded))
                   Positioned.fill(
@@ -341,7 +358,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                             const SizedBox(height: 24),
                             Text(
                               'Loading Map & Route...',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 color: _C.onSurface,
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
@@ -351,7 +369,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                             const SizedBox(height: 8),
                             Text(
                               'Initializing GPS lock and route telemetry',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 color: _C.textSec,
                                 fontSize: 13,
                               ),
@@ -377,58 +396,6 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 // 3. GPS LOST banner — shown prominently when satellite fix is lost
                 if (!state.gpsAvailable) _buildGpsLostBanner(),
 
-                // Simulator Mode indicator pill
-                ValueListenableBuilder<LocationSource>(
-                  valueListenable:
-                      LocationService.instance.locationSourceNotifier,
-                  builder: (context, source, _) {
-                    if (source != LocationSource.simulator) {
-                      return const SizedBox.shrink();
-                    }
-                    return SafeArea(
-                      child: Align(
-                        alignment: Alignment.topLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 16, top: 120),
-                          child: GestureDetector(
-                            onTap: _showSimulatorConfigSheet,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryLight
-                                    .withValues(alpha: 0.85),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: AppColors.border),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.sports_esports_rounded,
-                                      color: AppColors.textPrimary, size: 14),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'SIMULATOR ACTIVE',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary,
-                                      letterSpacing: 0.6,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.settings_rounded,
-                                      color: AppColors.textSecondary, size: 12),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
                 // 4. Floating HUD Map Controls (Recenter, Zoom In, Zoom Out, Route Overview)
                 Positioned(
                   right: 16,
@@ -450,9 +417,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                                 _isFollowingUser ? _C.primary : _C.cardBorder,
                           ),
                         ),
-                        onPressed: DeviceMapConfig.enabled
-                            ? () => DeviceMapService.instance.recenter()
-                            : _centerOnUser,
+                        onPressed: _centerOnUser,
                         child: const Icon(Icons.my_location_rounded, size: 20),
                       ),
                       const SizedBox(height: 8),
@@ -467,13 +432,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
-                          if (DeviceMapConfig.enabled) {
-                            DeviceMapService.instance
-                                .setZoom(DeviceMapService.instance.zoom + 1);
-                          } else {
-                            _mapController
-                                ?.animateCamera(CameraUpdate.zoomIn());
-                          }
+                          _mapController?.animateCamera(CameraUpdate.zoomIn());
                         },
                         child: const Icon(Icons.add_rounded, size: 22),
                       ),
@@ -489,13 +448,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
-                          if (DeviceMapConfig.enabled) {
-                            DeviceMapService.instance
-                                .setZoom(DeviceMapService.instance.zoom - 1);
-                          } else {
-                            _mapController
-                                ?.animateCamera(CameraUpdate.zoomOut());
-                          }
+                          _mapController?.animateCamera(CameraUpdate.zoomOut());
                         },
                         child: const Icon(Icons.remove_rounded, size: 22),
                       ),
@@ -511,10 +464,6 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
-                          if (DeviceMapConfig.enabled) {
-                            DeviceMapService.instance.showOverview();
-                            return;
-                          }
                           final r = NavigationService.instance.activeRoute;
                           if (r != null &&
                               r.polylinePoints.isNotEmpty &&
@@ -542,79 +491,6 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           }
                         },
                         child: const Icon(Icons.route_rounded, size: 20),
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Simulator / Real GPS Mode Toggle Button (Tap to toggle, Long-press for config)
-                      ValueListenableBuilder<LocationSource>(
-                        valueListenable:
-                            LocationService.instance.locationSourceNotifier,
-                        builder: (context, source, _) {
-                          final isSim = source == LocationSource.simulator;
-                          return GestureDetector(
-                            onLongPress: _showSimulatorConfigSheet,
-                            child: FloatingActionButton.small(
-                              heroTag: 'sim_toggle_btn',
-                              backgroundColor:
-                                  isSim ? AppColors.primaryLight : _C.cardBg,
-                              foregroundColor: isSim
-                                  ? AppColors.onPrimary
-                                  : AppColors.textSecondary,
-                              tooltip: isSim
-                                  ? 'Simulation Active (Long press to config)'
-                                  : 'Switch to Simulator',
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(
-                                  color: isSim
-                                      ? AppColors.primaryLight
-                                      : _C.cardBorder,
-                                ),
-                              ),
-                              onPressed: () {
-                                final nextSource = isSim
-                                    ? LocationSource.realGps
-                                    : LocationSource.simulator;
-                                LocationService.instance
-                                    .setLocationSource(nextSource);
-                                final isConnected = SimulatorLocationService
-                                    .instance.isConnected;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    duration: const Duration(seconds: 3),
-                                    backgroundColor: _C.cardBg,
-                                    content: Text(
-                                      nextSource == LocationSource.simulator
-                                          ? (isConnected
-                                              ? '🎮 Simulation Active (Connected to Web Simulator)'
-                                              : '🎮 Simulation Active (Connecting to ${SimulatorLocationService.instance.host}...)')
-                                          : '🛰️ Real Phone GPS Active',
-                                      style: GoogleFonts.inter(
-                                          color: AppColors.textPrimary,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                    action: nextSource ==
-                                                LocationSource.simulator &&
-                                            !isConnected
-                                        ? SnackBarAction(
-                                            label: 'CONFIG',
-                                            textColor: _C.primary,
-                                            onPressed:
-                                                _showSimulatorConfigSheet,
-                                          )
-                                        : null,
-                                  ),
-                                );
-                              },
-                              child: Icon(
-                                isSim
-                                    ? Icons.sports_esports_rounded
-                                    : Icons.satellite_alt_rounded,
-                                size: 20,
-                              ),
-                            ),
-                          );
-                        },
                       ),
                     ],
                   ),
@@ -797,7 +673,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                   isRerouting
                       ? 'Recalculating best motorcycle route'
                       : state.maneuverText,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: _C.textSec,
@@ -1003,7 +880,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         ),
         content: Text(
           'Are you sure you want to stop active motorcycle navigation?',
-          style: GoogleFonts.inter(color: _C.textSec),
+          style: TextStyle(fontFamily: 'Stack Sans Text', color: _C.textSec),
         ),
         actions: [
           TextButton(
@@ -1027,442 +904,5 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
       await NavigationService.instance.stopNavigation();
       if (mounted) Navigator.of(context).pop();
     }
-  }
-
-  void _showSimulatorConfigSheet() {
-    final hostController = TextEditingController(
-      text: SimulatorLocationService.instance.host,
-    );
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            ),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: _C.cardBg,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                border:
-                    Border(top: BorderSide(color: _C.cardBorder, width: 1.5)),
-              ),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Handle bar
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: _C.cardBorder,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Header
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color:
-                                AppColors.primaryLight.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.sports_esports_rounded,
-                            color: AppColors.primaryLight,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'GPS Ride Simulator',
-                                style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: _C.onSurface,
-                                ),
-                              ),
-                              Text(
-                                'Indoor testing & physical TFT synchronization',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: _C.textSec,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Live connection pill
-                        ValueListenableBuilder<bool>(
-                          valueListenable: SimulatorLocationService
-                              .instance.isConnectedNotifier,
-                          builder: (_, connected, __) => Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: connected
-                                  ? _C.primary.withValues(alpha: 0.15)
-                                  : _C.red.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: connected
-                                    ? _C.primary.withValues(alpha: 0.5)
-                                    : _C.red.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: connected ? _C.primary : _C.red,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  connected ? 'CONNECTED' : 'OFFLINE',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: connected ? _C.primary : _C.red,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Active Mode Switcher
-                    Text(
-                      'ACTIVE LOCATION SOURCE',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _C.textSec,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ValueListenableBuilder<LocationSource>(
-                      valueListenable:
-                          LocationService.instance.locationSourceNotifier,
-                      builder: (_, source, __) {
-                        final isSim = source == LocationSource.simulator;
-                        return Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  LocationService.instance.setLocationSource(
-                                      LocationSource.realGps);
-                                  setSheetState(() {});
-                                },
-                                icon: Icon(
-                                  Icons.satellite_alt_rounded,
-                                  size: 16,
-                                  color: !isSim ? _C.primary : _C.textSec,
-                                ),
-                                label: Text(
-                                  'Real Phone GPS',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: !isSim
-                                        ? FontWeight.w700
-                                        : FontWeight.normal,
-                                    color: !isSim ? _C.onSurface : _C.textSec,
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  backgroundColor: !isSim
-                                      ? _C.primary.withValues(alpha: 0.1)
-                                      : Colors.transparent,
-                                  side: BorderSide(
-                                    color: !isSim ? _C.primary : _C.cardBorder,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  LocationService.instance.setLocationSource(
-                                      LocationSource.simulator);
-                                  setSheetState(() {});
-                                },
-                                icon: Icon(
-                                  Icons.sports_esports_rounded,
-                                  size: 16,
-                                  color: isSim
-                                      ? AppColors.primaryLight
-                                      : _C.textSec,
-                                ),
-                                label: Text(
-                                  'Web Simulator',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: isSim
-                                        ? FontWeight.w700
-                                        : FontWeight.normal,
-                                    color: isSim ? _C.onSurface : _C.textSec,
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  backgroundColor: isSim
-                                      ? AppColors.primaryLight
-                                          .withValues(alpha: 0.15)
-                                      : Colors.transparent,
-                                  side: BorderSide(
-                                    color: isSim
-                                        ? AppColors.primaryLight
-                                        : _C.cardBorder,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Host Address Input
-                    Text(
-                      'SIMULATOR SERVER IP:PORT',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _C.textSec,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: hostController,
-                      style: GoogleFonts.jetBrainsMono(
-                        color: _C.onSurface,
-                        fontSize: 13,
-                      ),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: _C.bg,
-                        prefixIcon: const Icon(
-                          Icons.dns_rounded,
-                          color: _C.textSec,
-                          size: 18,
-                        ),
-                        suffixIcon: IconButton(
-                          icon: const Icon(
-                            Icons.check_circle_rounded,
-                            color: _C.primary,
-                          ),
-                          onPressed: () async {
-                            final text = hostController.text.trim();
-                            if (text.isNotEmpty) {
-                              await SimulatorLocationService.instance
-                                  .setHost(text);
-                              await SimulatorLocationService.instance.connect();
-                              setSheetState(() {});
-                            }
-                          },
-                        ),
-                        hintText: '127.0.0.1:8080 or 192.168.x.x:8080',
-                        hintStyle: GoogleFonts.jetBrainsMono(
-                          color: _C.textSec.withValues(alpha: 0.5),
-                          fontSize: 12,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: _C.cardBorder),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: _C.primary),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Presets
-                    Row(
-                      children: [
-                        Text(
-                          'Presets: ',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 11,
-                            color: _C.textSec,
-                          ),
-                        ),
-                        ActionChip(
-                          label: Text(
-                            '127.0.0.1:8080',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10,
-                              color: _C.onSurface,
-                            ),
-                          ),
-                          backgroundColor: _C.bg,
-                          side: const BorderSide(color: _C.cardBorder),
-                          onPressed: () async {
-                            hostController.text = '127.0.0.1:8080';
-                            await SimulatorLocationService.instance
-                                .setHost('127.0.0.1:8080');
-                            await SimulatorLocationService.instance.connect();
-                            setSheetState(() {});
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        ActionChip(
-                          label: Text(
-                            '10.0.2.2:8080',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10,
-                              color: _C.onSurface,
-                            ),
-                          ),
-                          backgroundColor: _C.bg,
-                          side: const BorderSide(color: _C.cardBorder),
-                          onPressed: () async {
-                            hostController.text = '10.0.2.2:8080';
-                            await SimulatorLocationService.instance
-                                .setHost('10.0.2.2:8080');
-                            await SimulatorLocationService.instance.connect();
-                            setSheetState(() {});
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Telemetry Status Row
-                    ValueListenableBuilder<SimulatedLocationPacket?>(
-                      valueListenable: SimulatorLocationService
-                          .instance.latestPacketNotifier,
-                      builder: (_, packet, __) {
-                        return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: _C.bg,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _C.cardBorder),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'LATENCY',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 10,
-                                      color: _C.textSec,
-                                    ),
-                                  ),
-                                  ValueListenableBuilder<int>(
-                                    valueListenable: SimulatorLocationService
-                                        .instance.latencyMsNotifier,
-                                    builder: (_, lat, __) => Text(
-                                      '$lat ms',
-                                      style: GoogleFonts.jetBrainsMono(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: lat < 50
-                                            ? _C.primary
-                                            : (lat < 150 ? _C.amber : _C.red),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'SPEED',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 10,
-                                      color: _C.textSec,
-                                    ),
-                                  ),
-                                  Text(
-                                    packet != null
-                                        ? '${packet.speedKmh.toStringAsFixed(1)} km/h'
-                                        : '--',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: _C.onSurface,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'PROGRESS',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 10,
-                                      color: _C.textSec,
-                                    ),
-                                  ),
-                                  Text(
-                                    packet != null
-                                        ? '${(packet.routeProgress * 100).toStringAsFixed(1)}%'
-                                        : '--',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: _C.blueAccent,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
   }
 }

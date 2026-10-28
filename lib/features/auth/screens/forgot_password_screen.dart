@@ -1,6 +1,5 @@
 import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../shared/widgets/app_logo.dart';
@@ -39,10 +38,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       vsync: this,
       duration: const Duration(milliseconds: 3000),
     )..repeat();
-    _pingScale =
-        Tween<double>(begin: 1.0, end: 1.6).animate(_pingCtrl);
-    _pingOpacity =
-        Tween<double>(begin: 0.3, end: 0.0).animate(_pingCtrl);
+    _pingScale = Tween<double>(begin: 1.0, end: 1.6).animate(_pingCtrl);
+    _pingOpacity = Tween<double>(begin: 0.3, end: 0.0).animate(_pingCtrl);
   }
 
   @override
@@ -154,8 +151,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             height: 96,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: _C.primary, width: 1.5),
+                              border: Border.all(color: _C.primary, width: 1.5),
                             ),
                           ),
                         ),
@@ -295,14 +291,16 @@ class _EmailFieldState extends State<_EmailField> {
               child: TextField(
                 controller: widget.controller,
                 keyboardType: TextInputType.emailAddress,
-                style: GoogleFonts.inter(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 16,
                   color: _C.onSurface,
                 ),
                 cursorColor: _C.primary,
                 decoration: InputDecoration(
                   hintText: 'Enter email address',
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 16,
                     color: _C.textSec.withValues(alpha: 0.5),
                   ),
@@ -361,7 +359,8 @@ class _ContinueButtonState extends State<_ContinueButton> {
             children: [
               Text(
                 'Continue',
-                style: GoogleFonts.poppins(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: _C.onPrimary,
