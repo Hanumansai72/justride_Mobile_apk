@@ -32,7 +32,8 @@ class ExploreBanner extends StatelessWidget {
                   colors: [AppColors.primaryDark, AppColors.primary],
                 ),
               ),
-              child: const Icon(Icons.explore_rounded, color: AppColors.background, size: 28),
+              child: const Icon(Icons.explore_rounded,
+                  color: AppColors.background, size: 28),
             ),
             const SizedBox(width: AppConstants.spacingLg),
 
@@ -52,7 +53,7 @@ class ExploreBanner extends StatelessWidget {
             ),
 
             const Icon(Icons.chevron_right_rounded,
-                color: AppColors.primary, size: 22),
+                color: AppColors.primaryDark, size: 22),
           ],
         ),
       ),

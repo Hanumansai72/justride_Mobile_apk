@@ -34,8 +34,10 @@ class ProfileHeader extends StatelessWidget {
               Stack(
                 children: [
                   IconButton(
-                    onPressed: () => Navigator.of(context).pushNamed('/notifications'),
-                    icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textPrimary),
+                    onPressed: () =>
+                        Navigator.of(context).pushNamed('/notifications'),
+                    icon: const Icon(Icons.notifications_none_rounded,
+                        color: AppColors.textPrimary),
                   ),
                   Positioned(
                     top: 12,
@@ -52,12 +54,13 @@ class ProfileHeader extends StatelessWidget {
                 ],
               ),
               IconButton(
-                onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
-                icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/profile-settings'),
+                icon: const Icon(Icons.settings_outlined,
+                    color: AppColors.textPrimary),
               ),
             ],
           ),
-
         ],
       ),
     );

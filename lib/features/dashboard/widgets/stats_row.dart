@@ -124,7 +124,8 @@ class _DeviceStatusCard extends StatelessWidget {
                         ? Icons.bluetooth_connected_rounded
                         : Icons.bluetooth_disabled_rounded,
                     size: 14,
-                    color: isConnected ? AppColors.primary : AppColors.textMuted,
+                    color:
+                        isConnected ? AppColors.primary : AppColors.textMuted,
                   ),
                 ],
               ),
@@ -137,9 +138,8 @@ class _DeviceStatusCard extends StatelessWidget {
                         ? Icons.check_circle_rounded
                         : Icons.cancel_outlined,
                     size: 14,
-                    color: isConnected
-                        ? AppColors.connected
-                        : AppColors.textMuted,
+                    color:
+                        isConnected ? AppColors.connected : AppColors.textMuted,
                   ),
                   const SizedBox(width: 4),
                   Text(

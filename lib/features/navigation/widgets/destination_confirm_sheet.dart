@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
@@ -207,7 +206,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                           const SizedBox(width: 6),
                           Text(
                             'MOTORCYCLE ROUTE',
-                            style: GoogleFonts.jetBrainsMono(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               color: _C.primary,
@@ -263,7 +263,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                               isBleConnected
                                   ? 'DEVICE READY'
                                   : 'NO HUD (TAP RECONNECT)',
-                              style: GoogleFonts.jetBrainsMono(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 color: isBleConnected
@@ -370,7 +371,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                           children: [
                             Text(
                               dest.displayTitle,
-                              style: GoogleFonts.jetBrainsMono(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
                                 color: _C.onSurface,
@@ -402,7 +404,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                                     const SizedBox(width: 4),
                                     Text(
                                       'Tap here to retry lookup',
-                                      style: GoogleFonts.jetBrainsMono(
+                                      style: TextStyle(
+                                        fontFamily: 'Stack Sans Text',
                                         fontSize: 12,
                                         color: _C.primary,
                                         fontWeight: FontWeight.bold,
@@ -425,7 +428,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                               const SizedBox(height: 6),
                               Text(
                                 'GPS: ${dest.latitude.toStringAsFixed(5)}, ${dest.longitude.toStringAsFixed(5)}',
-                                style: GoogleFonts.jetBrainsMono(
+                                style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
                                   fontSize: 11,
                                   color: _C.primary,
                                 ),
@@ -586,7 +590,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                         _isLoadingPreview
                             ? 'CALCULATING ROUTE...'
                             : 'START RIDE',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.8,
@@ -600,7 +605,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                   onPressed: () => Navigator.of(context).pop(false),
                   child: Text(
                     'CANCEL',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 13,
                       color: _C.textSec,
                       fontWeight: FontWeight.w600,
@@ -637,7 +643,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: _C.textSec,
@@ -648,7 +655,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: GoogleFonts.jetBrainsMono(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               fontSize: 18,
               fontWeight: FontWeight.w800,
               color: _C.onSurface,
@@ -693,7 +701,8 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
           Icon(icon, size: 17, color: color),
           const SizedBox(width: 10),
           Text('$label  ',
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 10,
                   color: _C.textSec,
                   fontWeight: FontWeight.w700)),

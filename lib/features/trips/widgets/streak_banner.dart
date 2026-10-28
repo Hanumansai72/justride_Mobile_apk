@@ -62,9 +62,11 @@ class StreakBanner extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('View Streaks', style: AppTextStyles.accentMedium.copyWith(fontSize: 11)),
+                  Text('View Streaks',
+                      style: AppTextStyles.accentMedium.copyWith(fontSize: 11)),
                   const SizedBox(width: 3),
-                  const Icon(Icons.chevron_right_rounded, color: AppColors.primary, size: 14),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.primary, size: 14),
                 ],
               ),
             ),

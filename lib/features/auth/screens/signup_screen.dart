@@ -355,8 +355,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                     () => _agreeToTerms = val ?? false),
                                 activeColor: AppColors.primary,
                                 checkColor: AppColors.background,
-                                side:
-                                    const BorderSide(color: AppColors.primary),
+                                side: const BorderSide(
+                                    color: AppColors.primary),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(4),
                                 ),

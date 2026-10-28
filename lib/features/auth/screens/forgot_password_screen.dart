@@ -151,7 +151,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             height: 96,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: _C.primary, width: 1.5),
+                              border:
+                                  Border.all(color: _C.primary, width: 1.5),
                             ),
                           ),
                         ),

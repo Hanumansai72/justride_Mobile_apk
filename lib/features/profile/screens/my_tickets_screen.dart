@@ -1,7 +1,6 @@
 import '../../../shared/widgets/device_connection_gate.dart';
 import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
@@ -166,138 +165,154 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
   }
 
   Widget _buildBody() {
-    return ListView(
+    final filtered = _tickets.where((ticket) {
+      if (_selectedFilterIndex == 1) {
+        return ticket.status != 'CLOSED' && ticket.status != 'RESOLVED';
+      } else if (_selectedFilterIndex == 2) {
+        return ticket.status == 'CLOSED' || ticket.status == 'RESOLVED';
+      }
+      return true;
+    }).toList();
+    return CustomScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.pagePadding,
-        AppConstants.spacingLg,
-        AppConstants.pagePadding,
-        100, // Fab and bottom bar breathing space
-      ),
-      children: [
-        Text(
-          'My Tickets',
-          style: AppTextStyles.headingLarge.copyWith(
-            fontSize: 24,
-            color: _C.onSurface,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacingSm),
-        Text(
-          'Manage and track your support requests.',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: _C.textSec,
-            fontSize: 15,
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacingLg),
-
-        // Filter chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: List.generate(_filterOptions.length, (index) {
-              final isSelected = _selectedFilterIndex == index;
-              return Padding(
-                padding: const EdgeInsets.only(right: AppConstants.spacingSm),
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedFilterIndex = index),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? _C.primary.withValues(alpha: 0.1)
-                          : Colors.transparent,
-                      border: Border.all(
-                        color: isSelected ? _C.primary : _C.outlineVariant,
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(AppConstants.radiusCircle),
-                    ),
-                    child: Text(
-                      _filterOptions[index],
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: isSelected ? _C.primary : _C.textSec,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-        const SizedBox(height: AppConstants.spacingLg),
-
-        if (_tickets.isEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Center(
-              child: Column(
-                children: [
-                  const Icon(Icons.confirmation_number_outlined,
-                      color: _C.textSec, size: 48),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No support tickets found',
-                    style: TextStyle(
-                        fontFamily: 'Stack Sans Text',
-                        color: _C.textSec,
-                        fontSize: 14),
-                  ),
-                ],
-              ),
+      slivers: [
+        SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.pagePadding,
+              AppConstants.spacingLg,
+              AppConstants.pagePadding,
+              100, // Fab and bottom bar breathing space
             ),
-          ),
-        ] else ...[
-          // Tickets list
-          ..._tickets.where((ticket) {
-            if (_selectedFilterIndex == 1) {
-              return ticket.status != 'CLOSED' && ticket.status != 'RESOLVED';
-            } else if (_selectedFilterIndex == 2) {
-              return ticket.status == 'CLOSED' || ticket.status == 'RESOLVED';
-            }
-            return true;
-          }).map((ticket) {
-            final isClosed =
-                ticket.status == 'CLOSED' || ticket.status == 'RESOLVED';
-            return Padding(
-              padding: const EdgeInsets.only(bottom: AppConstants.spacingMd),
-              child: _TicketCard(
-                ticket: _Ticket(
-                  id: ticket.ticketNumber,
-                  title: ticket.title,
-                  description: ticket.category,
-                  status: isClosed
-                      ? _TicketStatus.closed
-                      : _TicketStatus.inProgress,
-                  createdDate: 'OCT 2023',
-                  priorityLabel: ticket.status,
-                  priorityColor: isClosed ? _C.textSec : _C.primary,
-                  priorityIcon: isClosed
-                      ? Icons.check_circle_rounded
-                      : Icons.pending_actions_rounded,
-                  resolvedDate: '',
-                ),
-                onTap: () {
-                  Navigator.of(context).push(
-                    DevicePageRoute(
-                      builder: (context) => SupportTicketScreen(
-                        ticketId: ticket.id,
+            sliver: SliverMainAxisGroup(slivers: [
+              SliverToBoxAdapter(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(
+                      'My Tickets',
+                      style: AppTextStyles.headingLarge.copyWith(
+                        fontSize: 24,
+                        color: _C.onSurface,
+                        fontWeight: FontWeight.w700,
                       ),
+                    ),
+                    const SizedBox(height: AppConstants.spacingSm),
+                    Text(
+                      'Manage and track your support requests.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: _C.textSec,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacingLg),
+
+                    // Filter chips
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: List.generate(_filterOptions.length, (index) {
+                          final isSelected = _selectedFilterIndex == index;
+                          return Padding(
+                            padding: const EdgeInsets.only(
+                                right: AppConstants.spacingSm),
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setState(() => _selectedFilterIndex = index),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? _C.primary.withValues(alpha: 0.1)
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? _C.primary
+                                        : _C.outlineVariant,
+                                  ),
+                                  borderRadius: BorderRadius.circular(
+                                      AppConstants.radiusCircle),
+                                ),
+                                child: Text(
+                                  _filterOptions[index],
+                                  style: TextStyle(
+                                    fontFamily: 'Stack Sans Text',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.8,
+                                    color: isSelected ? _C.primary : _C.textSec,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacingLg),
+
+                    if (filtered.isEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.confirmation_number_outlined,
+                                  color: _C.textSec, size: 48),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No support tickets found',
+                                style: TextStyle(
+                                    fontFamily: 'Stack Sans Text',
+                                    color: _C.textSec,
+                                    fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ])),
+              if (filtered.isNotEmpty)
+                SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                  final ticket = filtered[index];
+                  final isClosed =
+                      ticket.status == 'CLOSED' || ticket.status == 'RESOLVED';
+                  return Padding(
+                    padding:
+                        const EdgeInsets.only(bottom: AppConstants.spacingMd),
+                    child: _TicketCard(
+                      ticket: _Ticket(
+                        id: ticket.ticketNumber,
+                        title: ticket.title,
+                        description: ticket.category,
+                        status: isClosed
+                            ? _TicketStatus.closed
+                            : _TicketStatus.inProgress,
+                        createdDate: 'OCT 2023',
+                        priorityLabel: ticket.status,
+                        priorityColor: isClosed ? _C.textSec : _C.primary,
+                        priorityIcon: isClosed
+                            ? Icons.check_circle_rounded
+                            : Icons.pending_actions_rounded,
+                        resolvedDate: '',
+                      ),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          DevicePageRoute(
+                            builder: (context) => SupportTicketScreen(
+                              ticketId: ticket.id,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   );
-                },
-              ),
-            );
-          }),
-        ],
+                }, childCount: filtered.length)),
+            ])),
       ],
     );
   }
@@ -388,7 +403,8 @@ class _TicketCardState extends State<_TicketCard> {
                           children: [
                             Text(
                               t.id,
-                              style: GoogleFonts.jetBrainsMono(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
                                 color: _C.onSurface,
@@ -397,7 +413,8 @@ class _TicketCardState extends State<_TicketCard> {
                             const SizedBox(height: 2),
                             Text(
                               t.createdDate,
-                              style: GoogleFonts.jetBrainsMono(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.6,
@@ -455,7 +472,8 @@ class _TicketCardState extends State<_TicketCard> {
                               const SizedBox(width: 6),
                               Text(
                                 t.priorityLabel,
-                                style: GoogleFonts.jetBrainsMono(
+                                style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.8,
@@ -497,7 +515,8 @@ class _TicketCardState extends State<_TicketCard> {
           const SizedBox(width: 6),
           Text(
             'In Progress',
-            style: GoogleFonts.jetBrainsMono(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.6,
@@ -520,7 +539,8 @@ class _TicketCardState extends State<_TicketCard> {
           const SizedBox(width: 6),
           Text(
             'Open',
-            style: GoogleFonts.jetBrainsMono(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.6,
@@ -540,7 +560,8 @@ class _TicketCardState extends State<_TicketCard> {
           const SizedBox(width: 4),
           Text(
             'Closed',
-            style: GoogleFonts.jetBrainsMono(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.6,

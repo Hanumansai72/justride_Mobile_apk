@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -364,7 +363,8 @@ class _DeviceCard extends StatelessWidget {
                     ),
                     child: Text(
                       'CONNECTED',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
@@ -413,7 +413,8 @@ class _DeviceCard extends StatelessWidget {
                         alignment: Alignment.centerRight,
                         child: Text(
                           'Synced 2m ago',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.6,
@@ -453,7 +454,8 @@ class _StatCell extends StatelessWidget {
       children: [
         Text(
           label,
-          style: GoogleFonts.jetBrainsMono(
+          style: TextStyle(
+            fontFamily: 'Stack Sans Text',
             fontSize: 9,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.8,
@@ -467,7 +469,8 @@ class _StatCell extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               value,
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: _C.onSurface,
@@ -571,7 +574,8 @@ class _SearchFieldState extends State<_SearchField> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(widget.label,
-                          style: GoogleFonts.jetBrainsMono(
+                          style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.8,
@@ -785,7 +789,8 @@ class _QuickShortcutState extends State<_QuickShortcut> {
                 ),
                 Text(
                   widget.subtitle,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.6,

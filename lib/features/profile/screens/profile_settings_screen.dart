@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -327,7 +326,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       backgroundColor: _C.bg,
       appBar: _buildAppBar(),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _C.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: _C.primary))
           : _buildBody(),
       bottomNavigationBar: JustRideBottomNavBar(
         currentIndex: _navIndex,
@@ -551,7 +551,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'ID: JR-$shortId',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.8,
@@ -597,7 +598,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             const SizedBox(width: AppConstants.spacingSm),
             Text(
               'LOGOUT',
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.8,
@@ -634,7 +636,8 @@ class _SettingsCard extends StatelessWidget {
         children: [
           Text(
             sectionLabel,
-            style: GoogleFonts.jetBrainsMono(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               fontSize: 10,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,

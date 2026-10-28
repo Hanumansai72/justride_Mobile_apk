@@ -1,6 +1,5 @@
 import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../shared/widgets/app_logo.dart';
@@ -187,7 +186,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         children: [
                           Text(
                             'Security Level',
-                            style: GoogleFonts.jetBrainsMono(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.8,
@@ -196,7 +196,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                           Text(
                             _strengthLabel,
-                            style: GoogleFonts.jetBrainsMono(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.8,
@@ -273,7 +274,8 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: GoogleFonts.jetBrainsMono(
+      style: TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,

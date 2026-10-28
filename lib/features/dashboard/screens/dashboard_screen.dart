@@ -1,3 +1,4 @@
+import '../../../core/services/app_update_service.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
@@ -43,7 +44,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Timer? _statusPollTimer;
   bool _isHardwareSheetShowing = false;
   AppReleaseModel? _latestRelease;
-  bool _isReleaseBannerDismissed = false;
   late Future<ApiResponse<RideHistoryPage>> _historyFuture;
 
   void _reloadHistory() {
@@ -181,21 +181,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _checkAppRelease() async {
-    try {
-      final res = await BackendService.instance.getLatestAppRelease(
-        currentBuild: AppConstants.appBuildNumber,
-      );
-      if (res.success &&
-          res.data != null &&
-          res.data!.buildNumber > AppConstants.appBuildNumber &&
-          mounted) {
-        setState(() {
-          _latestRelease = res.data;
-        });
-      }
-    } catch (e) {
-      debugPrint('[DashboardScreen] App release check error: $e');
-    }
+    if (!AppUpdateService.instance.verified)
+      await AppUpdateService.instance.check();
+    if (mounted)
+      setState(() => _latestRelease = AppUpdateService.instance.hasUpdate
+          ? AppUpdateService.instance.release
+          : null);
   }
 
   @override
@@ -246,7 +237,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       slivers: [
         const SliverToBoxAdapter(child: SizedBox(height: 16)),
         // ── In-App Release Update Alert Banner ────────────────────────────
-        if (_latestRelease != null && !_isReleaseBannerDismissed)
+        if (_latestRelease != null)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               AppConstants.pagePadding,
@@ -270,7 +261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                     child: Text(
                   _user != null && _user!.fullName.isNotEmpty
-                      ? 'Hello, ${_user!.fullName.split(" ").first} 👋'
+                      ? 'Hello, ${_user!.fullName.split(" ").first}'
                       : 'Where to?',
                   style: AppTextStyles.headingLarge,
                   maxLines: 2,
@@ -368,7 +359,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Padding(
                     padding: EdgeInsets.all(16),
-                    child: LinearProgressIndicator(color: AppColors.primary));
+                    child:
+                        LinearProgressIndicator(color: AppColors.primary));
               }
               final result = snapshot.data;
               if (result == null || !result.success || result.data == null) {
@@ -401,160 +393,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       );
 
-  Widget _buildReleaseNotificationBanner() {
-    if (_latestRelease == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.spacingMd),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.4),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 16,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.system_update_rounded,
-                  color: AppColors.primary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacingMd),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Update Available: v${_latestRelease!.version}',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Build ${_latestRelease!.buildNumber}',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _latestRelease!.releaseNotes?.isNotEmpty == true
-                          ? _latestRelease!.releaseNotes!
-                          : 'A new version of JustRide is ready to install.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacingSm),
-              GestureDetector(
-                onTap: () {
-                  setState(() => _isReleaseBannerDismissed = true);
-                },
-                child: const Padding(
-                  padding: EdgeInsets.all(4.0),
-                  child: Icon(
-                    Icons.close_rounded,
-                    color: AppColors.textSecondary,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pushNamed('/about'),
-                child: Text(
-                  'View Details',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacingSm),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.black,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-                  ),
-                ),
-                icon: const Icon(Icons.download_rounded,
-                    size: 16, color: Colors.black),
-                label: Text(
-                  'Download',
-                  style: AppTextStyles.labelLarge.copyWith(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                onPressed: () {
-                  if (_latestRelease!.downloadUrl != null &&
-                      _latestRelease!.downloadUrl!.isNotEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            'Downloading APK: ${_latestRelease!.downloadUrl}'),
-                        backgroundColor: AppColors.primaryContainer,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  } else {
-                    Navigator.of(context).pushNamed('/about');
-                  }
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildReleaseNotificationBanner() => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+            color: AppColors.primaryContainer,
+            borderRadius: BorderRadius.circular(20)),
+        child: Row(children: [
+          const Icon(Icons.system_update_rounded, color: AppColors.primary),
+          const SizedBox(width: 14),
+          const Expanded(
+              child: Text('A new app update is ready.',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
+          TextButton(
+              onPressed: () => Navigator.of(context).pushNamed('/app-update'),
+              child: const Text('Update')),
+        ]),
+      );
 }

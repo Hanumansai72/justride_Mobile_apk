@@ -332,8 +332,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Expanded(
               child: _isLoading
                   ? const Center(
-                      child:
-                          CircularProgressIndicator(color: AppColors.primary),
+                      child: CircularProgressIndicator(
+                          color: AppColors.primary),
                     )
                   : RefreshIndicator(
                       onRefresh: _fetchProfile,

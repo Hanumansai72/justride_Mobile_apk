@@ -42,8 +42,8 @@ abstract final class AppConstants {
   static const int recentCount = 5;
 
   // ── App Release & Version ──────────────────────────────────────────────────
-  static const String appVersion = 'v1.2.0';
-  static const int appBuildNumber = 3;
+  static const String appVersion = 'v1.2.2';
+  static const int appBuildNumber = 8;
 
   // ── Google OAuth ──────────────────────────────────────────────────────────
   static const String googleClientId =

@@ -103,11 +103,14 @@ class JustRidePushService : FirebaseMessagingService() {
             .putExtra("justride_push_type", type)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pending = PendingIntent.getActivity(this, id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        // Keep lock-screen copy minimal, including messages queued by older backends.
+        val title = if (type == "APP_UPDATE") "JustRide app update" else "JustRide firmware update"
+        val body = if (type == "APP_UPDATE") "A new update is available. Please update the JustRide app."
+            else "A new update is available. Please update your JustRide device."
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_stat_justride)
-            .setContentTitle(data["title"] ?: "JustRide update")
-            .setContentText(data["body"])
-            .setStyle(NotificationCompat.BigTextStyle().bigText(data["body"]))
+            .setContentTitle(title)
+            .setContentText(body)
             .setColor(0xFF6DE5A8.toInt()).setContentIntent(pending).setAutoCancel(true).build()
         try { manager.notify(id, notification) } catch (_: SecurityException) { /* Permission revoked during delivery. */ }
     }

@@ -52,7 +52,7 @@ class InsightsBanner extends StatelessWidget {
             ),
 
             const Icon(Icons.chevron_right_rounded,
-                color: AppColors.primary, size: 22),
+                color: AppColors.primaryDark, size: 22),
           ],
         ),
       ),

@@ -12,7 +12,6 @@ import '../../../app/theme/app_colors.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -387,7 +386,8 @@ class _DisplayCustomizationScreenState
                             Expanded(
                               child: Text(
                                 'Image ready for your JustRide display',
-                                style: GoogleFonts.jetBrainsMono(
+                                style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: _C.onSurface,
@@ -531,7 +531,8 @@ class _DisplayCustomizationScreenState
               left: 12,
               child: Text(
                 'LIVE PREVIEW 320×240 (4:3)',
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
                   color: _C.primary,
@@ -581,7 +582,8 @@ class _DisplayCustomizationScreenState
             children: [
               Text(
                 'SPEED',
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 8,
                   color: _C.primary,
                   letterSpacing: 1,
@@ -589,7 +591,8 @@ class _DisplayCustomizationScreenState
               ),
               Text(
                 '48',
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 34,
                   fontWeight: FontWeight.w700,
                   color: _C.onSurface,
@@ -598,7 +601,8 @@ class _DisplayCustomizationScreenState
               ),
               Text(
                 'KM/H',
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 8,
                   color: _C.textSec,
                   letterSpacing: 1,
@@ -614,7 +618,8 @@ class _DisplayCustomizationScreenState
               children: [
                 Text(
                   'JUST RIDE HUD DISPLAY',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: _C.primary,
@@ -623,7 +628,8 @@ class _DisplayCustomizationScreenState
                 const SizedBox(height: 4),
                 Text(
                   'Upload your custom image or QR code below.',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 9,
                     color: _C.textSec,
                   ),
@@ -631,7 +637,8 @@ class _DisplayCustomizationScreenState
                 const SizedBox(height: 6),
                 Text(
                   '↑ Swipe Right on device to toggle this view',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 8,
                     color: _C.primary.withValues(alpha: 0.8),
                   ),
@@ -722,7 +729,8 @@ class _DisplayCustomizationScreenState
           Expanded(
             child: Text(
               'Optimising pixels for JustRide display...',
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 13,
                 color: _C.onSurface,
               ),
@@ -755,8 +763,8 @@ class _DisplayCustomizationScreenState
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading:
-                  const Icon(Icons.photo_library_outlined, color: _C.primary),
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: _C.primary),
               title: Text(
                 'Choose from Gallery',
                 style: TextStyle(
@@ -768,7 +776,8 @@ class _DisplayCustomizationScreenState
               },
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt_outlined, color: _C.primary),
+              leading:
+                  const Icon(Icons.camera_alt_outlined, color: _C.primary),
               title: Text(
                 'Take a Photo',
                 style: TextStyle(
@@ -832,7 +841,8 @@ class _TransferProgressDialogState extends State<_TransferProgressDialog> {
                 const SizedBox(height: 12),
                 Text(
                   '$pct% — ${prog.statusMessage}',
-                  style: GoogleFonts.jetBrainsMono(
+                  style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
                     fontSize: 12,
                     color: _C.textSec,
                   ),
@@ -916,7 +926,8 @@ class _ActionCardState extends State<_ActionCard> {
             const SizedBox(height: 6),
             Text(
               widget.label,
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,

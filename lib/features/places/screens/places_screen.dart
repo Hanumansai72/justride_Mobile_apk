@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -157,88 +156,100 @@ class _PlacesScreenState extends State<PlacesScreen> {
           p.address.toLowerCase().contains(query);
     }).toList();
 
-    return ListView(
+    return CustomScrollView(
       physics:
           const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.pagePadding,
-        AppConstants.spacingMd,
-        AppConstants.pagePadding,
-        90, // room for FAB and bottom nav
-      ),
-      children: [
-        // Search bar
-        _buildSearchBar(),
-        const SizedBox(height: AppConstants.spacingLg),
-
-        if (filtered.isEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Center(
-              child: Column(
-                children: [
-                  const Icon(Icons.location_off_outlined,
-                      color: _C.textSec, size: 48),
-                  const SizedBox(height: 12),
-                  Text(
-                    query.isEmpty
-                        ? 'No saved places yet'
-                        : 'No matching places found',
-                    style: TextStyle(
-                        fontFamily: 'Stack Sans Text',
-                        color: _C.textSec,
-                        fontSize: 14),
-                  ),
-                ],
-              ),
+      slivers: [
+        SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.pagePadding,
+              AppConstants.spacingMd,
+              AppConstants.pagePadding,
+              90, // room for FAB and bottom nav
             ),
-          ),
-        ] else ...[
-          // Live Places Cards
-          ...filtered.map((place) {
-            IconData icon = Icons.place_outlined;
-            if (place.type.toUpperCase().contains('HOME')) {
-              icon = Icons.home_outlined;
-            } else if (place.type.toUpperCase().contains('WORK')) {
-              icon = Icons.work_outline_rounded;
-            } else if (place.type.toUpperCase().contains('GYM')) {
-              icon = Icons.fitness_center_rounded;
-            } else if (place.type.toUpperCase().contains('CAFE')) {
-              icon = Icons.local_cafe_outlined;
-            }
+            sliver: SliverMainAxisGroup(slivers: [
+              SliverToBoxAdapter(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    // Search bar
+                    _buildSearchBar(),
+                    const SizedBox(height: AppConstants.spacingLg),
 
-            final item = _PlaceItem(
-              id: place.id,
-              icon: icon,
-              name: place.title,
-              address: place.address,
-              hasAccentBorder: place.type.toUpperCase().contains('CAFE'),
-            );
+                    if (filtered.isEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              const Icon(Icons.location_off_outlined,
+                                  color: _C.textSec, size: 48),
+                              const SizedBox(height: 12),
+                              Text(
+                                query.isEmpty
+                                    ? 'No saved places yet'
+                                    : 'No matching places found',
+                                style: TextStyle(
+                                    fontFamily: 'Stack Sans Text',
+                                    color: _C.textSec,
+                                    fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ])),
+              if (filtered.isNotEmpty)
+                SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                  final place = filtered[index];
+                  IconData icon = Icons.place_outlined;
+                  if (place.type.toUpperCase().contains('HOME')) {
+                    icon = Icons.home_outlined;
+                  } else if (place.type.toUpperCase().contains('WORK')) {
+                    icon = Icons.work_outline_rounded;
+                  } else if (place.type.toUpperCase().contains('GYM')) {
+                    icon = Icons.fitness_center_rounded;
+                  } else if (place.type.toUpperCase().contains('CAFE')) {
+                    icon = Icons.local_cafe_outlined;
+                  }
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: AppConstants.spacingMd),
-              child: _PlaceCard(
-                place: item,
-                onNavigate: () {
-                  final dest = Destination(
-                    name: item.name,
-                    address: item.address,
-                    latitude: 0,
-                    longitude: 0,
-                    rawQuery:
-                        item.address.isNotEmpty ? item.address : item.name,
+                  final item = _PlaceItem(
+                    id: place.id,
+                    icon: icon,
+                    name: place.title,
+                    address: place.address,
+                    hasAccentBorder: place.type.toUpperCase().contains('CAFE'),
                   );
-                  DestinationConfirmSheet.show(context, dest);
-                },
-                onEdit: () {},
-                onDelete: () async {
-                  await BackendService.instance.deleteSavedAddress(item.id);
-                  _fetchPlaces();
-                },
-              ),
-            );
-          }),
-        ],
+
+                  return Padding(
+                    padding:
+                        const EdgeInsets.only(bottom: AppConstants.spacingMd),
+                    child: _PlaceCard(
+                      place: item,
+                      onNavigate: () {
+                        final dest = Destination(
+                          name: item.name,
+                          address: item.address,
+                          latitude: 0,
+                          longitude: 0,
+                          rawQuery: item.address.isNotEmpty
+                              ? item.address
+                              : item.name,
+                        );
+                        DestinationConfirmSheet.show(context, dest);
+                      },
+                      onEdit: () {},
+                      onDelete: () async {
+                        await BackendService.instance
+                            .deleteSavedAddress(item.id);
+                        _fetchPlaces();
+                      },
+                    ),
+                  );
+                }, childCount: filtered.length)),
+            ])),
       ],
     );
   }
@@ -318,7 +329,8 @@ class _PlacesScreenState extends State<PlacesScreen> {
               const SizedBox(width: 8),
               Text(
                 'ADD PLACE',
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.8,
@@ -392,7 +404,8 @@ class _PlaceCardState extends State<_PlaceCard> {
                   children: [
                     Text(
                       p.name,
-                      style: GoogleFonts.jetBrainsMono(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: _C.onSurface,
@@ -435,7 +448,8 @@ class _PlaceCardState extends State<_PlaceCard> {
                     const SizedBox(width: 6),
                     Text(
                       'NAVIGATE',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,

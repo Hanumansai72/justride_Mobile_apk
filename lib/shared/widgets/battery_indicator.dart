@@ -75,7 +75,8 @@ class _BatteryIcon extends StatelessWidget {
           width: width,
           height: height,
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.textSecondary, width: borderWidth),
+            border:
+                Border.all(color: AppColors.textSecondary, width: borderWidth),
             borderRadius: BorderRadius.circular(AppConstants.radiusSm / 2),
           ),
           padding: const EdgeInsets.all(innerPad),

@@ -22,7 +22,8 @@ class RideHistoryCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const Icon(Icons.route_outlined, color: AppColors.primary, size: 20),
+          const Icon(Icons.route_outlined,
+              color: AppColors.primary, size: 20),
           const SizedBox(width: 10),
           Expanded(
               child: Text(ride.destination?.displayTitle ?? 'Destination',
@@ -42,8 +43,8 @@ class RideHistoryCard extends StatelessWidget {
           Text('${(ride.durationSeconds / 60).ceil()} min',
               style: AppTextStyles.labelLarge),
           Text(ride.status == 'stopped' ? 'Ended early' : 'Completed',
-              style:
-                  AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.primary)),
         ]),
         const SizedBox(height: 10),
         Text(dateText, style: AppTextStyles.bodySmall),

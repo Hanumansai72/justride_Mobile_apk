@@ -12,12 +12,10 @@ class ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = user?.fullName.isNotEmpty == true
-        ? user!.fullName
-        : 'Rider Profile';
-    final displayEmail = user?.email.isNotEmpty == true
-        ? user!.email
-        : 'rider@justride.com';
+    final displayName =
+        user?.fullName.isNotEmpty == true ? user!.fullName : 'Rider Profile';
+    final displayEmail =
+        user?.email.isNotEmpty == true ? user!.email : 'rider@justride.com';
     final displayRole = user?.role ?? 'PRO RIDER';
 
     return Container(
@@ -41,11 +39,14 @@ class ProfileCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.primaryContainer,
-                      border: Border.all(color: AppColors.primary, width: 2),
+                      border:
+                          Border.all(color: AppColors.primary, width: 2),
                     ),
                     child: Center(
                       child: Text(
-                        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'R',
+                        displayName.isNotEmpty
+                            ? displayName[0].toUpperCase()
+                            : 'R',
                         style: AppTextStyles.headingLarge.copyWith(
                           color: AppColors.primary,
                           fontSize: 28,
@@ -62,7 +63,8 @@ class ProfileCard extends StatelessWidget {
                         color: AppColors.primary,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.verified_rounded, size: 14, color: AppColors.background),
+                      child: const Icon(Icons.verified_rounded,
+                          size: 14, color: AppColors.background),
                     ),
                   ),
                 ],
@@ -78,11 +80,14 @@ class ProfileCard extends StatelessWidget {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                            border: Border.all(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.3)),
                           ),
                           child: Text(
                             displayRole.toUpperCase(),
@@ -96,9 +101,11 @@ class ProfileCard extends StatelessWidget {
                           const SizedBox(width: 8),
                           Row(
                             children: [
-                              const Icon(Icons.phone_rounded, size: 14, color: AppColors.primary),
+                              const Icon(Icons.phone_rounded,
+                                  size: 14, color: AppColors.primary),
                               const SizedBox(width: 4),
-                              Text(user!.phone!, style: AppTextStyles.bodySmall),
+                              Text(user!.phone!,
+                                  style: AppTextStyles.bodySmall),
                             ],
                           ),
                         ],
@@ -134,4 +141,3 @@ class ProfileCard extends StatelessWidget {
     );
   }
 }
-

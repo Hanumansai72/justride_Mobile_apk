@@ -66,8 +66,8 @@ class _SensorStatusCardState extends State<SensorStatusCard> {
                             ]),
                             const SizedBox(height: 12),
                             Text(text,
-                                style:
-                                    const TextStyle(color: AppColors.primary)),
+                                style: const TextStyle(
+                                    color: AppColors.primary)),
                             const SizedBox(height: 8),
                             Text(ready
                                 ? 'Roll ${status.roll.toStringAsFixed(1)}°   Pitch ${status.pitch.toStringAsFixed(1)}°'

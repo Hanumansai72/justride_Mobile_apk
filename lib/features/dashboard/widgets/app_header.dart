@@ -25,15 +25,16 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         IconButton(
           onPressed: () => Navigator.of(context).pushNamed('/notifications'),
-          icon: const Icon(Icons.notifications_outlined, color: AppColors.textPrimary, size: 24),
+          icon: const Icon(Icons.notifications_outlined,
+              color: AppColors.textPrimary, size: 24),
         ),
         IconButton(
           onPressed: () => Navigator.of(context).pushNamed('/profile-settings'),
-          icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary, size: 24),
+          icon: const Icon(Icons.settings_outlined,
+              color: AppColors.textPrimary, size: 24),
         ),
         const SizedBox(width: 8),
       ],
     );
   }
 }
-

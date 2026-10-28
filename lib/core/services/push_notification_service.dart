@@ -1,3 +1,4 @@
+import 'app_update_service.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -87,16 +88,18 @@ class PushNotificationService with WidgetsBindingObserver {
 
   void _openPending() {
     if (_pendingType == null ||
-        !ApiClient.instance.isAuthenticated ||
-        JustRideBleService.instance.connectionStateNotifier.value !=
-            BluetoothConnectionState.connected ||
-        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed)
       return;
-    }
+    if (_pendingType == 'FIRMWARE_UPDATE' &&
+        (!ApiClient.instance.isAuthenticated ||
+            JustRideBleService.instance.connectionStateNotifier.value !=
+                BluetoothConnectionState.connected)) return;
     final navigator = appNavigatorKey.currentState;
     if (navigator == null) return;
     final route =
-        _pendingType == 'FIRMWARE_UPDATE' ? '/device' : '/notifications';
+        _pendingType == 'FIRMWARE_UPDATE' ? '/device-settings' : '/app-update';
+    if (_pendingType == 'APP_UPDATE')
+      unawaited(AppUpdateService.instance.check());
     _pendingType = null;
     WidgetsBinding.instance
         .addPostFrameCallback((_) => navigator.pushNamed(route));

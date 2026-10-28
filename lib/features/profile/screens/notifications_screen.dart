@@ -1,6 +1,5 @@
 import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
@@ -118,7 +117,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       backgroundColor: _C.bg,
       appBar: _buildAppBar(),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _C.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: _C.primary))
           : RefreshIndicator(
               onRefresh: _fetchNotifications,
               color: _C.primary,
@@ -243,7 +243,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           const SizedBox(width: 4),
                           Text(
                             'HUD ACCESS',
-                            style: GoogleFonts.jetBrainsMono(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               color: _C.primary,
@@ -257,7 +258,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     onTap: _isUpdatingRead ? null : () => _markRead(),
                     child: Text(
                       'MARK ALL READ',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
@@ -353,8 +355,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
                   final notifItem = _Notif(
                     icon: icon,
-                    title: n.title,
-                    body: n.message,
+                    title: type.contains('FIRMWARE')
+                        ? 'JustRide firmware update'
+                        : type.contains('APP') || type.contains('APK')
+                            ? 'JustRide app update'
+                            : n.title,
+                    body: type.contains('FIRMWARE')
+                        ? 'A new update is available. Please update your JustRide device.'
+                        : type.contains('APP') || type.contains('APK')
+                            ? 'A new update is available. Please update the JustRide app.'
+                            : n.message,
                     timestamp: 'RECENT',
                     state: n.isRead ? _NotifState.read : _NotifState.unreadHigh,
                   );
@@ -364,13 +374,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     onTap: () async {
                       // Send strictly latest notification to ESP32 HUD display over BLE
                       if (BleNavigationService.instance.isReady) {
-                        BleNavigationService.instance
-                            .sendLatestNotification(n.title, n.message);
+                        BleNavigationService.instance.sendLatestNotification(
+                            notifItem.title, notifItem.body);
                       }
-                      if (!await _markRead(notification: n)) return;
+                      final read = await _markRead(notification: n);
+                      if (!read &&
+                          !type.contains('APP') &&
+                          !type.contains('APK') &&
+                          !type.contains('FIRMWARE')) return;
                       if (!context.mounted) return;
                       if (type.contains('FIRMWARE')) {
                         Navigator.of(context).pushNamed('/device-settings');
+                      } else if (type.contains('APP') || type.contains('APK')) {
+                        Navigator.of(context).pushNamed('/app-update');
                       }
                     },
                   );
@@ -417,7 +433,8 @@ class _FilterChip extends StatelessWidget {
           children: [
             Text(
               label,
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.8,
@@ -545,7 +562,8 @@ class _NotificationCardState extends State<_NotificationCard> {
                               const SizedBox(width: 8),
                               Text(
                                 n.timestamp,
-                                style: GoogleFonts.jetBrainsMono(
+                                style: TextStyle(
+                                  fontFamily: 'Stack Sans Text',
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.5,

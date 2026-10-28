@@ -19,7 +19,8 @@ class DeviceHealthCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.monitor_heart_outlined, color: AppColors.primary, size: 24),
+              const Icon(Icons.monitor_heart_outlined,
+                  color: AppColors.primary, size: 24),
               const SizedBox(width: AppConstants.spacingMd),
               Expanded(
                 child: Column(
@@ -27,11 +28,13 @@ class DeviceHealthCard extends StatelessWidget {
                   children: [
                     Text('Device Health', style: AppTextStyles.headingSmall),
                     const SizedBox(height: 2),
-                    Text('All systems are working well', style: AppTextStyles.labelSmall),
+                    Text('All systems are working well',
+                        style: AppTextStyles.labelSmall),
                   ],
                 ),
               ),
-              const Icon(Icons.keyboard_arrow_up_rounded, color: AppColors.textSecondary, size: 24),
+              const Icon(Icons.keyboard_arrow_up_rounded,
+                  color: AppColors.textSecondary, size: 24),
             ],
           ),
           const SizedBox(height: AppConstants.spacingLg),
@@ -40,7 +43,8 @@ class DeviceHealthCard extends StatelessWidget {
             children: [
               _HealthItem(icon: Icons.monitor_outlined, label: 'Display'),
               _HealthItem(icon: Icons.battery_full_rounded, label: 'Battery'),
-              _HealthItem(icon: Icons.radio_button_checked_rounded, label: 'Buttons'),
+              _HealthItem(
+                  icon: Icons.radio_button_checked_rounded, label: 'Buttons'),
               _HealthItem(icon: Icons.sensors_rounded, label: 'Sensors'),
             ],
           ),
@@ -67,7 +71,9 @@ class _HealthItem extends StatelessWidget {
         const SizedBox(height: 8),
         Text(label, style: AppTextStyles.labelMedium),
         const SizedBox(height: 2),
-        Text('Good', style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary)),
+        Text('Good',
+            style: AppTextStyles.labelSmall
+                .copyWith(color: AppColors.primary)),
       ],
     );
   }

@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' hide BluetoothService;
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/backend_service.dart';
@@ -306,13 +305,14 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 const SizedBox(height: 20),
                 TextField(
                   controller: idCtrl,
-                  style: GoogleFonts.jetBrainsMono(color: _C.onSurface),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text', color: _C.onSurface),
                   decoration: InputDecoration(
                     labelText: 'Device ID',
                     labelStyle: TextStyle(
                         fontFamily: 'Stack Sans Text', color: _C.textSec),
-                    prefixIcon:
-                        const Icon(Icons.qr_code_rounded, color: _C.primary),
+                    prefixIcon: const Icon(Icons.qr_code_rounded,
+                        color: _C.primary),
                     filled: true,
                     fillColor: _C.bg,
                     border: OutlineInputBorder(
@@ -330,7 +330,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   controller: pinCtrl,
                   keyboardType: TextInputType.number,
                   obscureText: true,
-                  style: GoogleFonts.jetBrainsMono(color: _C.onSurface),
+                  style: TextStyle(
+                      fontFamily: 'Stack Sans Text', color: _C.onSurface),
                   decoration: InputDecoration(
                     labelText: 'Pairing PIN (Default: 1234)',
                     labelStyle: TextStyle(
@@ -704,7 +705,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                         left: 4, bottom: AppConstants.spacingSm),
                     child: Text(
                       'Discovered Devices (${discoveredDevices.length})',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
@@ -733,7 +735,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
             onTap: _openManualPairingDialog,
             child: Text(
               'Enter Device ID Manually',
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
@@ -862,7 +865,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                       Flexible(
                         child: Text(
                           devName.isNotEmpty ? devName : 'JustRide Module',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: _C.onSurface,
@@ -887,7 +891,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                     const SizedBox(width: 4),
                     Text(
                       '${signalInfo.$1} (${result.rssi} dBm)',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.5,
@@ -910,7 +915,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 children: [
                   Text(
                     'DEVICE MAC / ID',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.8,
@@ -920,7 +926,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   const SizedBox(height: 4),
                   Text(
                     devId,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: _C.onSurface,
@@ -933,7 +940,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 children: [
                   Text(
                     'STATUS',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.8,
@@ -943,7 +951,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   const SizedBox(height: 4),
                   Text(
                     isConnecting ? 'Connecting...' : 'Ready to Pair',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: isConnecting ? _C.tertiary : _C.primary,

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -245,7 +244,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
             // ── Preset quick tags ─────────────────────────────────────────────
             Text(
               'CATEGORY PRESET',
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.8,
@@ -321,7 +321,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
             // ── Search Address / Street Input ──────────────────────────────────
             Text(
               'SEARCH ADDRESS / LOCATION',
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.8,
@@ -338,7 +339,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.search_rounded, color: _C.primary, size: 22),
+                  const Icon(Icons.search_rounded,
+                      color: _C.primary, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
@@ -528,7 +530,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                   const SizedBox(width: 8),
                   Text(
                     'Coordinates: ${_selectedLat.toStringAsFixed(4)}, ${_selectedLng.toStringAsFixed(4)} ${_hasResolvedCoordinates ? '(Resolved)' : '(Default)'}',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       color: _hasResolvedCoordinates ? _C.primary : _C.textSec,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -607,7 +610,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.jetBrainsMono(
+          style: TextStyle(
+            fontFamily: 'Stack Sans Text',
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.8,

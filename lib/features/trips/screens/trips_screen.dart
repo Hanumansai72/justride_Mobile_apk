@@ -116,7 +116,8 @@ class _TripsScreenState extends State<TripsScreen> {
                 const Center(
                     child: Padding(
                   padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(color: AppColors.primary),
+                  child:
+                      CircularProgressIndicator(color: AppColors.primary),
                 )),
               if (_hasMore && !_loading && _error == null)
                 OutlinedButton(

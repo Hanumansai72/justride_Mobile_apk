@@ -44,7 +44,8 @@ class AuthTextField extends StatelessWidget {
             hintText: hintText,
             hintStyle:
                 AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
-            prefixIcon: Icon(prefixIcon, color: AppColors.primary, size: 20),
+            prefixIcon:
+                Icon(prefixIcon, color: AppColors.primary, size: 20),
             suffixIcon: suffixIcon,
             filled: true,
             fillColor: AppColors.surface,

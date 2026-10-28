@@ -1,4 +1,6 @@
+import '../../features/profile/screens/app_update_screen.dart';
 import 'package:flutter/material.dart';
+import '../services/app_update_service.dart';
 import '../../shared/widgets/device_connection_gate.dart';
 
 // Screens
@@ -56,6 +58,7 @@ abstract final class AppRoutes {
   static const String helpSupport = '/help';
   static const String myTickets = '/my-tickets';
   static const String supportTicket = '/support-ticket';
+  static const String appUpdate = '/app-update';
   static const String about = '/about';
   static const String terms = '/terms';
   static const String privacy = '/privacy';
@@ -86,12 +89,24 @@ abstract final class AppRoutes {
       helpSupport: (context) => const HelpSupportScreen(),
       myTickets: (context) => const MyTicketsScreen(),
       supportTicket: (context) => const SupportTicketScreen(),
+      appUpdate: (context) {
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => AppUpdateService.instance.check());
+        return const AppUpdateScreen();
+      },
       about: (context) => const AboutScreen(),
       terms: (context) => const LegalScreen(isPrivacy: false),
       privacy: (context) => const LegalScreen(isPrivacy: true),
       deleteAccount: (context) => const DeleteAccountScreen(),
     };
-    const publicPages = {splash, login, signup, forgotPassword, resetPassword};
+    const publicPages = {
+      splash,
+      login,
+      signup,
+      forgotPassword,
+      resetPassword,
+      appUpdate
+    };
     return pages.map((name, builder) => MapEntry(
           name,
           publicPages.contains(name)

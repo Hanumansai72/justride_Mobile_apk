@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/models/destination.dart';
 import '../../../core/services/google_maps_service.dart';
@@ -260,7 +259,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
             alignment: Alignment.centerLeft,
             child: Text(
               'OR TAP A FREQUENT DESTINATION',
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 10,
                 letterSpacing: 1.1,
                 fontWeight: FontWeight.bold,

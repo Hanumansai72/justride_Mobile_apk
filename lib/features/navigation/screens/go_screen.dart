@@ -1,7 +1,6 @@
 import '../../../shared/widgets/contextual_help_button.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/models/destination.dart';
@@ -690,7 +689,8 @@ class _GoScreenState extends State<GoScreen>
                       const Spacer(),
                       Text(
                         '${(_previewRoute!.totalDistanceMeters / 1000).toStringAsFixed(1)} km',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -715,7 +715,8 @@ class _GoScreenState extends State<GoScreen>
           // Quick Frequent Places Section
           Text(
             'QUICK DESTINATIONS',
-            style: GoogleFonts.jetBrainsMono(
+            style: TextStyle(
+              fontFamily: 'Stack Sans Text',
               color: AppColors.textMuted,
               fontSize: 11,
               letterSpacing: 1.1,

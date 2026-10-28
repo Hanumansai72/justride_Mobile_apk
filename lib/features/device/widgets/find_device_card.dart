@@ -17,7 +17,8 @@ class FindDeviceCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.radar_rounded, color: AppColors.primary, size: 28),
+          const Icon(Icons.radar_rounded,
+              color: AppColors.primary, size: 28),
           const SizedBox(width: AppConstants.spacingMd),
           Expanded(
             child: Column(
@@ -25,7 +26,8 @@ class FindDeviceCard extends StatelessWidget {
               children: [
                 Text('Find My Device', style: AppTextStyles.headingSmall),
                 const SizedBox(height: 2),
-                Text('Get help finding your JustRide device', style: AppTextStyles.labelSmall),
+                Text('Get help finding your JustRide device',
+                    style: AppTextStyles.labelSmall),
               ],
             ),
           ),
@@ -39,9 +41,12 @@ class FindDeviceCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.location_on_outlined, color: AppColors.primary, size: 16),
+                const Icon(Icons.location_on_outlined,
+                    color: AppColors.primary, size: 16),
                 const SizedBox(width: 4),
-                Text('Find Device', style: AppTextStyles.labelMedium.copyWith(color: AppColors.primary)),
+                Text('Find Device',
+                    style: AppTextStyles.labelMedium
+                        .copyWith(color: AppColors.primary)),
               ],
             ),
           ),

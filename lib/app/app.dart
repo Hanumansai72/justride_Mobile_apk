@@ -1,3 +1,4 @@
+import '../features/profile/screens/app_update_screen.dart';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
@@ -25,11 +26,11 @@ class JustRideApp extends StatelessWidget {
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 480),
-                  child: child!,
+                  child: AppUpdateGate(child: child!),
                 ),
               ),
             )
-          : child!,
+          : AppUpdateGate(child: child!),
       initialRoute: AppRoutes.splash,
       routes: AppRoutes.routes,
     );

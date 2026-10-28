@@ -41,7 +41,8 @@ class DeviceActionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTextStyles.headingSmall.copyWith(color: color)),
+                  Text(title,
+                      style: AppTextStyles.headingSmall.copyWith(color: color)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(subtitle!, style: AppTextStyles.labelSmall),
@@ -49,7 +50,11 @@ class DeviceActionTile extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: isDestructive ? AppColors.textSecondary : AppColors.textSecondary, size: 24),
+            Icon(Icons.chevron_right_rounded,
+                color: isDestructive
+                    ? AppColors.textSecondary
+                    : AppColors.textSecondary,
+                size: 24),
           ],
         ),
       ),

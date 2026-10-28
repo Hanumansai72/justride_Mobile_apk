@@ -50,7 +50,6 @@ class JustRideBottomNavBar extends StatelessWidget {
   }
 }
 
-
 // ── Private helpers ──────────────────────────────────────────────────────────
 
 class _NavItem {
@@ -82,6 +81,14 @@ class _RegularNavItem extends StatelessWidget {
           children: [
             AnimatedContainer(
               duration: AppConstants.animNormal,
+              width: 58,
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primaryContainer
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(24),
+              ),
               child: Icon(item.icon, color: color, size: 22),
             ),
             const SizedBox(height: 4),
@@ -91,21 +98,9 @@ class _RegularNavItem extends StatelessWidget {
               child: Text(item.label),
             ),
             const SizedBox(height: 2),
-            // Active indicator dot
-            AnimatedContainer(
-              duration: AppConstants.animNormal,
-              height: 3,
-              width: isSelected ? 20 : 0,
-              margin: const EdgeInsets.only(top: 2),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(AppConstants.radiusCircle),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 }
-

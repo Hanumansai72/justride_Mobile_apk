@@ -24,11 +24,11 @@ class ProfileMenuItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isDestructive ? AppColors.errorText : AppColors.primary;
-    final textColor = isDestructive ? AppColors.errorText : AppColors.textPrimary;
+    final textColor =
+        isDestructive ? AppColors.errorText : AppColors.textPrimary;
 
     return InkWell(
       onTap: onTap ?? () {},
-
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppConstants.pagePadding,
@@ -42,14 +42,17 @@ class ProfileMenuItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTextStyles.bodyLarge.copyWith(color: textColor, fontWeight: FontWeight.w600)),
+                  Text(title,
+                      style: AppTextStyles.bodyLarge.copyWith(
+                          color: textColor, fontWeight: FontWeight.w600)),
                   Text(subtitle, style: AppTextStyles.bodySmall),
                 ],
               ),
             ),
             if (trailing != null) trailing!,
             if (!isDestructive)
-              const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.textMuted),
           ],
         ),
       ),

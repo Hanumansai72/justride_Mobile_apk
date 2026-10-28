@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import '../../../core/constants/google_maps_config.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
@@ -544,7 +543,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               const SizedBox(width: 8),
               Text(
                 'GPS SIGNAL LOST',
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                   color: AppColors.errorText,
@@ -554,7 +554,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               const SizedBox(width: 8),
               Text(
                 '· Speed: --',
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 12,
                   color: AppColors.textMuted,
                 ),
@@ -622,7 +623,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                       isRerouting
                           ? 'REROUTING...'
                           : state.maneuverDistanceFormatted,
-                      style: GoogleFonts.jetBrainsMono(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: isRerouting ? _C.amber : _C.onSurface,
@@ -647,7 +649,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                           children: [
                             Text(
                               ManeuverMapper.toArrowSymbol(maneuver),
-                              style: GoogleFonts.jetBrainsMono(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 fontSize: 13,
                                 fontWeight: FontWeight.w900,
                                 color: _C.primary,
@@ -656,7 +659,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                             const SizedBox(width: 4),
                             Text(
                               ManeuverMapper.toRiderActionText(maneuver),
-                              style: GoogleFonts.jetBrainsMono(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                                 color: _C.primary,
@@ -776,7 +780,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                       const SizedBox(width: 6),
                       Text(
                         isBleConnected ? 'TFT HUD SYNCED' : 'HUD DISCONNECTED',
-                        style: GoogleFonts.jetBrainsMono(
+                        style: TextStyle(
+                          fontFamily: 'Stack Sans Text',
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: isBleConnected
@@ -806,7 +811,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                   icon: const Icon(Icons.stop_circle_outlined, size: 18),
                   label: Text(
                     'END RIDE',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -830,7 +836,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.jetBrainsMono(
+          style: TextStyle(
+            fontFamily: 'Stack Sans Text',
             fontSize: 10,
             fontWeight: FontWeight.w600,
             color: _C.textSec,
@@ -844,7 +851,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
           children: [
             Text(
               value,
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: valueColor,
@@ -854,7 +862,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               const SizedBox(width: 4),
               Text(
                 unit,
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: _C.textSec,
@@ -875,8 +884,10 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'End Navigation?',
-          style: GoogleFonts.jetBrainsMono(
-              color: _C.onSurface, fontWeight: FontWeight.w700),
+          style: TextStyle(
+              fontFamily: 'Stack Sans Text',
+              color: _C.onSurface,
+              fontWeight: FontWeight.w700),
         ),
         content: Text(
           'Are you sure you want to stop active motorcycle navigation?',
@@ -886,7 +897,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text('CONTINUE RIDE',
-                style: GoogleFonts.jetBrainsMono(color: _C.primary)),
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text', color: _C.primary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -894,7 +906,9 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 backgroundColor: AppColors.error,
                 foregroundColor: AppColors.textPrimary),
             child: Text('STOP',
-                style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    fontFamily: 'Stack Sans Text',
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),

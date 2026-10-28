@@ -57,7 +57,8 @@ class TripCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             trip.origin,
-                            style: AppTextStyles.labelLarge.copyWith(fontSize: 12),
+                            style:
+                                AppTextStyles.labelLarge.copyWith(fontSize: 12),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -79,7 +80,8 @@ class TripCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             trip.destination,
-                            style: AppTextStyles.bodyMedium.copyWith(fontSize: 11),
+                            style:
+                                AppTextStyles.bodyMedium.copyWith(fontSize: 11),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),

@@ -1,6 +1,5 @@
 import '../../../app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../core/services/telephony_service.dart';
 
 /// Floating call overlay card displayed at the bottom of the navigation screen
@@ -172,7 +171,8 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                           ),
                           child: Text(
                             isOffhook ? 'IN CALL' : 'INCOMING',
-                            style: GoogleFonts.jetBrainsMono(
+                            style: TextStyle(
+                              fontFamily: 'Stack Sans Text',
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               color: isOffhook ? _primary : AppColors.warning,
@@ -221,7 +221,8 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                   icon: const Icon(Icons.call_end_rounded, size: 20),
                   label: Text(
                     isOffhook ? 'END CALL' : 'REJECT',
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.4,
@@ -248,7 +249,8 @@ class _NavigationCallOverlayState extends State<NavigationCallOverlay>
                     icon: const Icon(Icons.call_rounded, size: 20),
                     label: Text(
                       'LIFT CALL',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: TextStyle(
+                        fontFamily: 'Stack Sans Text',
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.4,

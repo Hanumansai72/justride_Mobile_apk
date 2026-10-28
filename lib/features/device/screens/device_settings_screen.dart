@@ -9,7 +9,6 @@ import '../../../core/services/backend_service.dart';
 import '../../../core/models/app_models.dart';
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/device_unlink_dialog.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
@@ -567,7 +566,8 @@ class _BrightnessCard extends StatelessWidget {
               ),
               Text(
                 label,
-                style: GoogleFonts.jetBrainsMono(
+                style: TextStyle(
+                  fontFamily: 'Stack Sans Text',
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
                   color: _SC.primary,
@@ -750,7 +750,8 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
                   Text(
                     '${(progress.progress * 100).round()}% Complete',
                     textAlign: TextAlign.right,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: TextStyle(
+                      fontFamily: 'Stack Sans Text',
                       color: _SC.primary,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1111,7 +1112,8 @@ class _LabelCaps extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: GoogleFonts.jetBrainsMono(
+      style: TextStyle(
+        fontFamily: 'Stack Sans Text',
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,
@@ -1346,7 +1348,8 @@ class _HardwareDiagnosticsCardState extends State<_HardwareDiagnosticsCard> {
             ),
             child: Text(
               badge,
-              style: GoogleFonts.jetBrainsMono(
+              style: TextStyle(
+                fontFamily: 'Stack Sans Text',
                 color: isOk ? _SC.primary : _SC.errorRed,
                 fontWeight: FontWeight.w700,
                 fontSize: 10,

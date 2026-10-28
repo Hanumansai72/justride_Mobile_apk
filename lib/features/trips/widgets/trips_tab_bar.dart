@@ -40,7 +40,9 @@ class _TripsTabBarState extends State<TripsTabBar> {
                 duration: AppConstants.animNormal,
                 margin: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.primaryContainer : AppColors.transparent,
+                  color: selected
+                      ? AppColors.primaryContainer
+                      : AppColors.transparent,
                   borderRadius: BorderRadius.circular(AppConstants.radiusSm),
                 ),
                 alignment: Alignment.center,

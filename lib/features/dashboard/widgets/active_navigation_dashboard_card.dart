@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/navigation_state.dart';
@@ -76,7 +75,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                               isRerouting
                                   ? 'REROUTING...'
                                   : 'LIVE NAVIGATION ACTIVE',
-                              style: GoogleFonts.jetBrainsMono(
+                              style: TextStyle(
+                                fontFamily: 'Stack Sans Text',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: isRerouting
@@ -101,7 +101,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                 ),
                                 title: Text(
                                   'Cancel Navigation?',
-                                  style: GoogleFonts.jetBrainsMono(
+                                  style: TextStyle(
+                                    fontFamily: 'Stack Sans Text',
                                     color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -117,7 +118,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                     onPressed: () =>
                                         Navigator.of(ctx).pop(false),
                                     child: Text('KEEP RIDING',
-                                        style: GoogleFonts.jetBrainsMono(
+                                        style: TextStyle(
+                                            fontFamily: 'Stack Sans Text',
                                             color: AppColors.primary)),
                                   ),
                                   ElevatedButton(
@@ -127,7 +129,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                         backgroundColor: AppColors.error,
                                         foregroundColor: AppColors.textPrimary),
                                     child: Text('CANCEL ROUTE',
-                                        style: GoogleFonts.jetBrainsMono(
+                                        style: TextStyle(
+                                            fontFamily: 'Stack Sans Text',
                                             fontWeight: FontWeight.w700)),
                                   ),
                                 ],
@@ -156,7 +159,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 Text(
                                   'CANCEL',
-                                  style: GoogleFonts.jetBrainsMono(
+                                  style: TextStyle(
+                                    fontFamily: 'Stack Sans Text',
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.errorText,
@@ -198,7 +202,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                 children: [
                                   Text(
                                     state.maneuverDistanceFormatted,
-                                    style: GoogleFonts.jetBrainsMono(
+                                    style: TextStyle(
+                                      fontFamily: 'Stack Sans Text',
                                       fontSize: 20,
                                       fontWeight: FontWeight.w800,
                                       color: AppColors.textPrimary,
@@ -207,7 +212,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                   const SizedBox(width: 8),
                                   Text(
                                     '${ManeuverMapper.toArrowSymbol(state.maneuver)} ${ManeuverMapper.toRiderActionText(state.maneuver)}',
-                                    style: GoogleFonts.jetBrainsMono(
+                                    style: TextStyle(
+                                      fontFamily: 'Stack Sans Text',
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       color: AppColors.primary,
@@ -245,7 +251,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                       children: [
                         Text(
                           'SPEED: ${state.speedDisplay} KM/H',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: AppColors.primary,
@@ -253,7 +260,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                         ),
                         Text(
                           'REMAINING: ${state.remainingDistanceFormatted}',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
@@ -261,7 +269,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                         ),
                         Text(
                           'ETA: ${state.arrivalTimeFormatted}',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: TextStyle(
+                            fontFamily: 'Stack Sans Text',
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: AppColors.primary,
