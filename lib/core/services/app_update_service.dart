@@ -21,6 +21,8 @@ class AppUpdateService extends ChangeNotifier with WidgetsBindingObserver {
   bool checking = false;
   bool opening = false;
   bool _initialized = false;
+  bool startupComplete = false;
+  bool _optionalDismissed = false;
   Future<void>? _request;
 
   bool get supported =>
@@ -30,7 +32,15 @@ class AppUpdateService extends ChangeNotifier with WidgetsBindingObserver {
       installedBuild != null &&
       release!.buildNumber > installedBuild!;
   bool get required => hasUpdate && release!.isMandatory;
-  bool get blockAccess => supported && (!verified || required);
+  bool get showOptionalUpdate => hasUpdate && !required && !_optionalDismissed;
+  bool get blockAccess =>
+      supported && (!startupComplete || required || showOptionalUpdate);
+
+  void dismissOptionalUpdate() {
+    if (required || !startupComplete) return;
+    _optionalDismissed = true;
+    notifyListeners();
+  }
 
   void init() {
     if (_initialized) return;
@@ -47,16 +57,22 @@ class AppUpdateService extends ChangeNotifier with WidgetsBindingObserver {
     error = null;
     notifyListeners();
     try {
+      installedBuild = AppConstants.appBuildNumber;
+      installedVersion = AppConstants.appVersion;
       if (supported) {
-        final info =
-            await _platform.invokeMapMethod<String, dynamic>('appInfo');
-        installedBuild = (info?['build'] as num?)?.toInt();
-        installedVersion = info?['version'] as String?;
-        if (installedBuild == null)
-          throw StateError('Installed build unavailable');
-      } else {
-        installedBuild = AppConstants.appBuildNumber;
-        installedVersion = AppConstants.appVersion;
+        try {
+          final info = await _platform
+              .invokeMapMethod<String, dynamic>('appInfo')
+              .timeout(const Duration(seconds: 3));
+          installedBuild = (info?['build'] as num?)?.toInt() ?? installedBuild;
+          installedVersion = info?['version'] as String? ?? installedVersion;
+        } catch (_) {
+          // The compiled build still permits a check if Android's bridge is busy.
+        }
+      }
+      // An installed update clears the old in-memory mandatory gate on resume.
+      if (release != null && release!.buildNumber <= installedBuild!) {
+        release = null;
       }
       final prefs = await SharedPreferences.getInstance();
       final cached = prefs.getString(_requiredKey);
@@ -69,7 +85,8 @@ class AppUpdateService extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
       final response = await BackendService.instance
-          .getLatestAppRelease(currentBuild: installedBuild!);
+          .getLatestAppRelease(currentBuild: installedBuild!)
+          .timeout(const Duration(seconds: 6));
       if (!response.success) {
         error = response.message;
         return;
@@ -94,6 +111,9 @@ class AppUpdateService extends ChangeNotifier with WidgetsBindingObserver {
       error =
           'Could not check for updates. Check your connection and try again.';
     } finally {
+      // Network failure must not trap startup. A previously confirmed mandatory
+      // release still blocks access, including while offline.
+      startupComplete = true;
       checking = false;
       notifyListeners();
     }

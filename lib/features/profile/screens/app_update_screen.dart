@@ -13,7 +13,8 @@ class AppUpdateScreen extends StatelessWidget {
     return ListenableBuilder(
         listenable: updates,
         builder: (context, _) {
-          final blocked = gated || updates.required;
+          final blocked =
+              updates.required || (gated && !updates.startupComplete);
           return PopScope(
             canPop: !blocked,
             child: Scaffold(
@@ -21,7 +22,7 @@ class AppUpdateScreen extends StatelessWidget {
               appBar: AppBar(
                 automaticallyImplyLeading: !blocked,
                 title: const Text('App update'),
-                actions: [
+                actions: const [
                   Padding(
                       padding: const EdgeInsets.only(right: 20),
                       child: AppLogo(fontSize: 14))
@@ -149,8 +150,13 @@ class AppUpdateScreen extends StatelessWidget {
                         if (!blocked)
                           Center(
                               child: TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(context).maybePop(),
+                                  onPressed: () {
+                                    if (gated) {
+                                      updates.dismissOptionalUpdate();
+                                    } else {
+                                      Navigator.of(context).maybePop();
+                                    }
+                                  },
                                   child: const Text('Not now'))),
                         const SizedBox(height: 32),
                       ],

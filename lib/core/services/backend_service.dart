@@ -319,6 +319,14 @@ class BackendService {
 
   /// Step 1 â€“ Pre-check: verify the device is registered in backend and available to pair.
   /// Returns success=true + can_pair=true if the device is claimable.
+  Future<ApiResponse<List<Map<String, dynamic>>>> getScanDeviceDetails(
+          List<String> addresses) =>
+      _api.post<List<Map<String, dynamic>>>('/devices/scan-details',
+          body: {'addresses': addresses},
+          fromJson: (data) => (data as List)
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList());
+
   Future<ApiResponse<Map<String, dynamic>>> checkDeviceAccess({
     required String bleAddress,
     String? deviceId,

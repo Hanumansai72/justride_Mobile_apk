@@ -38,6 +38,47 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     with TickerProviderStateMixin {
   final JustRideBleService _bleService = JustRideBleService.instance;
   String? _connectingDeviceId;
+  final Map<String, String> _registeredNames = {};
+  final Set<String> _lookedUpAddresses = {};
+  bool _resolvingNames = false;
+
+  String _deviceName(ScanResult result) =>
+      _registeredNames[result.device.remoteId.str.toUpperCase()] ??
+      JustRideBleService.getDeviceName(result);
+
+  Future<void> _resolveDeviceNames() async {
+    if (_resolvingNames || !mounted) return;
+    final addresses = _bleService.justRideDevicesNotifier.value
+        .map((result) => result.device.remoteId.str.toUpperCase())
+        .where((address) =>
+            RegExp(r'^(?:[A-F0-9]{2}:){5}[A-F0-9]{2}$').hasMatch(address) &&
+            !_lookedUpAddresses.contains(address))
+        .take(30)
+        .toList();
+    if (addresses.isEmpty) return;
+    _lookedUpAddresses.addAll(addresses);
+    _resolvingNames = true;
+    try {
+      final response =
+          await BackendService.instance.getScanDeviceDetails(addresses);
+      if (!mounted) return;
+      if (response.success) {
+        setState(() {
+          for (final device in response.data ?? []) {
+            final address = device['BLE_ADDRESS']?.toString().toUpperCase();
+            final name =
+                (device['device_type'] ?? device['devicename'])?.toString();
+            if (address != null && name != null && name.isNotEmpty) {
+              _registeredNames[address] = name;
+            }
+          }
+        });
+      }
+    } finally {
+      _resolvingNames = false;
+      if (mounted) _resolveDeviceNames();
+    }
+  }
 
   // Rotating scanner line
   late final AnimationController _rotateCtrl;
@@ -79,6 +120,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
 
     // Initialize BLE and start real-time scan for JustRide devices
     _bleService.init();
+    _bleService.justRideDevicesNotifier.addListener(_resolveDeviceNames);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
       if (!kIsWeb) _startScanning();
@@ -102,11 +144,14 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
   }
 
   void _startScanning() {
+    _lookedUpAddresses.clear();
+    _resolveDeviceNames();
     _bleService.startJustRideScan();
   }
 
   @override
   void dispose() {
+    _bleService.justRideDevicesNotifier.removeListener(_resolveDeviceNames);
     _rotateCtrl.dispose();
     _ring1Ctrl.dispose();
     _ring2Ctrl.dispose();
@@ -119,7 +164,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
   Future<void> _connectToDiscoveredDevice(ScanResult result) async {
     if (_connectingDeviceId != null) return;
     final devId = result.device.remoteId.str;
-    final devName = JustRideBleService.getDeviceName(result);
+    final devName = _deviceName(result);
 
     setState(() => _connectingDeviceId = devId);
 
@@ -246,220 +291,6 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     );
 
     if (connected) Navigator.of(context).pushReplacementNamed('/device');
-  }
-
-  void _openManualPairingDialog() {
-    final idCtrl = TextEditingController(text: 'JR-');
-    final pinCtrl = TextEditingController(text: '1234');
-    bool isSubmitting = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: _C.surfCont,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: _C.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'Enter JustRide Device ID',
-                  style: TextStyle(
-                    fontFamily: 'Stack Sans Text',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: _C.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Find the serial number on your JustRide HUD hardware or packaging.',
-                  style: TextStyle(
-                    fontFamily: 'Stack Sans Text',
-                    fontSize: 13,
-                    color: _C.textSec,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: idCtrl,
-                  style: TextStyle(
-                      fontFamily: 'Stack Sans Text', color: _C.onSurface),
-                  decoration: InputDecoration(
-                    labelText: 'Device ID',
-                    labelStyle: TextStyle(
-                        fontFamily: 'Stack Sans Text', color: _C.textSec),
-                    prefixIcon: const Icon(Icons.qr_code_rounded,
-                        color: _C.primary),
-                    filled: true,
-                    fillColor: _C.bg,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: _C.outlineVariant),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: _C.primary),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: pinCtrl,
-                  keyboardType: TextInputType.number,
-                  obscureText: true,
-                  style: TextStyle(
-                      fontFamily: 'Stack Sans Text', color: _C.onSurface),
-                  decoration: InputDecoration(
-                    labelText: 'Pairing PIN (Default: 1234)',
-                    labelStyle: TextStyle(
-                        fontFamily: 'Stack Sans Text', color: _C.textSec),
-                    prefixIcon:
-                        const Icon(Icons.pin_rounded, color: _C.primary),
-                    filled: true,
-                    fillColor: _C.bg,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: _C.outlineVariant),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: _C.primary),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: isSubmitting
-                        ? null
-                        : () async {
-                            final code = idCtrl.text.trim();
-                            if (code.isEmpty) return;
-                            setSheetState(() => isSubmitting = true);
-
-                            // Step 1: backend check
-                            final checkRes =
-                                await BackendService.instance.checkDeviceAccess(
-                              bleAddress: code,
-                              deviceId: code,
-                            );
-
-                            if (!checkRes.success) {
-                              setSheetState(() => isSubmitting = false);
-                              if (ctx.mounted) {
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  SnackBar(
-                                    backgroundColor: AppColors.error,
-                                    content: Text(
-                                      checkRes.message.isNotEmpty
-                                          ? checkRes.message
-                                          : 'Device not available for pairing.',
-                                      style: const TextStyle(
-                                          color: AppColors.textPrimary),
-                                    ),
-                                  ),
-                                );
-                              }
-                              return;
-                            }
-
-                            // Step 2: backend official pair
-                            final pairRes =
-                                await BackendService.instance.pairDevice(
-                              bleAddress: code,
-                              deviceName: 'JustRide HUD',
-                              deviceId: code,
-                            );
-
-                            if (!pairRes.success) {
-                              setSheetState(() => isSubmitting = false);
-                              if (ctx.mounted) {
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  SnackBar(
-                                    backgroundColor: AppColors.error,
-                                    content: Text(
-                                      'Pairing failed: ${pairRes.message}',
-                                      style: const TextStyle(
-                                          color: AppColors.textPrimary),
-                                    ),
-                                  ),
-                                );
-                              }
-                              return;
-                            }
-
-                            if (ctx.mounted) Navigator.of(ctx).pop();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  backgroundColor: AppColors.primaryContainer,
-                                  content: Text(
-                                    'JustRide device paired successfully!',
-                                    style: TextStyle(color: _C.onPrimary),
-                                  ),
-                                ),
-                              );
-                              Navigator.of(context)
-                                  .pushReplacementNamed('/device');
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _C.primary,
-                      foregroundColor: _C.onPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: isSubmitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: _C.onPrimary,
-                            ),
-                          )
-                        : Text(
-                            'Pair Device',
-                            style: TextStyle(
-                              fontFamily: 'Stack Sans Text',
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
   }
 
   @override
@@ -728,24 +559,6 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
               );
             },
           ),
-          const SizedBox(height: AppConstants.spacingXl),
-
-          // ── Manual Entry Option ─────────────────────────────────────────
-          GestureDetector(
-            onTap: _openManualPairingDialog,
-            child: Text(
-              'Enter Device ID Manually',
-              style: TextStyle(
-                fontFamily: 'Stack Sans Text',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-                color: _C.tertiary,
-                decoration: TextDecoration.underline,
-                decorationColor: _C.tertiary,
-              ),
-            ),
-          ),
           const SizedBox(height: AppConstants.spacingSection),
         ],
       ),
@@ -816,7 +629,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
 
   // ── Detected JustRide Device Card ──────────────────────────────────────────
   Widget _buildDeviceCard(ScanResult result) {
-    final devName = JustRideBleService.getDeviceName(result);
+    final devName = _deviceName(result);
     final devId = result.device.remoteId.str;
     final signalInfo = JustRideBleService.getSignalInfo(result.rssi);
     final isConnecting = _connectingDeviceId == devId;
