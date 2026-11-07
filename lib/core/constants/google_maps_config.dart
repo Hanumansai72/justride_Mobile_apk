@@ -43,7 +43,8 @@ abstract final class GoogleMapsConfig {
     if (_envApiKey.isNotEmpty || _runtimeApiKey.isNotEmpty) return;
     try {
       final key = await const MethodChannel('com.justride.app/maps_config')
-          .invokeMethod<String>('getApiKey');
+          .invokeMethod<String>('getApiKey')
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
       if (key != null && key.trim().isNotEmpty) setApiKey(key);
     } on MissingPluginException {
       // Non-Android platform: caller may use --dart-define instead.

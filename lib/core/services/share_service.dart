@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -8,7 +7,6 @@ import '../../core/routes/app_routes.dart';
 import '../../features/navigation/widgets/destination_confirm_sheet.dart';
 import '../models/destination.dart';
 import '../utils/maps_url_parser.dart';
-import 'google_maps_service.dart';
 
 /// Handles incoming shares from Google Maps and other applications.
 /// Features dual-channel native intent capture, deduplication, and
@@ -28,7 +26,7 @@ class ShareService {
 
   String? _lastProcessedPayload;
   DateTime? _lastProcessedTime;
-  bool _isConfirmSheetOpen = false;
+  int _shareGeneration = 0;
 
   /// Initializes the share intent listener for both running app and cold-start.
   void init() {
@@ -92,7 +90,7 @@ class ShareService {
     await handleSharedText(text);
   }
 
-  /// Parses shared text/URL, resolves coordinates, and emits to listeners.
+  /// Opens confirmation immediately; its sheet resolves the exact pin in view.
   Future<Destination?> handleSharedText(String text) async {
     final now = DateTime.now();
     if (_lastProcessedPayload == text &&
@@ -104,36 +102,22 @@ class ShareService {
     _lastProcessedPayload = text;
     _lastProcessedTime = now;
 
+    final generation = ++_shareGeneration;
     try {
-      final parsed = await MapsUrlParser.parseSharedContent(text);
+      final parsed = await MapsUrlParser.parseSharedContent(text, resolveShortLinks: false);
+      if (generation != _shareGeneration) return null;
       if (parsed == null) {
         debugPrint('[ShareService] Could not parse destination from text.');
         return null;
       }
 
-      var dest = parsed.destination;
-      var start = parsed.startLocation;
-
-      // If coordinates are missing (0,0), resolve them using Google Maps Places/Geocoding
-      if (dest.latitude == 0.0 && dest.longitude == 0.0) {
-        final resolved = await GoogleMapsService.instance.resolveDestination(dest);
-        if (resolved != null && resolved.latitude != 0.0) {
-          dest = resolved;
-        }
-      }
-
-      // If start coordinates are missing (0,0), resolve them as well
-      if (start != null && start.latitude == 0.0 && start.longitude == 0.0) {
-        final resolvedStart = await GoogleMapsService.instance.resolveDestination(start);
-        if (resolvedStart != null && resolvedStart.latitude != 0.0) {
-          start = resolvedStart;
-        }
-      }
+      final dest = parsed.destination;
+      final start = parsed.startLocation;
 
       currentSharedStartLocation = start;
       destinationSharedNotifier.value = dest;
       debugPrint(
-          '[ShareService] Successfully resolved shared destination: ${dest.displayTitle} (${dest.latitude}, ${dest.longitude})'
+          '[ShareService] Received shared destination: ${dest.displayTitle} (${dest.latitude}, ${dest.longitude})'
           '${start != null ? " with start: ${start.displayTitle} (${start.latitude}, ${start.longitude})" : ""}');
 
       // Attempt to immediately display confirmation sheet if navigator context is available
@@ -162,29 +146,18 @@ class ShareService {
       return;
     }
 
-    // If a confirm sheet is currently open from a previous share, pop it first to present fresh location
-    if (_isConfirmSheetOpen) {
-      try {
-        Navigator.of(targetContext, rootNavigator: true).pop();
-      } catch (_) {}
-      _isConfirmSheetOpen = false;
-    }
-
-    _isConfirmSheetOpen = true;
     final startLoc = currentSharedStartLocation;
     clearSharedDestination();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        await DestinationConfirmSheet.show(
+      if (!targetContext.mounted) return;
+      await DestinationConfirmSheet.show(
           targetContext,
           dest,
           startLocation: startLoc,
         );
-      } finally {
-        _isConfirmSheetOpen = false;
-      }
     });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Clears current shared destination after user has acted on it

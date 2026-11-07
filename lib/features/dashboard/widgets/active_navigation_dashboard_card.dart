@@ -73,7 +73,7 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                             const SizedBox(width: 6),
                             Text(
                               isRerouting
-                                  ? 'REROUTING...'
+                                  ? 'OFF ROUTE'
                                   : 'LIVE NAVIGATION ACTIVE',
                               style: TextStyle(
                                 fontFamily: 'Stack Sans Text',

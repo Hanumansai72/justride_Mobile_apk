@@ -1,4 +1,6 @@
 import '../../../core/models/ride_state.dart';
+import '../../../core/models/destination.dart';
+import '../../../core/services/google_maps_service.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import '../../../core/constants/google_maps_config.dart';
@@ -8,6 +10,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/navigation_state.dart';
 import '../../../core/services/navigation_service.dart';
+import '../../../core/services/ride_history_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/bluetooth_service.dart';
 import '../../../core/services/telephony_service.dart';
@@ -176,7 +179,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _confirmExitNavigation();
+        if (!didPop) _returnHome();
       },
       child: Scaffold(
         backgroundColor: _C.bg,
@@ -196,6 +199,12 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           fontSize: 28, color: AppColors.textPrimary)),
+                  const SizedBox(height: 16),
+                  if (NavigationService.instance.lastCompletedSession != null)
+                    Text(
+                        NavigationService
+                            .instance.lastCompletedSession!.summary,
+                        textAlign: TextAlign.center),
                   const SizedBox(height: 24),
                   FilledButton(
                       onPressed: () => Navigator.of(context)
@@ -621,7 +630,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                   children: [
                     Text(
                       isRerouting
-                          ? 'REROUTING...'
+                          ? 'OFF ROUTE'
                           : state.maneuverDistanceFormatted,
                       style: TextStyle(
                         fontFamily: 'Stack Sans Text',
@@ -674,9 +683,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  isRerouting
-                      ? 'Recalculating best motorcycle route'
-                      : state.maneuverText,
+                  isRerouting ? state.maneuverText : state.maneuverText,
                   style: TextStyle(
                     fontFamily: 'Stack Sans Text',
                     fontSize: 14,
@@ -690,11 +697,11 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
             ),
           ),
 
-          // Exit button
           IconButton(
-            icon: const Icon(Icons.close_rounded,
+            tooltip: 'Home',
+            icon: const Icon(Icons.home_outlined,
                 color: AppColors.textSecondary, size: 22),
-            onPressed: _confirmExitNavigation,
+            onPressed: _returnHome,
           ),
         ],
       ),
@@ -702,6 +709,140 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
   }
 
   /// Bottom HUD panel: Speedometer, Total Distance, ETA, BLE Status, and Exit
+  Future<void> _manageStops() async {
+    final nav = NavigationService.instance;
+    final query = TextEditingController();
+    List<Destination> results = [];
+    bool searching = false;
+    String? error;
+    await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => StatefulBuilder(
+            builder: (context, update) => SafeArea(
+                  child: Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16,
+                          16 + MediaQuery.viewInsetsOf(context).bottom),
+                      child: SizedBox(
+                        height: MediaQuery.sizeOf(context).height * .65,
+                        child: ValueListenableBuilder<int>(
+                            valueListenable: nav.stopsChanged,
+                            builder: (context, _, child) => Column(children: [
+                                  const Text('Journey stops',
+                                      style: TextStyle(fontSize: 22)),
+                                  const Text(
+                                      'Active stop stays first. Use Skip to change it.'),
+                                  TextField(
+                                      controller: query,
+                                      decoration: const InputDecoration(
+                                          labelText: 'Search for a stop'),
+                                      onSubmitted: (_) async {
+                                        if (searching ||
+                                            query.text.trim().length < 2)
+                                          return;
+                                        update(() {
+                                          searching = true;
+                                          error = null;
+                                        });
+                                        try {
+                                          results = await GoogleMapsService
+                                              .instance
+                                              .searchPlaces(query.text);
+                                        } catch (_) {
+                                          error =
+                                              'Search unavailable. Try again when connected.';
+                                        }
+                                        if (context.mounted)
+                                          update(() => searching = false);
+                                      }),
+                                  if (searching)
+                                    const LinearProgressIndicator(),
+                                  if (error != null) Text(error!),
+                                  Expanded(
+                                      child: ListView(children: [
+                                    for (final result in results)
+                                      ListTile(
+                                          leading: const Icon(Icons.add),
+                                          title: Text(result.displayTitle),
+                                          onTap: () async {
+                                            try {
+                                              await nav.addStop(result);
+                                            } catch (_) {
+                                              if (context.mounted)
+                                                update(() => error =
+                                                    'Could not add this stop. Select a location with valid coordinates.');
+                                              return;
+                                            }
+                                            if (context.mounted)
+                                              update(() {
+                                                results = [];
+                                                query.clear();
+                                              });
+                                          }),
+                                    for (var i = 0;
+                                        i < nav.remainingStops.length;
+                                        i++)
+                                      ListTile(
+                                          title: Text(
+                                              '${i + 1}. ${nav.remainingStops[i].displayTitle}'),
+                                          subtitle: i == 0
+                                              ? const Text('Active destination')
+                                              : null,
+                                          trailing: i == 0
+                                              ? null
+                                              : Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                      IconButton(
+                                                          tooltip:
+                                                              'Move earlier',
+                                                          onPressed: i > 1
+                                                              ? () =>
+                                                                  nav.moveStop(
+                                                                      i, i - 1)
+                                                              : null,
+                                                          icon: const Icon(Icons
+                                                              .arrow_upward)),
+                                                      IconButton(
+                                                          tooltip: 'Move later',
+                                                          onPressed: i + 1 <
+                                                                  nav.remainingStops
+                                                                      .length
+                                                              ? () =>
+                                                                  nav.moveStop(
+                                                                      i, i + 1)
+                                                              : null,
+                                                          icon: const Icon(Icons
+                                                              .arrow_downward)),
+                                                      IconButton(
+                                                          tooltip:
+                                                              'Remove stop',
+                                                          onPressed: () =>
+                                                              nav.removeStop(i),
+                                                          icon: const Icon(
+                                                              Icons.close)),
+                                                    ])),
+                                  ])),
+                                  FilledButton(
+                                      onPressed: nav.remainingStops.length >
+                                                  1 &&
+                                              stateAllowsSkip(nav.currentState)
+                                          ? () async {
+                                              Navigator.pop(context);
+                                              await nav.skipStop();
+                                            }
+                                          : null,
+                                      child: const Text('Skip active stop')),
+                                ])),
+                      )),
+                )));
+    query.dispose();
+  }
+
+  bool stateAllowsSkip(NavigationState state) =>
+      state.rideState != RideState.paused && !state.rerouting;
+
   Widget _buildBottomHud(NavigationState state, bool isBleConnected) {
     return Container(
       decoration: const BoxDecoration(
@@ -715,6 +856,31 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            TextButton.icon(
+                onPressed: _manageStops,
+                icon: const Icon(Icons.playlist_add),
+                label: Text(
+                    'To ${NavigationService.instance.currentDestination?.displayTitle ?? "Destination"} · Stops')),
+            TextButton.icon(
+                onPressed: () {
+                  if (state.rideState == RideState.paused) {
+                    NavigationService.instance.resumeNavigation();
+                  } else {
+                    NavigationService.instance.pauseNavigation();
+                  }
+                },
+                icon: Icon(state.rideState == RideState.paused
+                    ? Icons.play_arrow
+                    : Icons.pause),
+                label: Text(state.rideState == RideState.paused
+                    ? 'Resume journey'
+                    : 'Pause journey')),
+            ValueListenableBuilder<String?>(
+                valueListenable: RideHistoryService.instance.storageError,
+                builder: (context, message, _) => message == null
+                    ? const SizedBox.shrink()
+                    : Text(message,
+                        style: const TextStyle(color: AppColors.warning))),
             // Row 1: Speed, Remaining Distance, ETA
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -876,6 +1042,10 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
     );
   }
 
+  void _returnHome() {
+    Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (_) => false);
+  }
+
   Future<void> _confirmExitNavigation() async {
     final shouldExit = await showDialog<bool>(
       context: context,
@@ -916,7 +1086,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
 
     if (shouldExit == true && mounted) {
       await NavigationService.instance.stopNavigation();
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) _returnHome();
     }
   }
 }

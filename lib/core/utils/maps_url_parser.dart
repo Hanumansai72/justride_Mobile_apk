@@ -30,18 +30,6 @@ class MapsUrlParser {
     r'''(\d{1,2})[°\s]+(?:(\d{1,2})['\s]+([\d.]+)(?:["\s]*)?|([\d.]+)['\s]*)([NSns])[,;\s]+(\d{1,3})[°\s]+(?:(\d{1,2})['\s]+([\d.]+)(?:["\s]*)?|([\d.]+)['\s]*)([EWew])''',
   );
 
-  static final RegExp _atCoordsRegex = RegExp(
-    r'@([-+]?\d{1,2}\.\d+),([-+]?\d{1,3}\.\d+)',
-  );
-
-  static final RegExp _latProtobufRegex = RegExp(
-    r'!3d([-+]?\d{1,2}\.\d+)',
-  );
-
-  static final RegExp _lngProtobufRegex = RegExp(
-    r'!4d([-+]?\d{1,3}\.\d+)',
-  );
-
   static final RegExp _placeNameFromUrlRegex = RegExp(
     r'/maps/place/([^/@?]+)',
   );
@@ -62,15 +50,6 @@ class MapsUrlParser {
   static final RegExp _ogImageMarkerRegex = RegExp(
     r'markers=(?:color:[^%|&]+%7C)?([-+]?\d{1,2}\.\d+)(?:%2C|,)([-+]?\d{1,3}\.\d+)',
     caseSensitive: false,
-  );
-
-  static final RegExp _staticMapCenterRegex = RegExp(
-    r'center=([-+]?\d{1,2}\.\d+)(?:%2C|,)([-+]?\d{1,3}\.\d+)',
-    caseSensitive: false,
-  );
-
-  static final RegExp _appStateCoordsRegex = RegExp(
-    r'\[null,null,([-+]?\d{1,2}\.\d{3,}),([-+]?\d{1,3}\.\d{3,})\]',
   );
 
   static final RegExp _sharedRouteRegex = RegExp(
@@ -133,9 +112,14 @@ class MapsUrlParser {
   /// Strips URLs and route sharing boilerplate to obtain the clean destination or place name.
   static String cleanSearchQuery(String raw) {
     var cleaned = raw.replaceAll(_urlRegex, ' ').trim();
-    cleaned = cleaned.replaceAll(RegExp(r'^\s*Shared\s+route\s*', caseSensitive: false), ' ');
-    cleaned = cleaned.replaceAll(RegExp(r'For the best route.*$', caseSensitive: false), ' ');
-    cleaned = cleaned.replaceAll(RegExp(r'\d+\s*(?:min|mins|hr|hrs|hour|hours|km|m)\b.*$', caseSensitive: false), ' ');
+    cleaned = cleaned.replaceAll(
+        RegExp(r'^\s*Shared\s+route\s*', caseSensitive: false), ' ');
+    cleaned = cleaned.replaceAll(
+        RegExp(r'For the best route.*$', caseSensitive: false), ' ');
+    cleaned = cleaned.replaceAll(
+        RegExp(r'\d+\s*(?:min|mins|hr|hrs|hour|hours|km|m)\b.*$',
+            caseSensitive: false),
+        ' ');
     cleaned = cleaned.replaceAll(RegExp(r'[\r\n\t]+'), ' ');
     cleaned = cleaned.replaceAll(RegExp(r'\s{2,}'), ' ');
     cleaned = cleaned.trim();
@@ -147,7 +131,9 @@ class MapsUrlParser {
       final destPart = routeMatch.group(2)?.trim();
       if (destPart != null && destPart.isNotEmpty) {
         final parsedDest = _parseEndpointString(destPart);
-        if (parsedDest != null && parsedDest.name != null && parsedDest.name!.isNotEmpty) {
+        if (parsedDest != null &&
+            parsedDest.name != null &&
+            parsedDest.name!.isNotEmpty) {
           return parsedDest.name!;
         }
       }
@@ -161,8 +147,15 @@ class MapsUrlParser {
     var s = raw.trim();
     s = s.replaceAll(RegExp(r'[\.,;]+$'), '').trim();
     s = s.replaceAll(RegExp(r'\s+via\s+.*$', caseSensitive: false), '').trim();
-    s = s.replaceAll(RegExp(r'\d+\s*(?:min|mins|hr|hrs|hour|hours|km|m)\b.*$', caseSensitive: false), '').trim();
-    s = s.replaceAll(RegExp(r'^(?:From|To)[:\s]+', caseSensitive: false), '').trim();
+    s = s
+        .replaceAll(
+            RegExp(r'\d+\s*(?:min|mins|hr|hrs|hour|hours|km|m)\b.*$',
+                caseSensitive: false),
+            '')
+        .trim();
+    s = s
+        .replaceAll(RegExp(r'^(?:From|To)[:\s]+', caseSensitive: false), '')
+        .trim();
     if (s.isEmpty) return null;
 
     final lower = s.toLowerCase();
@@ -217,7 +210,8 @@ class MapsUrlParser {
   /// Analyzes any text shared into JustRide to extract a Destination and optional Start location.
   /// Handles "Shared route From <origin> to <destination>" as well as single place shares,
   /// dropped pins, DMS coordinates, and shortened/full Google Maps links.
-  static Future<ParsedShareResult?> parseSharedContent(String sharedText) async {
+  static Future<ParsedShareResult?> parseSharedContent(String sharedText,
+      {bool resolveShortLinks = true}) async {
     final text = sharedText.trim();
     if (text.isEmpty) return null;
 
@@ -240,7 +234,8 @@ class MapsUrlParser {
 
       routeOrigin = _parseEndpointString(rawOrigin);
       routeDest = _parseEndpointString(rawDest);
-      debugPrint('[MapsUrlParser] Detected shared route - Origin: "${routeOrigin?.displayTitle}", Destination: "${routeDest?.displayTitle}"');
+      debugPrint(
+          '[MapsUrlParser] Detected shared route - Origin: "${routeOrigin?.displayTitle}", Destination: "${routeDest?.displayTitle}"');
     }
 
     // 3. Check for DMS coordinates in text before URL parsing
@@ -254,7 +249,8 @@ class MapsUrlParser {
 
       ParsedShareResult? parsedResultFromUrl;
       try {
-        parsedResultFromUrl = await parseUrlDetailed(foundUrl);
+        parsedResultFromUrl = await parseUrlDetailed(foundUrl,
+            resolveShortLinks: resolveShortLinks);
       } catch (e) {
         debugPrint('[MapsUrlParser] Error parsing URL $foundUrl: $e');
       }
@@ -359,7 +355,7 @@ class MapsUrlParser {
             address: extraText,
             latitude: 0,
             longitude: 0,
-            rawQuery: extraText,
+            rawQuery: text,
           ),
           startLocation: routeOrigin,
         );
@@ -437,11 +433,14 @@ class MapsUrlParser {
   }
 
   /// Parses a Google Maps URL and extracts both destination and optional origin (for /maps/dir/ routes).
-  static Future<ParsedShareResult?> parseUrlDetailed(String inputUrl) async {
+  static Future<ParsedShareResult?> parseUrlDetailed(String inputUrl,
+      {bool resolveShortLinks = true}) async {
     String finalUrl = inputUrl.trim();
 
     // If it's a shortened URL (goo.gl / maps.app.goo.gl), resolve the redirect chain
-    if (finalUrl.contains('goo.gl') || finalUrl.contains('maps.app.goo.gl')) {
+    final inputHost = Uri.tryParse(finalUrl)?.host.toLowerCase();
+    if (inputHost == 'goo.gl' || inputHost == 'maps.app.goo.gl') {
+      if (!resolveShortLinks) return null;
       try {
         final resolved = await _resolveRedirectChain(finalUrl);
         if (resolved != null && resolved.isNotEmpty) {
@@ -462,7 +461,8 @@ class MapsUrlParser {
 
     final placeMatch = _placeNameFromUrlRegex.firstMatch(finalUrl);
     if (placeMatch != null) {
-      final rawSegment = Uri.decodeComponent(placeMatch.group(1)!).replaceAll('+', ' ');
+      final rawSegment =
+          Uri.decodeComponent(placeMatch.group(1)!.replaceAll('+', ' '));
       final dms = parseDmsCoordinates(rawSegment);
       if (dms != null) {
         pathCoords = dms;
@@ -482,7 +482,8 @@ class MapsUrlParser {
     } else {
       final searchMatch = _searchNameFromUrlRegex.firstMatch(finalUrl);
       if (searchMatch != null) {
-        final rawSegment = Uri.decodeComponent(searchMatch.group(1)!).replaceAll('+', ' ');
+        final rawSegment =
+            Uri.decodeComponent(searchMatch.group(1)!.replaceAll('+', ' '));
         final dms = parseDmsCoordinates(rawSegment);
         if (dms != null) {
           pathCoords = dms;
@@ -536,25 +537,49 @@ class MapsUrlParser {
     }
 
     // Check query parameters for origin
-    final originQuery = uri.queryParameters['origin'] ?? uri.queryParameters['saddr'];
+    final originQuery =
+        uri.queryParameters['origin'] ?? uri.queryParameters['saddr'];
     if (originQuery != null && originQuery.isNotEmpty && routeOrigin == null) {
       routeOrigin = _parseEndpointString(originQuery);
     }
 
     Destination? dest;
+    final placeId = uri.queryParameters['destination_place_id'] ??
+        uri.queryParameters['query_place_id'] ??
+        uri.queryParameters['place_id'];
+    final qPlaceId = uri.queryParameters['q'];
+    final embeddedPlaceId =
+        RegExp(r'!1s(ChI[^!/?&]+)').firstMatch(finalUrl)?.group(1);
+    final exactId = placeId ??
+        (qPlaceId?.startsWith('place_id:') == true
+            ? qPlaceId!.substring(9)
+            : null) ??
+        embeddedPlaceId;
+    if (exactId != null && exactId.isNotEmpty) {
+      dest = Destination(
+          name: placeName ?? 'Google Maps Place',
+          placeId: exactId,
+          latitude: 0,
+          longitude: 0,
+          rawQuery: finalUrl);
+    }
 
-    // Check 1: Decoupled !3d(lat) and !4d(lng) identifies the selected pin
-    // in Google Maps URLs. Decoupled so order or intervening parameters never fail.
+    // Keep latitude/longitude from the same pin token, never two unrelated entries.
     // NOTE: For /maps/dir/ URLs, protobuf coordinates can correspond to the origin/waypoint
     // and must not be used to override the destination name.
     if (!isDirectionUrl) {
-      final latMatch = _latProtobufRegex.firstMatch(finalUrl);
-      final lngMatch = _lngProtobufRegex.firstMatch(finalUrl);
+      final pairs = RegExp(
+              r'!3d([-+]?\d+(?:\.\d+)?)(?:(?!![34]d).)*?!4d([-+]?\d+(?:\.\d+)?)')
+          .allMatches(finalUrl);
+      final pair = pairs.isEmpty ? null : pairs.last;
+      final latMatch = pair;
+      final lngMatch = pair;
       if (latMatch != null && lngMatch != null) {
         final lat = double.tryParse(latMatch.group(1)!);
-        final lng = double.tryParse(lngMatch.group(1)!);
+        final lng = double.tryParse(lngMatch.group(2)!);
         if (lat != null && lng != null && _isValidCoord(lat, lng)) {
           dest = Destination(
+            placeId: exactId,
             name: placeName ?? 'Selected Location',
             address: placeName ?? '$lat, $lng',
             latitude: lat,
@@ -576,16 +601,12 @@ class MapsUrlParser {
       );
     }
 
-    // Check 3: Check query parameters (q, query, destination, daddr, ll, sll, center, near)
+    // Explicit destination queries only; ll/sll/center/near are viewport hints.
     if (dest == null) {
-      final q = uri.queryParameters['q'] ??
-          uri.queryParameters['query'] ??
-          uri.queryParameters['destination'] ??
+      final q = uri.queryParameters['destination'] ??
           uri.queryParameters['daddr'] ??
-          uri.queryParameters['ll'] ??
-          uri.queryParameters['sll'] ??
-          uri.queryParameters['center'] ??
-          uri.queryParameters['near'];
+          uri.queryParameters['q'] ??
+          uri.queryParameters['query'];
 
       if (q != null && q.isNotEmpty) {
         final dms = parseDmsCoordinates(q);
@@ -647,29 +668,8 @@ class MapsUrlParser {
         address: placeName,
         latitude: 0,
         longitude: 0,
-        rawQuery: placeName,
+        rawQuery: finalUrl,
       );
-    }
-
-    // Check 6: @lat,lng in URL path or query (Camera / map center position fallback when no place name is found)
-    // NOTE: In /maps/dir/ URLs, @lat,lng is the camera/viewport center between origin & destination
-    // (often centered on the origin e.g. Miyapur), NOT the destination coordinate!
-    // Never assign camera coordinates to the destination in direction/route URLs.
-    if (dest == null && !isDirectionUrl) {
-      final atMatch = _atCoordsRegex.firstMatch(finalUrl);
-      if (atMatch != null) {
-        final lat = double.tryParse(atMatch.group(1)!);
-        final lng = double.tryParse(atMatch.group(2)!);
-        if (lat != null && lng != null && _isValidCoord(lat, lng)) {
-          dest = Destination(
-            name: 'Selected Location',
-            address: '$lat, $lng',
-            latitude: lat,
-            longitude: lng,
-            rawQuery: finalUrl,
-          );
-        }
-      }
     }
 
     if (dest == null) return null;
@@ -726,7 +726,10 @@ class MapsUrlParser {
     if (match != null) {
       final lat = double.tryParse(match.group(1)!);
       final lng = double.tryParse(match.group(2)!);
-      if (lat != null && lng != null && (lat != 0.0 || lng != 0.0) && _isValidCoord(lat, lng)) {
+      if (lat != null &&
+          lng != null &&
+          (lat != 0.0 || lng != 0.0) &&
+          _isValidCoord(lat, lng)) {
         return Destination(
           name: 'Selected Location',
           address: '$lat, $lng',
@@ -744,16 +747,19 @@ class MapsUrlParser {
   /// (OG image markers, staticmap centers, and app initialization state).
   static Future<String?> _resolveRedirectChain(String initialUrl) async {
     final client = http.Client();
+    var currentUrl = initialUrl;
+    final elapsed = Stopwatch()..start();
+    Duration remaining() => Duration(
+        milliseconds: (8000 - elapsed.elapsedMilliseconds).clamp(1, 8000));
     try {
-      var currentUrl = initialUrl;
       for (int hop = 0; hop < 6; hop++) {
+        if (elapsed.elapsedMilliseconds >= 8000) break;
         final request = http.Request('GET', Uri.parse(currentUrl))
           ..followRedirects = false
           ..headers['User-Agent'] =
               'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
-        final response =
-            await client.send(request).timeout(const Duration(seconds: 10));
+        final response = await client.send(request).timeout(remaining());
         final status = response.statusCode;
         final location = response.headers['location'];
 
@@ -769,18 +775,24 @@ class MapsUrlParser {
           if (currentUrl.contains('consent.google.com')) {
             final continueParam = nextUri.queryParameters['continue'];
             if (continueParam != null && continueParam.isNotEmpty) {
-              currentUrl = Uri.decodeFull(continueParam);
-              debugPrint('[MapsUrlParser] Extracted target URL from consent page: $currentUrl');
+              currentUrl = continueParam;
+              debugPrint(
+                  '[MapsUrlParser] Extracted target URL from consent page: $currentUrl');
             }
           }
 
-          // Stop early if the redirect URL already contains full place/route coordinates or parameters
+          final query = nextUri.queryParameters['destination'] ??
+              nextUri.queryParameters['daddr'] ??
+              nextUri.queryParameters['q'] ??
+              '';
+          // A text-only query still needs the page's actual place identity.
           if ((currentUrl.contains('!3d') && currentUrl.contains('!4d')) ||
-              (currentUrl.contains('/maps/place/') && currentUrl.contains('@')) ||
               currentUrl.contains('/maps/dir/') ||
-              nextUri.queryParameters.containsKey('q') ||
-              nextUri.queryParameters.containsKey('destination') ||
-              nextUri.queryParameters.containsKey('daddr')) {
+              googleCid(currentUrl) != null ||
+              nextUri.queryParameters.containsKey('query_place_id') ||
+              nextUri.queryParameters.containsKey('place_id') ||
+              query.startsWith('place_id:') ||
+              _latLngRegex.hasMatch(query)) {
             return currentUrl;
           }
           continue;
@@ -788,7 +800,8 @@ class MapsUrlParser {
 
         // 200 OK — check HTML body for canonical or og:url and embedded coordinates
         if (status == 200) {
-          final body = await response.stream.bytesToString();
+          final body =
+              await response.stream.bytesToString().timeout(remaining());
 
           // 1. Check HTML meta refresh tag
           final metaRefresh = RegExp(
@@ -819,31 +832,14 @@ class MapsUrlParser {
 
           // 3. Check OpenGraph image markers (Exact pin coordinates in staticmap marker URL)
           final ogImageMatch = _ogImageMarkerRegex.firstMatch(body);
-          if (ogImageMatch != null) {
+          if (ogImageMatch != null && !currentUrl.contains('/maps/dir/')) {
             final lat = double.tryParse(ogImageMatch.group(1)!);
             final lng = double.tryParse(ogImageMatch.group(2)!);
             if (lat != null && lng != null && _isValidCoord(lat, lng)) {
-              return '$currentUrl&q=$lat,$lng!3d$lat!4d$lng';
-            }
-          }
-
-          // 4. Check staticmap center
-          final centerMatch = _staticMapCenterRegex.firstMatch(body);
-          if (centerMatch != null) {
-            final lat = double.tryParse(centerMatch.group(1)!);
-            final lng = double.tryParse(centerMatch.group(2)!);
-            if (lat != null && lng != null && _isValidCoord(lat, lng)) {
-              return '$currentUrl&q=$lat,$lng!3d$lat!4d$lng';
-            }
-          }
-
-          // 5. Check window.APP_INITIALIZATION_STATE
-          final appStateMatch = _appStateCoordsRegex.firstMatch(body);
-          if (appStateMatch != null) {
-            final lat = double.tryParse(appStateMatch.group(1)!);
-            final lng = double.tryParse(appStateMatch.group(2)!);
-            if (lat != null && lng != null && _isValidCoord(lat, lng)) {
-              return '$currentUrl&q=$lat,$lng!3d$lat!4d$lng';
+              return Uri.parse(currentUrl).replace(queryParameters: {
+                ...Uri.parse(currentUrl).queryParameters,
+                'q': '$lat,$lng'
+              }).toString();
             }
           }
 
@@ -855,10 +851,27 @@ class MapsUrlParser {
       return currentUrl;
     } catch (e) {
       debugPrint('[MapsUrlParser] _resolveRedirectChain error: $e');
-      return initialUrl;
+      return currentUrl;
     } finally {
       client.close();
     }
+  }
+
+  /// Google Maps FTID's second hex value is the unsigned decimal CID.
+  static String? googleCid(String url) {
+    final uri = Uri.tryParse(url);
+    final cid = uri?.queryParameters['cid'];
+    if (cid != null && RegExp(r'^\d+$').hasMatch(cid))
+      return BigInt.tryParse(cid)?.toString();
+    var decoded = url;
+    try {
+      decoded = Uri.decodeFull(url);
+    } catch (_) {}
+    final match = RegExp(r'0x[0-9a-f]+:0x([0-9a-f]+)', caseSensitive: false)
+        .firstMatch(decoded);
+    return match == null
+        ? null
+        : BigInt.tryParse(match.group(1)!, radix: 16)?.toString();
   }
 
   static bool _isValidCoord(double lat, double lng) {

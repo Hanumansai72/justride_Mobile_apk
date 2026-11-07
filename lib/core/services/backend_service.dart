@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../network/api_client.dart';
 import '../network/api_endpoints.dart';
@@ -13,6 +14,10 @@ class BackendService {
   final ApiClient _api = ApiClient.instance;
   Future<ApiResponse<DeviceModel>>? _deviceRequest;
   String? _deviceRequestToken;
+  String? _pairingToken;
+
+  /// Account ownership is independent of the live Bluetooth connection.
+  final accountPaired = ValueNotifier<bool?>(null);
 
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // 1. AUTHENTICATION & USER (/api/users)
@@ -113,7 +118,8 @@ class BackendService {
     String? phonenumber,
     String? email,
   }) async {
-    return _api.put<UserModel>(
+    final token = _api.token;
+    final result = await _api.put<UserModel>(
       ApiEndpoints.updateProfile,
       body: {
         if (name != null) 'name': name,
@@ -125,6 +131,10 @@ class BackendService {
           ? json['data']
           : (json is Map && json.containsKey('user') ? json['user'] : json)),
     );
+    if (result.success && result.data != null && _api.token == token) {
+      await _api.saveUserData(result.data!.toJson());
+    }
+    return result;
   }
 
   Future<ApiResponse<void>> changePassword({
@@ -141,10 +151,15 @@ class BackendService {
   }
 
   Future<ApiResponse<UserModel>> getProfile() async {
-    return _api.get<UserModel>(
+    final token = _api.token;
+    final result = await _api.get<UserModel>(
       ApiEndpoints.getMe,
       fromJson: (json) => UserModel.fromJson(json['user'] ?? json),
     );
+    if (result.success && result.data != null && _api.token == token) {
+      await _api.saveUserData(result.data!.toJson());
+    }
+    return result;
   }
 
   Future<ApiResponse<Map<String, dynamic>>> getAccountDeletionStatus() =>
@@ -193,14 +208,20 @@ class BackendService {
 
   Future<void> saveLocalDevice(DeviceModel device) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'justride_paired_device', jsonEncode(device.toJson()));
+    final user = await _api.getSavedUserData();
+    await prefs.setString('justride_paired_device', jsonEncode({
+      ...device.toJson(),
+      '_account_id': user?['_id'] ?? user?['id'],
+    }));
+    _pairingToken = _api.token;
+    accountPaired.value = true;
     if (device.bleAddress != null && device.bleAddress!.isNotEmpty) {
       await prefs.setString('justride_saved_mac_address', device.bleAddress!);
     }
   }
 
   Future<void> unpairLocalDevice() async {
+    accountPaired.value = false;
     await JustRideBleService.instance.disableCompanion(forgetDevice: true);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('justride_paired_device');
@@ -222,6 +243,33 @@ class BackendService {
 
   Future<ApiResponse<DeviceModel>> _fetchMyDevice() async {
     final sessionToken = _api.token;
+    final prefs = await SharedPreferences.getInstance();
+    if (sessionToken != _api.token) {
+      return ApiResponse.error('Session changed during device check.');
+    }
+    if (_pairingToken != sessionToken) {
+      _pairingToken = sessionToken;
+      accountPaired.value = null;
+    }
+    DeviceModel? cachedDevice;
+    final user = await _api.getSavedUserData();
+    final accountId = user?['_id'] ?? user?['id'];
+    final raw = prefs.getString('justride_paired_device');
+    if (raw != null && accountId != null) {
+      try {
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        if (json['_account_id'] == accountId) {
+          final device = DeviceModel.fromJson(json);
+          if (!device.isBlocked && device.isActive && !device.isRetired) {
+            cachedDevice = device;
+          }
+        }
+      } catch (_) {}
+    }
+    if (sessionToken != _api.token) {
+      return ApiResponse.error('Session changed during device check.');
+    }
+    if (cachedDevice != null) accountPaired.value = true;
     final res = await _api.get<DeviceModel>(
       ApiEndpoints.myDevice,
       fromJson: (json) {
@@ -256,7 +304,7 @@ class BackendService {
       // If no device is paired, or device is blocked / inactive / retired on the server:
       if (dev == null || dev.isBlocked || !dev.isActive || dev.isRetired) {
         await unpairLocalDevice();
-        await JustRideBleService.instance.disconnectDevice();
+        await JustRideBleService.instance.disconnectDevice(restartScan: false);
         if (dev != null && dev.isBlocked) {
           return ApiResponse(
             success: false,
@@ -278,31 +326,20 @@ class BackendService {
     if (!res.isTransientFailure) {
       if (res.statusCode == 401 || res.statusCode == 403) {
         await unpairLocalDevice();
-        await JustRideBleService.instance.disconnectDevice();
+        await JustRideBleService.instance.disconnectDevice(restartScan: false);
       }
       return res;
     }
 
-    // Use the local device only during transient network/service failures.
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('justride_paired_device');
-    if (raw != null) {
-      try {
-        final dev =
-            DeviceModel.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-        if (!dev.isBlocked && dev.isActive && !dev.isRetired) {
-          return ApiResponse<DeviceModel>(
-              success: false,
-              data: dev,
-              message: res.message,
-              statusCode: res.statusCode,
-              errors: res.errors,
-              retryAfterSeconds: res.retryAfterSeconds);
-        } else {
-          await unpairLocalDevice();
-          await JustRideBleService.instance.disconnectDevice();
-        }
-      } catch (_) {}
+    // An offline phone or server does not remove an account's device link.
+    if (cachedDevice != null) {
+      return ApiResponse<DeviceModel>(
+          success: false,
+          data: cachedDevice,
+          message: res.message,
+          statusCode: res.statusCode,
+          errors: res.errors,
+          retryAfterSeconds: res.retryAfterSeconds);
     }
     return res;
   }
@@ -348,12 +385,14 @@ class BackendService {
     required String deviceName,
     String? deviceId,
     String? deviceVersion,
+    String? setupCode,
   }) async {
     final res = await _api.post<DeviceModel>(
       ApiEndpoints.pairDevice,
       body: {
         'BLE_ADDRESS': bleAddress,
         'devicename': deviceName,
+        if (setupCode != null) 'setup_code': setupCode,
         if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
         if (deviceVersion != null) 'device_version': deviceVersion,
       },
@@ -581,6 +620,7 @@ class BackendService {
   Future<ApiResponse<Map<String, dynamic>>> uploadCustomDisplayImage({
     required List<int> imageBytes,
     required String filename,
+    int width=320,int height=240,
   }) async {
     return _api.uploadMultipart<Map<String, dynamic>>(
       ApiEndpoints.uploadImage,
@@ -589,8 +629,8 @@ class BackendService {
       fieldName: 'image',
       fields: {
         'folder': 'justride/display_customization',
-        'width': '320',
-        'height': '240',
+        'width': width.toString(),
+        'height': height.toString(),
       },
       fromJson: (json) => (json is Map ? Map<String, dynamic>.from(json) : {}),
     );

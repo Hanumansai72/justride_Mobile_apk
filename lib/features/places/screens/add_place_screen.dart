@@ -68,6 +68,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
 
   void _onAddressChanged(String query) {
     _debounceTimer?.cancel();
+    _hasResolvedCoordinates = false;
     final clean = query.trim();
     if (clean.length < 2) {
       if (mounted) {
@@ -84,7 +85,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       setState(() => _isSearching = true);
       try {
         final results = await GoogleMapsService.instance.searchPlaces(clean);
-        if (mounted) {
+        if (mounted && _addressController.text.trim() == clean) {
           setState(() {
             _searchSuggestions = results;
             _isSearching = false;

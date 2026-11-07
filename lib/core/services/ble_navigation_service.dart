@@ -2,11 +2,14 @@ import 'device_presence_service.dart';
 import '../models/ride_state.dart';
 import 'telephony_service.dart';
 import '../models/sensor_status.dart';
+import '../models/power_status.dart';
 import 'system_media_bridge.dart';
 import '../constants/device_map_config.dart';
 import 'device_map_service.dart';
 import '../models/device_map_frame.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import '../models/ble_media_packet.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -16,6 +19,8 @@ import '../models/navigation_state.dart';
 import '../utils/route_window_transformer.dart';
 import 'bluetooth_service.dart';
 import 'navigation_service.dart';
+import 'ride_history_service.dart';
+import 'location_service.dart';
 
 /// Manages GATT Navigation Service (0xFF30) communication with ESP32-S3 TFT Display.
 class BleNavigationService {
@@ -54,10 +59,134 @@ class BleNavigationService {
   Timer? _discoveryRetryTimer;
   bool _mediaBusy = false;
   bool _mediaRefreshPending = false;
+  Map<Object?, Object?>? _pendingMediaSnapshot;
   DateTime? _lastMediaSentAt;
+  bool _mediaEventsActive = false;
+  Map<Object?, Object?>? _mediaSnapshot;
+  DateTime? _mediaSnapshotAt;
   bool _supportsProtocolV1 = false;
   final sensorSupported = ValueNotifier<bool>(false);
   final sensorStatus = ValueNotifier<SensorStatus?>(null);
+  final powerSupported = ValueNotifier<bool>(false);
+  final powerStatus = ValueNotifier<PowerStatus?>(null);
+  int? firmwareChipId;
+  final firmwareVersion = ValueNotifier<String?>(null);
+  bool signedOtaSupported = false;
+  bool _otaBusy = false;
+  Future<void> prepareForOta() async {
+    _otaBusy = true;
+    await _writeTail;
+  }
+
+  void finishOta() {
+    _otaBusy = false;
+  }
+
+  bool _supportsRiderOptions = false;
+  bool _supportsRichMedia = false;
+  bool get photoUploadSupported => firmwareChipId == 0;
+  bool _supportsSleepTimeout = false;
+  final sleepMinutes = ValueNotifier<int>(5);
+  final mediaState = ValueNotifier<int>(6);
+  static List<int> encodeRiderOptions(bool glove,bool automatic,int manual,int minutes,
+      {required bool supportsSleep}) => [
+    0x1e,glove?1:0,automatic?1:0,manual.clamp(0,100),
+    if(supportsSleep) [0,1,5,10].contains(minutes)?minutes:5,
+  ];
+  Future<void> setSleepMinutes(int minutes) async {
+    if(![0,1,5,10].contains(minutes))throw ArgumentError.value(minutes);
+    sleepMinutes.value=minutes;
+    await (await SharedPreferences.getInstance()).setInt('device_sleep_minutes',minutes);
+    await _sendRiderOptions();
+  }
+  Future<void> connectMusic() async {
+    final snapshot=await readSystemMedia();
+    mediaState.value=(snapshot['state'] as num? ?? 7).toInt().clamp(0,7);
+    if(mediaState.value==1)await readSystemMedia(command:8);
+    final device=JustRideBleService.instance.connectedDevice;
+    if(!isReady && device!=null)await _discoverNavCharacteristics(device);
+    await _syncMedia(command:7);
+  }
+
+  final gloveMode = ValueNotifier<bool>(false);
+  final automaticBrightness = ValueNotifier<bool>(false);
+  final manualBrightness = ValueNotifier<int>(80);
+  Future<void> _sendRiderOptions() async {
+    if (_supportsRiderOptions)
+      await _writeBytes(encodeRiderOptions(gloveMode.value,automaticBrightness.value,
+          manualBrightness.value,sleepMinutes.value,supportsSleep:_supportsSleepTimeout),
+          withoutResponse:false);
+  }
+
+  Future<void> setAutomaticBrightness(bool enabled) async {
+    automaticBrightness.value = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('device_auto_brightness', enabled);
+    await _sendRiderOptions();
+  }
+
+  Future<void> _rememberManualBrightness(int value) async {
+    automaticBrightness.value = false;
+    manualBrightness.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('device_auto_brightness', false);
+    await prefs.setInt('device_manual_brightness', value);
+  }
+
+  String? _lastDestination;
+  Future<void> setGloveMode(bool enabled) async {
+    gloveMode.value = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('device_glove_mode', enabled);
+    await _sendRiderOptions();
+  }
+
+  List<int>? _lastTripStats;
+  Future<void> _syncHomeStats() async {
+    if (!_supportsRichMedia || !isReady) return;
+    final history = RideHistoryService.instance;
+    if (!history.hasCurrentTotal) {
+      unawaited(history.refreshTotalDistance());
+      return;
+    }
+    final packet = encodeHomeDistance(history.totalDistanceMeters.value!);
+    if (listEquals(packet, _lastTripStats)) return;
+    if (await _writeBytes(packet, withoutResponse: false))
+      _lastTripStats = packet;
+  }
+
+  Future<void> _syncDestination() async {
+    if (!_supportsRiderOptions || !isReady) return;
+    final name = NavigationService.instance.isNavigating
+        ? NavigationService.instance.currentDestination?.displayTitle ?? ''
+        : '';
+    if (name == _lastDestination) return;
+    final label = <int>[];
+    for (final rune in name.runes) {
+      final bytes = utf8.encode(String.fromCharCode(rune));
+      if (label.length + bytes.length > 31) break;
+      label.addAll(bytes);
+    }
+    if (await _writeBytes([0x1f, label.length, ...label],
+        withoutResponse: false)) _lastDestination = name;
+  }
+
+  Timer? _powerExpiry;
+  Future<bool> requestPowerStatus() async {
+    if (!isReady || !powerSupported.value) return false;
+    return _writeBytes([0x1d, 0], withoutResponse: false, allowFallback: false);
+  }
+
+  void _acceptPowerStatus(List<int> bytes) {
+    final parsed = PowerStatus.parse(bytes);
+    if (parsed == null) return;
+    powerStatus.value = parsed;
+    _powerExpiry?.cancel();
+    _powerExpiry = Timer(const Duration(seconds: 15), () {
+      if (identical(powerStatus.value, parsed)) powerStatus.value = null;
+    });
+  }
+
   Future<bool> requestSensorStatus({bool calibrate = false}) async {
     if (!isReady || !sensorSupported.value) return false;
     return _writeBytes([0x1a, calibrate ? 1 : 0],
@@ -100,9 +229,11 @@ class BleNavigationService {
     }
     final generation = _navigationGeneration,
         connection = _connectionGeneration;
+    final camera = nav.deviceCameraGeneration;
     bool current() =>
         generation == _navigationGeneration &&
         connection == _connectionGeneration &&
+        camera == nav.deviceCameraGeneration &&
         nav.isNavigating &&
         nav.routeRevision == map.revision &&
         DeviceMapService.instance.frame.value == map &&
@@ -161,6 +292,9 @@ class BleNavigationService {
             withoutResponse: false, allowFallback: false);
       }
       _mapSending = false;
+      if (DeviceMapService.instance.frame.value != map && isReady) {
+        unawaited(_sendMap());
+      }
     }
   }
 
@@ -180,6 +314,8 @@ class BleNavigationService {
       }
       final snapshot = await readSystemMedia(command: command);
       if (generation != _connectionGeneration) return;
+      if (command == 7) _mediaEventsActive = await startSystemMediaUpdates();
+      if (generation != _connectionGeneration) return;
       unawaited(_performMediaSync(snapshot: snapshot, force: true));
     });
     _mediaCommandTail = pending.catchError((Object error) {
@@ -194,15 +330,34 @@ class BleNavigationService {
   }) async {
     if (!isReady || !_supportsProtocolV1) return;
     if (_mediaBusy) {
+      if (snapshot != null) _pendingMediaSnapshot = Map<Object?, Object?>.of(snapshot);
       _mediaRefreshPending |= force;
       return;
     }
     _mediaBusy = true;
     final generation = _connectionGeneration;
     try {
-      final current = snapshot ?? await readSystemMedia();
+      Map<Object?, Object?> current;
+      final cachedAt = _mediaSnapshotAt;
+      if (snapshot == null && _mediaEventsActive && _mediaSnapshot != null &&
+          cachedAt != null && DateTime.now().difference(cachedAt).inSeconds < 10) {
+        current = Map<Object?, Object?>.of(_mediaSnapshot!);
+        if (current['state'] == 4) {
+          final elapsed = (current['elapsedSeconds'] as num? ?? 0).toInt() +
+              DateTime.now().difference(cachedAt).inSeconds;
+          final duration = (current['durationSeconds'] as num? ?? 0).toInt();
+          current['elapsedSeconds'] = duration > 0 ? elapsed.clamp(0, duration) : elapsed;
+        }
+      } else {
+        current = snapshot ?? await readSystemMedia();
+        if (generation != _connectionGeneration || !isReady) return;
+        _mediaSnapshot = Map<Object?, Object?>.of(current);
+        _mediaSnapshotAt = DateTime.now();
+      }
       if (generation != _connectionGeneration || !isReady) return;
-      final packet = encodeMediaSnapshot(current);
+      mediaState.value=(current['state'] as num? ?? 7).toInt().clamp(0,7);
+      final packet =
+          encodeMediaSnapshot(current, includeTimeline: _supportsRichMedia);
       // The display can reset its media state while the phone snapshot stays
       // unchanged. Explicit refreshes and a heartbeat must bypass deduplication.
       if (force ||
@@ -226,8 +381,9 @@ class BleNavigationService {
       _mediaBusy = false;
       if (_mediaRefreshPending) {
         _mediaRefreshPending = false;
-        // Read again so a command issued during a transfer sends current state.
-        unawaited(_performMediaSync(force: true));
+        final pending = _pendingMediaSnapshot;
+        _pendingMediaSnapshot = null;
+        unawaited(_performMediaSync(snapshot: pending, force: true));
       }
     }
   }
@@ -255,7 +411,7 @@ class BleNavigationService {
 
   Future<bool> _writeBytes(List<int> bytes,
       {bool? withoutResponse, bool allowFallback = true}) {
-    if (_queuedWrites >= 16) return Future.value(false);
+    if (_otaBusy || _queuedWrites >= 16) return Future.value(false);
     final generation = _connectionGeneration;
     final navigationGeneration = _navigationGeneration;
     if (_supportsProtocolV1 &&
@@ -264,6 +420,7 @@ class BleNavigationService {
             bytes[0] == 10 ||
             bytes[0] == 11 ||
             bytes[0] == 17 ||
+            bytes[0] == 0x1f ||
             (bytes[0] >= 0x14 && bytes[0] <= 0x19))) {
       bytes = [
         0x13,
@@ -322,6 +479,13 @@ class BleNavigationService {
 
   /// Initializes the service and listens for connection state changes.
   void init() {
+    setSystemMediaListener((snapshot) {
+      if (isReady && !_otaBusy) unawaited(_performMediaSync(snapshot: snapshot, force: true));
+    });
+    unawaited(SharedPreferences.getInstance().then((prefs) {
+      final saved=prefs.getInt('device_sleep_minutes') ?? 5;
+      sleepMinutes.value=[0,1,5,10].contains(saved)?saved:5;
+    }));
     DeviceMapService.instance.status.removeListener(_onMapStatus);
     DeviceMapService.instance.frame.removeListener(_onMapFrame);
     DeviceMapService.instance.frame.addListener(_onMapFrame);
@@ -410,11 +574,27 @@ class BleNavigationService {
       _mediaTimer = null;
       _lastMediaPacket = null;
       _lastMediaSentAt = null;
+      _mediaEventsActive = false;
+      _mediaSnapshot = null;
+      _mediaSnapshotAt = null;
+      _pendingMediaSnapshot = null;
+      unawaited(stopSystemMediaUpdates());
       _mediaRefreshPending = false;
       _pendingTelemetry = null;
       _supportsProtocolV1 = false;
       sensorSupported.value = false;
       sensorStatus.value = null;
+      powerSupported.value = false;
+      firmwareChipId = null;
+      firmwareVersion.value = null;
+      signedOtaSupported = false;
+      _supportsRiderOptions = false;
+      _supportsRichMedia = false;
+      _supportsSleepTimeout=false;mediaState.value=6;
+      _lastDestination = null;
+      _lastTripStats = null;
+      powerStatus.value = null;
+      _powerExpiry?.cancel();
       _supportsMaps = false;
       _supportsHud = false;
       _sentMapId = null;
@@ -490,7 +670,17 @@ class BleNavigationService {
             if (connectionGeneration != _connectionGeneration) return false;
             await _statusSubscription?.cancel();
             _statusSubscription = _statusChar!.onValueReceived.listen((value) {
+              if (connectionGeneration != _connectionGeneration ||
+                  !JustRideBleService.instance.isDeviceConnected) return;
               if (value.isNotEmpty) {
+                if (value[0] == 0x20 && value.length == 2 && value[1] <= 100) {
+                  unawaited(_rememberManualBrightness(value[1]));
+                  return;
+                }
+                if (value[0] == 0x1d) {
+                  _acceptPowerStatus(value);
+                  return;
+                }
                 if (connectionGeneration == _connectionGeneration &&
                     JustRideBleService.instance.isDeviceConnected) {
                   DevicePresenceService.instance.report(device.remoteId.str);
@@ -504,6 +694,8 @@ class BleNavigationService {
                 debugPrint(
                     '[BleNav] Received Status Code: 0x${status.toRadixString(16).padLeft(2, '0')}');
                 if (status == 0x14 && value.length == 2) {
+                  if (![14, 15, 16, 17, 254, 255].contains(value[1])) return;
+                  NavigationService.instance.selectDeviceView(value[1]);
                   if (value[1] == 255) {
                     DeviceMapService.instance.showOverview();
                   } else if (value[1] == 254) {
@@ -540,6 +732,9 @@ class BleNavigationService {
           _supportsProtocolV1 = capabilities.length >= 2 &&
               capabilities[0] == 1 &&
               capabilities[1] >= 1;
+          firmwareChipId = _supportsProtocolV1
+              ? (capabilities.length >= 4 ? capabilities[3] : 0)
+              : null;
           _supportsHud = _supportsProtocolV1 &&
               capabilities[1] >= 3 &&
               capabilities.length >= 3 &&
@@ -547,21 +742,52 @@ class BleNavigationService {
           _supportsMaps = _supportsProtocolV1 &&
               capabilities.length >= 3 &&
               capabilities[1] >= 2;
+          signedOtaSupported =
+              capabilities.length >= 5 && (capabilities[4] & 1) != 0;
+          firmwareVersion.value = capabilities.length > 5
+              ? utf8.decode(
+                  capabilities.skip(5).takeWhile((b) => b != 0).toList(),
+                  allowMalformed: true)
+              : null;
+          _supportsRichMedia = _supportsProtocolV1 && capabilities[1] >= 5;
+          _supportsRiderOptions = _supportsProtocolV1 && capabilities[1] >= 4;
+          _supportsSleepTimeout=_supportsProtocolV1 && capabilities[1]>=6;
+          final prefs = await SharedPreferences.getInstance();
+          if (connectionGeneration != _connectionGeneration) return false;
+          gloveMode.value = prefs.getBool('device_glove_mode') ?? false;
+          automaticBrightness.value =
+              prefs.getBool('device_auto_brightness') ?? false;
+          manualBrightness.value =
+              (prefs.getInt('device_manual_brightness') ?? 80).clamp(0, 100);
+          final savedSleep=prefs.getInt('device_sleep_minutes') ?? 5;
+          sleepMinutes.value=[0,1,5,10].contains(savedSleep)?savedSleep:5;
+          await _sendRiderOptions();
           unawaited(TelephonyService.instance.syncDisplay());
           sensorSupported.value =
               capabilities.length >= 3 && (capabilities[2] & 1) != 0;
           if (sensorSupported.value) await requestSensorStatus();
+          powerSupported.value =
+              capabilities.length >= 3 && (capabilities[2] & 4) != 0;
+          if (powerSupported.value) await requestPowerStatus();
         }
         _mediaTimer?.cancel();
         _mediaTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+          if (_otaBusy) return;
+          final navigation = NavigationService.instance;
+          if (navigation.isNavigating) {
+            unawaited(sendNavUpdate(navigation.currentState));
+          }
+          if (powerSupported.value &&
+              (powerStatus.value == null ||
+                  DateTime.now().difference(powerStatus.value!.receivedAt) >=
+                      const Duration(seconds: 7))) {
+            unawaited(requestPowerStatus());
+          }
+          unawaited(_syncDestination());
+          unawaited(_syncHomeStats());
           unawaited(_syncMedia());
           unawaited(_sendMap());
-          if (sensorSupported.value &&
-              (sensorStatus.value == null ||
-                  DateTime.now().difference(sensorStatus.value!.receivedAt) >=
-                      const Duration(seconds: 2))) {
-            unawaited(requestSensorStatus());
-          }
+
         });
         unawaited(_syncMedia(command: 7));
         setupComplete = true;
@@ -571,8 +797,7 @@ class BleNavigationService {
         final navigation = NavigationService.instance;
         if (navigation.currentState.rideState == RideState.arrived) {
           await sendNavArrived(navigation.currentState);
-        }
-        if (navigation.isNavigating &&
+        } else if (navigation.isNavigating &&
             navigation.currentState.rideState.isActive) {
           await syncState(navigation.currentState);
           final route = navigation.activeRoute;
@@ -580,17 +805,7 @@ class BleNavigationService {
           if (route != null &&
               destination != null &&
               route.polylinePoints.isNotEmpty) {
-            final state = navigation.currentState;
-            final window = RouteWindowTransformer.transform(
-              riderPosition:
-                  LatLng(state.currentLatitude, state.currentLongitude),
-              riderHeadingDeg: state.heading,
-              polylinePoints: route.polylinePoints,
-              destination: LatLng(destination.latitude, destination.longitude),
-              minimumRouteIndex: navigation.routeProgressIndex,
-              distanceToManeuverMeters: state.maneuverDistanceMeters,
-              followingLegDistanceMeters: state.nextManeuverDistanceMeters,
-            );
+            final window = navigation.currentDeviceRouteWindow();
             await sendRouteSegment(window);
           } else if (_latestRouteSegment != null) {
             await sendRouteSegment(_latestRouteSegment!);
@@ -678,6 +893,11 @@ class BleNavigationService {
       }
     }
 
+    // Keep the phone's long GPS recovery window, but suppress stale HUD guidance.
+    if (state.rideState.isActive &&
+        !LocationService.instance.hasFreshNavigationFix) {
+      state = state.copyWith(gpsAvailable: false, speedKmh: 0);
+    }
     // Throttle check — only for regular updates, not for forced ops.
     if (!force && opCode == BleNavOpCode.navUpdate) {
       if (!_shouldSendUpdate(state)) {
@@ -702,6 +922,7 @@ class BleNavigationService {
 
   void beginRouteRevision() {
     ++_navigationGeneration;
+    _lastDestination = null;
     _sentMapId = null;
     _pendingTelemetry = null;
   }
@@ -768,6 +989,7 @@ class BleNavigationService {
   /// Controls ESP32 display brightness remotely (0 to 100%)
   Future<bool> sendSetBrightness(int brightnessPct) async {
     _pendingBrightnessPct = brightnessPct.clamp(0, 100).toInt();
+    await _rememberManualBrightness(_pendingBrightnessPct!);
     if (_isSendingBrightness) return true;
 
     _isSendingBrightness = true;
@@ -862,13 +1084,36 @@ class BleNavigationService {
   }
 
   /// Sends sliding route window segment (OpCode 0x0B) to ESP32
+  RouteWindowSegment? _pendingRoute;
+  bool _routeSending = false;
   Future<bool> sendRouteSegment(RouteWindowSegment segment) async {
     _latestRouteSegment = segment;
     if (!isReady || _dataChar == null || segment.points.isEmpty) return false;
-
-    final packet = RouteSegmentPacket.fromWindow(segment);
-    final bytes = packet.toBinary();
-    return await _writeBytes(bytes, withoutResponse: false);
+    _pendingRoute = segment;
+    if (_routeSending) return false;
+    _routeSending = true;
+    final generation = _navigationGeneration,
+        connection = _connectionGeneration;
+    var sent = false;
+    try {
+      while (_pendingRoute != null &&
+          generation == _navigationGeneration &&
+          connection == _connectionGeneration &&
+          isReady) {
+        final latest = _pendingRoute!;
+        _pendingRoute = null;
+        sent = await _writeBytes(
+            RouteSegmentPacket.fromWindow(latest).toBinary(),
+            withoutResponse: false);
+        if (!sent) break;
+      }
+      return sent;
+    } finally {
+      _routeSending = false;
+      final pending = _pendingRoute;
+      _pendingRoute = null;
+      if (pending != null && isReady) unawaited(sendRouteSegment(pending));
+    }
   }
 
   Future<bool> sendNavContext(NavContextPacket context) async {
@@ -878,11 +1123,19 @@ class BleNavigationService {
     return _writeBytes(context.toBinary(), withoutResponse: false);
   }
 
-  Future<bool> sendCallState(int state, int actions, String caller) async {
+  Future<bool> sendCallState(int state, int actions, String caller,
+      {String number = ''}) async {
     if (!isReady || !_supportsHud) return false;
     final name = hudUtf8(caller, 47);
-    return _writeBytes([0x1c, state, actions, name.length, ...name],
-        withoutResponse: false, allowFallback: false);
+    final phone = hudUtf8(number, 24);
+    return _writeBytes([
+      0x1c,
+      state,
+      actions,
+      name.length,
+      ...name,
+      if (_supportsRichMedia) ...[phone.length, ...phone]
+    ], withoutResponse: false, allowFallback: false);
   }
 
   /// Sends strictly the latest notification (OpCode 0x0F) to the ESP32 HUD display.
@@ -985,6 +1238,13 @@ class BleNavigationService {
   }
 
   void dispose() {
+    setSystemMediaListener(null);
+    unawaited(stopSystemMediaUpdates());
+    _mediaEventsActive = false;
+    _powerExpiry?.cancel();
+    powerStatus.value = null;
+    powerSupported.value = false;
+    firmwareChipId = null;
     DeviceMapService.instance.status.removeListener(_onMapStatus);
     DeviceMapService.instance.frame.removeListener(_onMapFrame);
     ++_connectionGeneration;

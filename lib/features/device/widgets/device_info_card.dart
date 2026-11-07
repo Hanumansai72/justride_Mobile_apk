@@ -4,6 +4,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/bluetooth_service.dart';
+import '../../../core/services/ble_navigation_service.dart';
 
 /// Original product image and live device status with connection controls.
 class DeviceInfoCard extends StatelessWidget {
@@ -24,9 +25,15 @@ class DeviceInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<BluetoothConnectionState>(
-      valueListenable: JustRideBleService.instance.connectionStateNotifier,
-      builder: (context, connState, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        JustRideBleService.instance.connectionStateNotifier,
+        BleNavigationService.instance.powerStatus
+      ]),
+      builder: (context, _) {
+        final connState =
+            JustRideBleService.instance.connectionStateNotifier.value;
+        final power = BleNavigationService.instance.powerStatus.value;
         final isConnected = connState == BluetoothConnectionState.connected ||
             JustRideBleService.instance.isDeviceConnected;
 
@@ -193,12 +200,15 @@ class DeviceInfoCard extends StatelessWidget {
 
                     // Battery
                     _InfoRow(
-                      icon: isConnected
+                      icon: isConnected && power?.charging == 1
                           ? Icons.battery_charging_full_rounded
                           : Icons.battery_std_rounded,
                       title: 'Battery',
-                      value: isConnected ? '$batteryPercent%' : '--',
-                      subtitle: isConnected ? 'Active' : 'Offline',
+                      value: isConnected ? power?.levelLabel ?? '—' : '—',
+                      subtitle: isConnected
+                          ? power?.detailLabel ??
+                              'Waiting for device measurement'
+                          : 'Offline',
                       valueColor:
                           isConnected ? AppColors.primary : AppColors.textMuted,
                     ),

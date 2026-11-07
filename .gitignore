@@ -54,3 +54,10 @@ app.*.map.json
 # Firebase Android project configuration
 android/app/google-services.json
 /android/.kotlin/
+
+# Local generated review notes and unused image experiments
+/NAVIGATION_ACCURACY_NOTES.md
+/docs/legal-review-notes.md
+/assets/justride_device_call_clean.png
+/assets/justride_device_call_glow.png
+/assets/justride_device_call_glow_625.png

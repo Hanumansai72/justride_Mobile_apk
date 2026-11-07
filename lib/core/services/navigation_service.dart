@@ -7,6 +7,7 @@ import '../models/destination.dart';
 import '../models/navigation_state.dart';
 import '../models/navigation_session.dart';
 import '../models/ride_state.dart';
+import '../models/device_map_frame.dart';
 import '../models/ble_navigation_packet.dart';
 import '../utils/gps_accuracy_filter.dart';
 import '../utils/maneuver_state_machine.dart';
@@ -17,17 +18,19 @@ import 'location_service.dart';
 import 'ble_navigation_service.dart';
 import 'bluetooth_service.dart';
 import 'ride_history_service.dart';
+import 'backend_service.dart';
+import '../network/api_client.dart';
 
 /// Central owner of the JustRide navigation session.
 ///
 /// Architecture:
-///   LocationService  →  NavigationService  →  NavigationState  →  UI / BLE
+///   LocationService  â†’  NavigationService  â†’  NavigationState  â†’  UI / BLE
 ///
 /// Rules enforced here:
-///   • Speed is ALWAYS sourced from LocationService (SpeedFilter applied there)
-///   • Speed is 0.0 when stationary or GPS unavailable
-///   • Google APIs are called only for route calculation and rerouting
-///   • NavigationState is the one source of truth — no other component owns state
+///   â€¢ Speed is ALWAYS sourced from LocationService (SpeedFilter applied there)
+///   â€¢ Speed is 0.0 when stationary or GPS unavailable
+///   â€¢ Google APIs are called only for route calculation and rerouting
+///   â€¢ NavigationState is the one source of truth â€” no other component owns state
 class NavigationService {
   NavigationService._() : _routeLoader = null;
   @visibleForTesting
@@ -43,14 +46,81 @@ class NavigationService {
 
   static final NavigationService instance = NavigationService._();
 
-  // ── High-Accuracy Navigation Filters & State Machine ────────────────────────
+  // â”€â”€ High-Accuracy Navigation Filters & State Machine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final GpsAccuracyFilter _gpsFilter = GpsAccuracyFilter();
   final ManeuverStateMachine _maneuverFsm = ManeuverStateMachine();
   LatLng? _lastTransmittedRouteWindowRiderPos;
   double? _lastTransmittedRouteWindowHeading;
 
-  // ── Route & Coordinates ────────────────────────────────────────────────────
+  // â”€â”€ Route & Coordinates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Destination? _currentDestination;
+  final List<Destination> _stops = [];
+  final stopsChanged = ValueNotifier<int>(0);
+  List<Destination> get remainingStops => List.unmodifiable(_stops);
+  bool _changingStop = false;
+
+  Future<void> addStop(Destination stop) async {
+    if (!_isNavigating || _stops.length >= 20) return;
+    if (!stop.latitude.isFinite ||
+        !stop.longitude.isFinite ||
+        stop.latitude.abs() > 90 ||
+        stop.longitude.abs() > 180 ||
+        (stop.latitude == 0 && stop.longitude == 0)) {
+      throw ArgumentError('Select a resolved destination');
+    }
+    _stops.add(stop);
+    await _saveStops();
+  }
+
+  Future<void> removeStop(int index) async {
+    if (index <= 0 || index >= _stops.length) return;
+    _stops.removeAt(index);
+    await _saveStops();
+  }
+
+  Future<void> moveStop(int from, int to) async {
+    // The active leg stays pinned. Skipping explicitly changes that leg.
+    if (from <= 0 || to <= 0 || from >= _stops.length || to >= _stops.length)
+      return;
+    _stops.insert(to, _stops.removeAt(from));
+    await _saveStops();
+  }
+
+  Future<void> _saveStops() async {
+    stopsChanged.value++;
+    final prefs = await SharedPreferences.getInstance();
+    if (_isNavigating)
+      await prefs.setStringList(
+          'resume_stops', _stops.map((s) => s.toJson()).toList());
+  }
+
+  Future<void> skipStop() async {
+    if (!_isNavigating || _stops.length < 2 || _changingStop || _paused) return;
+    final generation =
+        ++_rideGeneration; // Discard a late response for the previous destination.
+    _stops.removeAt(0);
+    _currentDestination = _stops.first;
+    _destination = LatLng(_stops.first.latitude, _stops.first.longitude);
+    _changingStop = true;
+    _isRerouting = false;
+    _reroutePending = true;
+    _arrivalConfirmCount = 0;
+    _arrivalCandidateSince = null;
+    _nextRerouteAllowedAt = null;
+    _offRouteDetector.reset();
+    // Set the new target before awaiting persistence or the network.
+    _currentState = _currentState.copyWith(
+        rerouting: true,
+        rideState: RideState.rerouting,
+        maneuverText: 'Next stop - calculating');
+    navigationStateNotifier.value = _currentState;
+    await _saveStops();
+    if (generation != _rideGeneration || !_isNavigating || !_changingStop)
+      return;
+    await _triggerReroute(
+        LatLng(_currentState.currentLatitude, _currentState.currentLongitude));
+  }
+
   LatLng? _origin;
   LatLng? _destination;
   NavigationRoute? _activeRoute;
@@ -84,37 +154,115 @@ class NavigationService {
     }
   }
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   NavigationState _currentState = NavigationState.idle();
   bool _isNavigating = false;
   bool _isRerouting = false;
+  bool _reroutePending =
+      false; // Confirmed deviation persists across request failures/backoff.
   bool _isStarting = false;
   Future<void>? _stopping;
   int _rideGeneration = 0;
   int _routeRevision = 0;
   int _rerouteFailures = 0;
   bool _paused = false;
+  bool _resuming = false;
+  Future<void> _gpsTransition = Future<void>.value();
+  Timer? _deviceAccessTimer;
+  bool _checkingDeviceAccess = false;
+
+  void _startDeviceAccessChecks() {
+    _deviceAccessTimer?.cancel();
+    _deviceAccessTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+      if (!_isNavigating) { timer.cancel(); return; }
+      if (_checkingDeviceAccess || !ApiClient.instance.isAuthenticated) return;
+      _checkingDeviceAccess = true;
+      try { await BackendService.instance.getMyDevice(); }
+      finally { _checkingDeviceAccess = false; }
+    });
+  }
   DateTime? _nextRerouteAllowedAt;
   static const _rerouteRetryCooldown = Duration(seconds: 10);
   final OffRouteDetector _offRouteDetector = OffRouteDetector();
-  // Arrival confirmation counter — requires 2 samples < 30m to avoid
+  // Arrival confirmation counter â€” requires 2 samples < 30m to avoid
   // triggering on a momentary GPS jump near the destination.
   DateTime? _arrivalCandidateSince;
   int _arrivalConfirmCount = 0;
 
-  // ── Ride session tracking ──────────────────────────────────────────────────
+  // â”€â”€ Ride session tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   NavigationSession? _currentSession;
   String? _sessionUserId;
   double _sessionDistanceTravelled = 0.0;
   double _sessionMaxSpeedKmh = 0.0;
-  double _sessionSpeedSum = 0.0;
-  int _sessionSpeedSamples = 0;
+  final Stopwatch _rideClock = Stopwatch();
+  int _savedActiveSeconds = 0;
+  DateTime? _lastRecordedAt, _lastCheckpointAt;
+  bool _trailBreak = true;
+  final List<Map<String, dynamic>> _trailBuffer = [];
+  NavigationSession? lastCompletedSession;
 
-  // ── GPS listener reference ─────────────────────────────────────────────────
+  double get distanceTravelledMeters => _isNavigating
+      ? _sessionDistanceTravelled
+      : lastCompletedSession?.distanceMeters ?? 0;
+  int get activeRideSeconds =>
+      _savedActiveSeconds + _rideClock.elapsed.inSeconds;
+
+  NavigationSession _checkpointSession() => NavigationSession(
+      sessionId: _currentSession!.sessionId,
+      startTime: _currentSession!.startTime,
+      origin: _currentSession!.origin,
+      destination: _currentDestination,
+      durationSeconds: activeRideSeconds,
+      distanceMeters: _sessionDistanceTravelled,
+      averageSpeedKmh: activeRideSeconds > 0
+          ? _sessionDistanceTravelled * 3.6 / activeRideSeconds
+          : 0,
+      maxSpeedKmh: _sessionMaxSpeedKmh,
+      status: _paused ? 'paused' : 'recording');
+
+  void _flushTrail() {
+    if (_currentSession == null || _trailBuffer.isEmpty) return;
+    final points = List<Map<String, dynamic>>.of(_trailBuffer);
+    _trailBuffer.clear();
+    unawaited(RideHistoryService.instance.appendTrail(
+        _sessionUserId ?? 'guest', _currentSession!.sessionId, points));
+  }
+
+  Future<void> _checkpointRide() async {
+    if (_currentSession == null) return;
+    _flushTrail();
+    final session = _checkpointSession();
+    final generation = _rideGeneration;
+    final prefs = await SharedPreferences.getInstance();
+    if (generation != _rideGeneration || _currentSession == null) return;
+    await prefs.setString('resume_active_session', session.toJson());
+  }
+
+  void _recordFix(Position pos) {
+    final now = pos.timestamp;
+    if (_lastRecordedAt == null ||
+        now.difference(_lastRecordedAt!).inSeconds >= 5) {
+      _trailBuffer.add({
+        'lat': pos.latitude,
+        'lon': pos.longitude,
+        'at': now.toUtc().toIso8601String(),
+        'segment': _trailBreak
+      });
+      _lastRecordedAt = now;
+      _trailBreak = false;
+    }
+    if (_lastCheckpointAt == null ||
+        now.difference(_lastCheckpointAt!).inSeconds >= 30) {
+      _lastCheckpointAt = now;
+      unawaited(_checkpointRide());
+    }
+  }
+
+  // â”€â”€ GPS listener reference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   VoidCallback? _gpsTickListener;
   VoidCallback? _gpsAvailabilityListener;
 
-  // ── Public Notifiers ───────────────────────────────────────────────────────
+  // â”€â”€ Public Notifiers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final ValueNotifier<NavigationState> navigationStateNotifier =
       ValueNotifier<NavigationState>(NavigationState.idle());
   final ValueNotifier<NavigationRoute?> activeRouteNotifier =
@@ -129,6 +277,48 @@ class NavigationService {
   Destination? get currentDestination => _currentDestination;
   int get routeProgressIndex => _routeProgressIndex;
   int get routeRevision => _routeRevision;
+  int _deviceViewLevel = 2, _deviceCameraGeneration = 0;
+  int get deviceViewLevel => _deviceViewLevel;
+  int get deviceCameraGeneration => _deviceCameraGeneration;
+  int _deviceViewportRevision = -1;
+  ({LatLng center, int zoom})? _deviceOverview;
+  ({LatLng center, int zoom})? get deviceOverviewViewport {
+    if (deviceViewLevel != 5 || _activeRoute == null) return null;
+    if (_deviceOverview == null || _deviceViewportRevision != _routeRevision) {
+      _deviceViewportRevision = _routeRevision;
+      _deviceOverview = fitDeviceMapViewport([
+        LatLng(_currentState.currentLatitude, _currentState.currentLongitude),
+        ..._activeRoute!.polylinePoints.skip(_routeProgressIndex)
+      ]);
+    }
+    return _deviceOverview;
+  }
+
+  void selectDeviceView(int command) {
+    final next = command == 255
+        ? 5
+        : command == 254
+            ? 2
+            : command >= 14 && command <= 17
+                ? 18 - command
+                : 0;
+    if (next == 0) return;
+    if (next != deviceViewLevel) {
+      _deviceViewLevel = next;
+      _deviceCameraGeneration++;
+      _deviceOverview = null;
+    }
+    if (!_isNavigating || _activeRoute == null || !_currentState.gpsAvailable) {
+      return;
+    }
+    unawaited(BleNavigationService.instance.sendRouteSegment(_routeWindow(
+        LatLng(_currentState.currentLatitude, _currentState.currentLongitude),
+        _currentState.heading)));
+  }
+
+  RouteWindowSegment currentDeviceRouteWindow() => _routeWindow(
+      LatLng(_currentState.currentLatitude, _currentState.currentLongitude),
+      _currentState.heading);
 
   RouteWindowSegment _routeWindow(LatLng rider, double heading) {
     final window = RouteWindowTransformer.transform(
@@ -139,6 +329,15 @@ class NavigationService {
       minimumRouteIndex: _routeProgressIndex,
       distanceToManeuverMeters: _currentState.maneuverDistanceMeters,
       followingLegDistanceMeters: _currentState.nextManeuverDistanceMeters,
+      windowMeters: const [
+        150.0,
+        300.0,
+        700.0,
+        1800.0,
+        1800.0
+      ][deviceViewLevel - 1],
+      focusManeuver: deviceViewLevel <= 2,
+      overviewViewport: deviceOverviewViewport,
     );
     _routeProgressIndex = window.routeIndex;
     return window;
@@ -224,11 +423,11 @@ class NavigationService {
     navigationStateNotifier.value = _currentState;
   }
 
-  // ── START NAVIGATION ───────────────────────────────────────────────────────
+  // â”€â”€ START NAVIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Starts turn-by-turn motorcycle navigation to the given destination.
   ///
-  /// STEP 1–12 of the master prompt START RIDE workflow.
+  /// STEP 1â€“12 of the master prompt START RIDE workflow.
   /// The live phone fix always drives progress after the ride begins.  An
   /// optional [startLocation] lets the planner preview and initialise a route
   /// between two entered places (instead of silently assuming current GPS).
@@ -238,14 +437,23 @@ class NavigationService {
     Destination destination, {
     Destination? startLocation,
     NavigationSession? resumedSession,
+    List<Destination>? journeyStops,
   }) async {
     if (_stopping != null) await _stopping;
     if (_isStarting) return false;
     if (_isNavigating) return true;
     _isStarting = true;
     final generation = ++_rideGeneration;
+    _deviceViewLevel = 2;
+    _deviceCameraGeneration++;
+    _deviceOverview = null;
     try {
       _currentDestination = destination;
+      _stops
+        ..clear()
+        ..addAll(
+            journeyStops?.isNotEmpty == true ? journeyStops! : [destination]);
+      _changingStop = false;
       _setRideState(RideState.starting);
       _gpsFilter.reset();
 
@@ -266,8 +474,9 @@ class NavigationService {
       }
 
       _destination = LatLng(resolvedDest.latitude, resolvedDest.longitude);
+      _stops[0] = resolvedDest;
 
-      // 2. Obtain fresh current GPS position as origin (STEP 3–4 of master prompt)
+      // 2. Obtain fresh current GPS position as origin (STEP 3â€“4 of master prompt)
       final currentPos = await LocationService.instance.getCurrentPosition();
       if (generation != _rideGeneration) return false;
       if (currentPos == null || _gpsFilter.filter(currentPos) == null) {
@@ -316,6 +525,7 @@ class NavigationService {
       _currentStepIndex = 0;
       _isNavigating = true;
       _isRerouting = false;
+      _reroutePending = false;
       _paused = false;
       _routeRevision++;
       _rerouteFailures = 0;
@@ -336,14 +546,20 @@ class NavigationService {
             origin: resolvedStart ?? _originAsDestination(currentPos),
             destination: resolvedDest,
           );
-      _sessionDistanceTravelled = 0;
-      _sessionMaxSpeedKmh = 0;
-      _sessionSpeedSum = 0;
-      _sessionSpeedSamples = 0;
+      _sessionDistanceTravelled = resumedSession?.distanceMeters ?? 0;
+      _sessionMaxSpeedKmh = resumedSession?.maxSpeedKmh ?? 0;
+      _savedActiveSeconds = resumedSession?.durationSeconds ?? 0;
+      _rideClock
+        ..reset()
+        ..start();
+      _lastRecordedAt = null;
+      _lastCheckpointAt = null;
+      _trailBreak = true;
+      _trailBuffer.clear();
       _previousPos = null;
 
       // 5. Build initial NavigationState
-      //    Speed MUST be 0.0 via SpeedFilter — do NOT multiply pos.speed blindly.
+      //    Speed MUST be 0.0 via SpeedFilter â€” do NOT multiply pos.speed blindly.
       final initialSpeed = LocationService.instance.lastSpeedKmh;
       final firstStep = route.steps[0];
       final nextStep = route.steps.length > 1 ? route.steps[1] : null;
@@ -381,7 +597,7 @@ class NavigationService {
       _currentState = NavigationState(
         currentLatitude: currentPos.latitude,
         currentLongitude: currentPos.longitude,
-        speedKmh: initialSpeed, // 0.0 when parked ✓
+        speedKmh: initialSpeed, // 0.0 when parked âœ“
         heading: currentPos.heading >= 0 ? currentPos.heading : 0.0,
         remainingDistanceMeters: route.totalDistanceMeters,
         remainingDurationSeconds: route.totalDurationSeconds,
@@ -445,11 +661,12 @@ class NavigationService {
         if (_sessionUserId != null) {
           await prefs.setString('resume_session_owner', _sessionUserId!);
         } else {
-          await prefs.remove('resume_session_owner');
+          await prefs.setString('resume_session_owner', 'guest');
         }
         if (generation != _rideGeneration) return false;
         await prefs.setString(
             'resume_active_session', _currentSession!.toJson());
+        await _saveStops();
         if (generation != _rideGeneration) return false;
       } catch (e) {
         debugPrint('[NavService] Failed to save active ride: $e');
@@ -472,10 +689,15 @@ class NavigationService {
       _onGpsTick();
       _gpsTickListener = _onGpsTick;
       LocationService.instance.positionNotifier.addListener(_onGpsTick);
+      _startDeviceAccessChecks();
 
       debugPrint(
-          '[NavService] ✓ Navigation started to ${destination.displayTitle} '
+          '[NavService] âœ“ Navigation started to ${destination.displayTitle} '
           '(${route.totalDistanceMeters.round()}m, ${route.steps.length} steps)');
+      if (resumedSession?.status == 'paused') {
+        _isStarting = false;
+        pauseNavigation();
+      }
       return true;
     } catch (e) {
       if (generation == _rideGeneration) {
@@ -489,7 +711,7 @@ class NavigationService {
     }
   }
 
-  // ── GPS LOST / RECOVERED ──────────────────────────────────────────────────
+  // â”€â”€ GPS LOST / RECOVERED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _onGpsAvailabilityChanged() {
     if (_paused) return;
@@ -497,14 +719,14 @@ class NavigationService {
 
     if (!isAvailable && _isNavigating) {
       // GPS lost during active navigation
-      debugPrint('[NavService] ⚠ GPS signal lost during navigation');
+      debugPrint('[NavService] âš  GPS signal lost during navigation');
       _currentState = NavigationState.gpsLost(_currentState);
       navigationStateNotifier.value = _currentState;
       rideStateNotifier.value = RideState.gpsLost;
       BleNavigationService.instance.sendNavUpdate(_currentState, force: true);
     } else if (isAvailable && _currentState.rideState == RideState.gpsLost) {
       // GPS recovered
-      debugPrint('[NavService] ✓ GPS signal recovered');
+      debugPrint('[NavService] âœ“ GPS signal recovered');
       _currentState = _currentState.copyWith(
         gpsAvailable: true,
         rideState: RideState.navigating,
@@ -515,10 +737,10 @@ class NavigationService {
     }
   }
 
-  // ── GPS TICK (Live Update Loop) ───────────────────────────────────────────
+  // â”€â”€ GPS TICK (Live Update Loop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Called on every GPS position update from LocationService.
-  /// This is the main navigation progress loop — runs locally, no network calls.
+  /// This is the main navigation progress loop â€” runs locally, no network calls.
   void _onGpsTick() {
     if (!_isNavigating || _paused || _activeRoute == null) {
       return;
@@ -530,30 +752,100 @@ class NavigationService {
     // Validate raw GPS fix (reject stale fixes, poor accuracy, or teleportation jumps)
     final pos = _gpsFilter.filter(rawPos);
     if (pos == null) {
-      // Discard invalid / noisy GPS point per Master Prompt §10
+      // Discard invalid / noisy GPS point per Master Prompt Â§10
       return;
     }
 
-    // Speed is pre-filtered by LocationService → SpeedFilter (never shows jitter)
+    // Speed is pre-filtered by LocationService â†’ SpeedFilter (never shows jitter)
     final currentSpeed = LocationService.instance.speedKmhNotifier.value;
     final currentHeading = LocationService.instance.headingNotifier.value;
     final bleConnected = JustRideBleService.instance.isDeviceConnected;
     final riderLatLng = LatLng(pos.latitude, pos.longitude);
 
     final previousPos = _previousPos;
-    // Session telemetry accumulation: only when actively riding (not parked GPS drift)
-    if (_previousPos != null && currentSpeed >= 1.5) {
-      final seg = _calculateDistanceMeters(
-        LatLng(_previousPos!.latitude, _previousPos!.longitude),
-        riderLatLng,
-      );
-      _sessionDistanceTravelled += seg;
+    // Record only fresh, accurate fixes. Never join a GPS outage with a straight line.
+    if (pos.accuracy <= 25 &&
+        LocationService.navigationFixFresh(pos, DateTime.now())) {
+      final gap = _previousPos == null ||
+          pos.timestamp.difference(_previousPos!.timestamp).inSeconds > 10;
+      if (gap) _trailBreak = true;
+      if (!gap && _previousPos != null && currentSpeed >= 1.5) {
+        _sessionDistanceTravelled += _calculateDistanceMeters(
+            LatLng(_previousPos!.latitude, _previousPos!.longitude),
+            riderLatLng);
+      }
+      _previousPos = pos;
+      if (currentSpeed > _sessionMaxSpeedKmh)
+        _sessionMaxSpeedKmh = currentSpeed;
+      _recordFix(pos);
+    } else {
+      _previousPos = null;
+      _trailBreak = true;
     }
-    _previousPos = pos;
-    if (currentSpeed > _sessionMaxSpeedKmh) _sessionMaxSpeedKmh = currentSpeed;
-    if (currentSpeed > 0) {
-      _sessionSpeedSum += currentSpeed;
-      _sessionSpeedSamples++;
+
+    var missedTurn = false;
+    if (!_reroutePending && pos.accuracy <= 25 &&
+        LocationService.navigationFixFresh(pos, DateTime.now())) {
+      final steps = _activeRoute!.steps;
+      missedTurn = _maneuverFsm.update(
+        riderPosition: riderLatLng,
+        riderHeading: currentHeading,
+        steps: steps,
+        riderSpeedKmh: currentSpeed,
+        remainingAlongRouteMeters: _remainingStepDistance(
+            riderLatLng, steps[_currentStepIndex.clamp(0, steps.length - 1)]),
+      );
+      _currentStepIndex = _maneuverFsm.activeStepIndex.clamp(0, steps.length - 1);
+    }
+
+    final offRouteState = _offRouteDetector.update(
+      riderPosition: riderLatLng,
+      timestamp: pos.timestamp,
+      accuracyMeters: pos.accuracy,
+      speedMs: currentSpeed / 3.6,
+      polylinePoints: _activeRoute!.polylinePoints,
+    );
+    if (offRouteState == OffRouteState.offRoute ||
+        (missedTurn && currentSpeed >= 5)) _reroutePending = true;
+    if (_reroutePending &&
+        !_changingStop &&
+        _maneuverFsm.stage != ManeuverStage.missed &&
+        !_isRerouting &&
+        offRouteState == OffRouteState.onRoute &&
+        pos.accuracy <= 25 &&
+        currentSpeed >= 5) {
+      _reroutePending = false;
+      _rerouteFailures = 0;
+      _nextRerouteAllowedAt = null;
+    }
+    if (_reroutePending) {
+      _currentState = _currentState.copyWith(
+        currentLatitude: pos.latitude,
+        currentLongitude: pos.longitude,
+        speedKmh: currentSpeed,
+        heading: currentHeading,
+        bleConnected: bleConnected,
+        gpsAvailable: true,
+        rerouting: true,
+        rideState: RideState.rerouting,
+        maneuverState: 'NONE',
+        maneuverText: _changingStop
+            ? (_isRerouting
+                ? 'Next stop - calculating'
+                : 'Next stop - retrying')
+            : (_isRerouting || _rerouteFailures == 0
+                ? 'Off route - rerouting'
+                : 'Off route - retrying'),
+      );
+      navigationStateNotifier.value = _currentState;
+      rideStateNotifier.value = RideState.rerouting;
+      unawaited(BleNavigationService.instance.sendNavUpdate(_currentState));
+      if (!_isRerouting &&
+          pos.accuracy <= 25 &&
+          LocationService.navigationFixFresh(pos, DateTime.now())) {
+        unawaited(_triggerReroute(riderLatLng));
+      }
+      return; // Never advance old steps or confirm arrival against an invalid route.
     }
 
     // 1. Arrival requires the final route segment, slow speed and a five-second dwell to
@@ -580,18 +872,6 @@ class NavigationService {
     // 2. Evaluate active step progress via Maneuver State Machine
     final steps = _activeRoute!.steps;
 
-    // Progress is monotonic within a route. Backtracking is handled by the
-    // confirmed corridor detector, not nearest historical vertices.
-    _maneuverFsm.update(
-      riderPosition: riderLatLng,
-      riderHeading: currentHeading,
-      steps: steps,
-      riderSpeedKmh: currentSpeed,
-      remainingAlongRouteMeters: _remainingStepDistance(
-          riderLatLng, steps[_currentStepIndex.clamp(0, steps.length - 1)]),
-    );
-
-    _currentStepIndex = _maneuverFsm.activeStepIndex.clamp(0, steps.length - 1);
     final step = steps[_currentStepIndex];
     final distToTurn = _remainingStepDistance(riderLatLng, step);
 
@@ -643,21 +923,6 @@ class NavigationService {
       remainingSecs += steps[i].durationSeconds;
     }
 
-    // 6. Off-route detection using 3-state OffRouteDetector.
-    //    Suppresses rerouting while stationary; requires confirmed deviation.
-    final offRouteState = _offRouteDetector.update(
-      riderPosition: riderLatLng,
-      timestamp: pos.timestamp,
-      accuracyMeters: pos.accuracy,
-      speedMs: currentSpeed / 3.6, // km/h → m/s
-      polylinePoints: _activeRoute!.polylinePoints,
-    );
-    if (offRouteState == OffRouteState.offRoute && !_isRerouting) {
-      _offRouteDetector.reset();
-      _triggerReroute(riderLatLng);
-      return;
-    }
-
     // 7. Heading: when stationary or low-speed, orient toward the next step
     //    endpoint (so the map arrow points the right direction while parked).
     //    Use route bearing whenever speed < 3 km/h regardless of raw heading value,
@@ -703,16 +968,14 @@ class NavigationService {
 
     // 8. Determine ride state: STATIONARY when speed < 3.0 km/h
     final RideState activeRideState;
-    if (_isRerouting) {
-      activeRideState = RideState.rerouting;
-    } else if (currentSpeed < 3.0) {
+    if (currentSpeed < 3.0) {
       activeRideState = RideState.stationary;
     } else {
       activeRideState = RideState.navigating;
     }
 
     // Stationary GPS jitter filter:
-    // When parked or stopped at a signal, GPS coordinates drift by ±2-5m.
+    // When parked or stopped at a signal, GPS coordinates drift by Â±2-5m.
     // Freeze distance to prevent the HUD/app numbers from jumping around.
     if (activeRideState == RideState.stationary &&
         _currentState.maneuverDistanceMeters > 0) {
@@ -732,11 +995,11 @@ class NavigationService {
 
     final maneuverChanged = _currentState.maneuverId != effectiveManeuverId;
 
-    // 9. Update NavigationState — single source of truth
+    // 9. Update NavigationState â€” single source of truth
     _currentState = NavigationState(
       currentLatitude: pos.latitude,
       currentLongitude: pos.longitude,
-      speedKmh: currentSpeed, // 0.0 when stationary ✓
+      speedKmh: currentSpeed, // 0.0 when stationary âœ“
       heading: activeHeading,
       remainingDistanceMeters: remainingDist,
       remainingDurationSeconds: remainingSecs,
@@ -748,7 +1011,7 @@ class NavigationService {
       nextManeuverDistanceMeters: nextStep?.distanceMeters ?? 0.0,
       maneuverId: effectiveManeuverId,
       maneuverState: effectiveManeuverState,
-      rerouting: _isRerouting,
+      rerouting: false,
       gpsAvailable: true,
       bleConnected: bleConnected,
       rideState: activeRideState,
@@ -835,10 +1098,10 @@ class NavigationService {
     return remaining;
   }
 
-  // ── Previous position for session distance tracking ───────────────────────
+  // â”€â”€ Previous position for session distance tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Position? _previousPos;
 
-  // ── REROUTE ──────────────────────────────────────────────────────────────
+  // â”€â”€ REROUTE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _triggerReroute(LatLng riderLocation) async {
     if (!_isNavigating || _paused || _destination == null || _isRerouting) {
@@ -850,7 +1113,7 @@ class NavigationService {
       return;
     }
 
-    final previousInstruction = _currentState.maneuverText;
+    _reroutePending = true;
     _isRerouting = true;
     _nextRerouteAllowedAt = now.add(_rerouteRetryCooldown);
     debugPrint('[NavService] Off-route! Triggering automatic reroute...');
@@ -858,7 +1121,8 @@ class NavigationService {
     _currentState = _currentState.copyWith(
       rerouting: true,
       rideState: RideState.rerouting,
-      maneuverText: 'Recalculating route...',
+      maneuverText:
+          _changingStop ? 'Next stop - calculating' : 'Off route - rerouting',
     );
     navigationStateNotifier.value = _currentState;
     rideStateNotifier.value = RideState.rerouting;
@@ -872,6 +1136,8 @@ class NavigationService {
         _routeRevision++;
         BleNavigationService.instance.beginRouteRevision();
         _rerouteFailures = 0;
+        _reroutePending = false;
+        _changingStop = false;
         _activeRoute = newRoute;
         _routeProgressIndex = 0;
         _hudPois.clear();
@@ -916,7 +1182,7 @@ class NavigationService {
           initialManeuver: rerouteManeuver,
         );
         activeRouteNotifier.value = newRoute;
-        debugPrint('[NavService] ✓ Rerouted successfully!');
+        debugPrint('[NavService] âœ“ Rerouted successfully!');
 
         // Publish the new navigation state before its route window. The BLE
         // write queue preserves this order, so the HUD never renders a new
@@ -954,13 +1220,13 @@ class NavigationService {
         debugPrint('[NavService] Reroute returned no usable route.');
         _rerouteFailures++;
         _currentState = _currentState.copyWith(
-            rerouting: false,
+            rerouting: true,
             rideState: _currentState.gpsAvailable
-                ? RideState.navigating
+                ? RideState.rerouting
                 : RideState.gpsLost,
-            maneuverText: _currentState.maneuverText == 'Recalculating route...'
-                ? previousInstruction
-                : _currentState.maneuverText);
+            maneuverText: _changingStop
+                ? 'Next stop - retrying'
+                : 'Off route - retrying');
         navigationStateNotifier.value = _currentState;
         rideStateNotifier.value = _currentState.rideState;
         await BleNavigationService.instance.sendNavUpdate(
@@ -971,17 +1237,15 @@ class NavigationService {
     } catch (e) {
       if (generation != _rideGeneration || !_isNavigating || _paused) return;
       debugPrint('[NavService] Reroute failed: $e');
-      // Leave the user in the last valid navigation state. The cooldown
-      // prevents an immediate retry loop while the network/GPS recovers.
+      // Keep invalid guidance suppressed while the cooldown limits network retries.
       _rerouteFailures++;
       _currentState = _currentState.copyWith(
-          rerouting: false,
+          rerouting: true,
           rideState: _currentState.gpsAvailable
-              ? RideState.navigating
+              ? RideState.rerouting
               : RideState.gpsLost,
-          maneuverText: _currentState.maneuverText == 'Recalculating route...'
-              ? previousInstruction
-              : _currentState.maneuverText);
+          maneuverText:
+              _changingStop ? 'Next stop - retrying' : 'Off route - retrying');
       navigationStateNotifier.value = _currentState;
       rideStateNotifier.value = _currentState.rideState;
       await BleNavigationService.instance.sendNavUpdate(
@@ -997,11 +1261,18 @@ class NavigationService {
     }
   }
 
-  // ── ARRIVED ──────────────────────────────────────────────────────────────
+  // â”€â”€ ARRIVED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _onArrived(Position pos, bool bleConnected) {
+    if (_stops.length > 1) {
+      unawaited(skipStop());
+      return;
+    }
+    _reroutePending = false;
     ++_rideGeneration;
     _isNavigating = false;
+    _deviceAccessTimer?.cancel();
+    _deviceAccessTimer = null;
     _isRerouting = false;
     _isStarting = false;
     LocationService.instance.positionNotifier.removeListener(_onGpsTick);
@@ -1041,15 +1312,19 @@ class NavigationService {
     _completeSession();
 
     BleNavigationService.instance.sendNavArrived(_currentState);
-    debugPrint('[NavService] ★ Destination reached!');
+    debugPrint('[NavService] â˜… Destination reached!');
   }
 
-  // ── PAUSE / RESUME ────────────────────────────────────────────────────────
+  // â”€â”€ PAUSE / RESUME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  void pauseNavigation() {
-    if (!_isNavigating) return;
+  Future<void> pauseNavigation() async {
+    if (!_isNavigating || _paused) return;
     ++_rideGeneration; // Invalidate any in-flight reroute.
     _paused = true;
+    _rideClock.stop();
+    _trailBreak = true;
+    _flushTrail();
+    unawaited(_checkpointRide());
     _isRerouting = false;
     _offRouteDetector.reset();
     _currentState =
@@ -1061,35 +1336,68 @@ class NavigationService {
       opCode: BleNavOpCode.navPause,
       force: true,
     );
+    _gpsTransition = _gpsTransition.then((_) => LocationService.instance.stopTracking());
+    await _gpsTransition;
   }
 
-  void resumeNavigation() {
-    if (!_isNavigating) return;
-    _paused = false;
-    _previousPos = null;
-    _offRouteDetector.reset();
-    _currentState = _currentState.copyWith(rideState: RideState.navigating);
-    navigationStateNotifier.value = _currentState;
-    rideStateNotifier.value = RideState.navigating;
-    BleNavigationService.instance.sendNavUpdate(
-      _currentState,
-      opCode: BleNavOpCode.navResume,
-      force: true,
-    );
+  Future<void> resumeNavigation() async {
+    if (!_isNavigating || !_paused || _resuming) return;
+    _resuming = true;
+    final generation = _rideGeneration;
+    _gpsTransition = _gpsTransition.then((_) async {
+      if (!_isNavigating || generation != _rideGeneration) return;
+      final location = LocationService.instance;
+      final resumeAt = DateTime.now();
+      final started = await location.startTracking(distanceFilterMeters: 0, intervalMs: 400);
+      if (!_isNavigating || generation != _rideGeneration) return;
+      if (!started) return; // Stay paused; another Resume can retry permissions/GPS.
+      final latest = location.currentPosition;
+      final fix = latest != null && latest.timestamp.isAfter(resumeAt)
+          ? latest : await location.getCurrentPosition();
+      if (!_isNavigating || generation != _rideGeneration) return;
+      final fresh = LocationService.navigationFixFresh(fix, DateTime.now()) &&
+          fix!.timestamp.isAfter(resumeAt.subtract(const Duration(seconds: 1)));
+      _paused = false;
+      _rideClock.start();
+      _trailBreak = true;
+      _previousPos = null;
+      _gpsFilter.reset();
+      _offRouteDetector.reset();
+      if (!fresh) location.isGpsAvailableNotifier.value = false;
+      _currentState = _currentState.copyWith(
+        gpsAvailable: fresh,
+        rideState: !fresh ? RideState.gpsLost :
+            _reroutePending ? RideState.rerouting : RideState.navigating,
+        rerouting: _reroutePending,
+        maneuverText: _reroutePending ? 'Off route - retrying' : _currentState.maneuverText,
+      );
+      navigationStateNotifier.value = _currentState;
+      rideStateNotifier.value = _currentState.rideState;
+      await BleNavigationService.instance.sendNavUpdate(
+        _currentState, opCode: BleNavOpCode.navResume, force: true);
+      if (fresh && _isNavigating && generation == _rideGeneration) _onGpsTick();
+    });
+    try { await _gpsTransition; } finally { _resuming = false; }
   }
 
-  // ── STOP ─────────────────────────────────────────────────────────────────
+  // â”€â”€ STOP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> stopNavigation() {
     return _stopping ??= _stopNavigation().whenComplete(() => _stopping = null);
   }
 
   Future<void> _stopNavigation() async {
+    _deviceAccessTimer?.cancel();
+    _deviceAccessTimer = null;
     ++_rideGeneration;
     _isStarting = false;
+    _changingStop = false;
+    _stops.clear();
+    stopsChanged.value++;
     _paused = false;
     _isNavigating = false;
     _routeProgressIndex = 0;
+    _reroutePending = false;
     _hudPois.clear();
     _lastContextFetchAt = null;
     _cityName = '';
@@ -1121,19 +1429,21 @@ class NavigationService {
     rideStateNotifier.value = RideState.idle;
     activeRouteNotifier.value = null;
 
+    await _gpsTransition;
     await LocationService.instance.stopTracking();
     await BleNavigationService.instance.sendNavStop(_currentState);
 
     debugPrint('[NavService] Navigation stopped.');
   }
 
-  // ── Session Tracking Helpers ──────────────────────────────────────────────
+  // â”€â”€ Session Tracking Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _clearSavedSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('resume_active_session');
       await prefs.remove('resume_destination');
+      await prefs.remove('resume_stops');
       await prefs.remove('resume_session_owner');
     } catch (e) {
       debugPrint('[NavService] Failed to clear finished ride: $e');
@@ -1142,19 +1452,21 @@ class NavigationService {
 
   void _completeSession({String status = 'completed'}) {
     if (_currentSession != null) {
-      final avgSpeed = _sessionSpeedSamples > 0
-          ? _sessionSpeedSum / _sessionSpeedSamples
+      _rideClock.stop();
+      _flushTrail();
+      final avgSpeed = activeRideSeconds > 0
+          ? _sessionDistanceTravelled * 3.6 / activeRideSeconds
           : 0.0;
-      final completed = _currentSession!.complete(
+      final completed = _checkpointSession().complete(
         status: status,
         distanceMeters: _sessionDistanceTravelled,
         averageSpeedKmh: avgSpeed,
         maxSpeedKmh: _sessionMaxSpeedKmh,
+        activeDurationSeconds: activeRideSeconds,
       );
-      final owner = _sessionUserId;
-      if (owner != null) {
-        unawaited(RideHistoryService.instance.save(completed, owner));
-      }
+      lastCompletedSession = completed;
+      unawaited(RideHistoryService.instance
+          .save(completed, _sessionUserId ?? 'guest'));
       _currentSession = null;
       _sessionUserId = null;
       _previousPos = null;
@@ -1169,7 +1481,7 @@ class NavigationService {
     );
   }
 
-  // ── Geometry Helpers ──────────────────────────────────────────────────────
+  // â”€â”€ Geometry Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static double _calculateDistanceMeters(LatLng p1, LatLng p2) {
     return Geolocator.distanceBetween(
@@ -1197,15 +1509,20 @@ class NavigationService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final owner = await RideHistoryService.instance.currentUserId();
-      if (owner == null || prefs.getString('resume_session_owner') != owner) {
+      if (prefs.getString('resume_session_owner') != (owner ?? 'guest')) {
         return false;
       }
       final savedSession = prefs.getString('resume_active_session');
       if (savedSession != null) {
         final session = NavigationSession.fromJson(savedSession);
         if (session.endTime == null && session.destination != null) {
-          return await startNavigation(session.destination!,
-              resumedSession: session);
+          final stops = (prefs.getStringList('resume_stops') ?? [])
+              .map(Destination.fromJson)
+              .toList();
+          return await startNavigation(
+              stops.isNotEmpty ? stops.first : session.destination!,
+              resumedSession: session,
+              journeyStops: stops);
         }
         await prefs.remove('resume_active_session');
       }

@@ -1,3 +1,4 @@
+import '../../../shared/widgets/visible_page_polling.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
@@ -10,21 +11,19 @@ class SensorStatusCard extends StatefulWidget {
   State<SensorStatusCard> createState() => _SensorStatusCardState();
 }
 
-class _SensorStatusCardState extends State<SensorStatusCard> {
-  Timer? _freshness;
+class _SensorStatusCardState extends State<SensorStatusCard> with VisiblePagePolling<SensorStatusCard> {
   @override
   void initState() {
     super.initState();
-    _freshness = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
     unawaited(BleNavigationService.instance.requestSensorStatus());
   }
 
   @override
-  void dispose() {
-    _freshness?.cancel();
-    super.dispose();
+  Duration get visiblePollInterval => const Duration(seconds: 2);
+  @override
+  Future<void> pollVisiblePage() async {
+    await BleNavigationService.instance.requestSensorStatus();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -66,13 +65,17 @@ class _SensorStatusCardState extends State<SensorStatusCard> {
                             ]),
                             const SizedBox(height: 12),
                             Text(text,
-                                style: const TextStyle(
-                                    color: AppColors.primary)),
+                                style:
+                                    const TextStyle(color: AppColors.primary)),
                             const SizedBox(height: 8),
                             Text(ready
                                 ? 'Roll ${status.roll.toStringAsFixed(1)}°   Pitch ${status.pitch.toStringAsFixed(1)}°'
                                 : 'Roll —   Pitch —'),
                             if (ready) Text(status.movement),
+                            if (ready && status.gyroAvailable)
+                              Text(status.gyroFresh
+                                  ? 'Gyro turn ${status.yaw!.toStringAsFixed(1)}° · ${status.turnRate!.toStringAsFixed(1)}°/s'
+                                  : 'Waiting for fresh gyroscope data'),
                             const SizedBox(height: 8),
                             const Text(
                                 'Calibrates automatically when a ride starts. Keep the device still briefly.',

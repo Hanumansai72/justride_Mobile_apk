@@ -35,6 +35,16 @@ class LocationService with WidgetsBindingObserver {
   Position? get currentPosition => _currentPosition;
   bool get isGpsAvailable => isGpsAvailableNotifier.value;
 
+  /// HUD guidance must not present an old/bad fix as live while recovery polls.
+  static bool navigationFixFresh(Position? fix, DateTime now) =>
+      fix != null &&
+      fix.accuracy.isFinite &&
+      fix.accuracy <= 50 &&
+      now.toUtc().difference(fix.timestamp.toUtc()).abs() <=
+          const Duration(seconds: 10);
+  bool get hasFreshNavigationFix =>
+      navigationFixFresh(positionNotifier.value, DateTime.now());
+
   /// Last known filtered speed in km/h (0.0 if unavailable).
   double get lastSpeedKmh => speedKmhNotifier.value;
 
@@ -126,6 +136,9 @@ class LocationService with WidgetsBindingObserver {
   LocationSettings? _trackingSettings;
   bool _trackingActive = false, _streamNeedsRecovery = false;
   int _trackingGeneration = 0;
+  bool _recoveryPollBusy = false;
+  int _recoveryPollFailures = 0;
+  DateTime? _nextRecoveryPoll;
 
   // ── Continuous Tracking ──────────────────────────────────────────────────
 
@@ -207,7 +220,11 @@ class LocationService with WidgetsBindingObserver {
           isGpsAvailableNotifier.value = false;
           speedKmhNotifier.value = 0.0;
         }
-        // Attempt one-shot wake-up to prompt Android GPS hardware
+        // The live stream remains active. Back off extra one-shot requests
+        // during a prolonged outage instead of starting another every 4 s.
+        final now = DateTime.now();
+        if (_recoveryPollBusy || (_nextRecoveryPoll != null && now.isBefore(_nextRecoveryPoll!))) return;
+        _recoveryPollBusy = true;
         try {
           final fix = await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
@@ -215,13 +232,24 @@ class LocationService with WidgetsBindingObserver {
               timeLimit: Duration(seconds: 4),
             ),
           );
-          if (_trackingActive &&
-              trackingGeneration == _trackingGeneration &&
-              fix.accuracy.isFinite &&
-              fix.accuracy <= 120.0) {
-            _onPositionUpdate(fix);
+          if (_trackingActive && trackingGeneration == _trackingGeneration) {
+            if (_isFreshUsableFix(fix, maxAgeSeconds: 30) && fix.accuracy <= 120.0) {
+              _onPositionUpdate(fix);
+            } else {
+              _recoveryPollFailures = (_recoveryPollFailures + 1).clamp(0, 3);
+            }
           }
-        } catch (_) {}
+        } catch (_) {
+          if (trackingGeneration == _trackingGeneration) {
+            _recoveryPollFailures = (_recoveryPollFailures + 1).clamp(0, 3);
+          }
+        } finally {
+          if (trackingGeneration == _trackingGeneration) {
+            _recoveryPollBusy = false;
+            _nextRecoveryPoll = DateTime.now().add(Duration(
+                seconds: (4 * (1 << _recoveryPollFailures)).clamp(4, 30)));
+          }
+        }
       }
     });
 
@@ -238,7 +266,7 @@ class LocationService with WidgetsBindingObserver {
         _streamNeedsRecovery = false;
         _recoveryTimer?.cancel();
         _onPositionUpdate(pos);
-        debugPrint('[LocationService] Live fix: '
+        if (kDebugMode) debugPrint('[LocationService] Live fix: '
             '${pos.latitude.toStringAsFixed(6)},${pos.longitude.toStringAsFixed(6)} '
             '±${pos.accuracy.toStringAsFixed(0)}m '
             '${speedKmhNotifier.value.toStringAsFixed(1)}km/h');
@@ -303,6 +331,8 @@ class LocationService with WidgetsBindingObserver {
       return;
     }
     _lastLiveFixAt = DateTime.now();
+    _recoveryPollFailures = 0;
+    _nextRecoveryPoll = null;
     _currentPosition = pos;
     isGpsAvailableNotifier.value = true;
 
@@ -365,6 +395,9 @@ class LocationService with WidgetsBindingObserver {
     ++_trackingGeneration;
     _trackingSettings = null;
     _streamNeedsRecovery = false;
+    _recoveryPollBusy = false;
+    _recoveryPollFailures = 0;
+    _nextRecoveryPoll = null;
     WidgetsBinding.instance.removeObserver(this);
     _recoveryTimer?.cancel();
     _recoveryTimer = null;

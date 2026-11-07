@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/google_maps_service.dart';
+import 'off_route_detector.dart';
 
 /// Explicit lifecycle stages for an active maneuver.
 enum ManeuverStage {
@@ -181,12 +182,13 @@ class ManeuverStateMachine {
         _lockedManeuver.toUpperCase().contains('REACHED');
 
     // Track minimum distance to turn point
-    if (distToTurn < _minDistanceToTurn) {
-      _minDistanceToTurn = distToTurn;
+    if (distToTurn <= 30.0) {
+      _minDistanceToTurn = math.min(_minDistanceToTurn, directDistance);
     }
 
     // ── STAGE 4: TURN_ACTIVE / TURNING (Traversing Junction) ──────────────────
-    if (_stage == ManeuverStage.turning) {
+    if (_stage == ManeuverStage.turning ||
+        (_minDistanceToTurn <= 30.0 && directDistance > _lastDistanceMeters)) {
       final outgoingHeading = calculateOutgoingHeading(_activeStepIndex, steps);
       final distFromTurnPoint = Geolocator.distanceBetween(
         riderPosition.latitude,
@@ -203,29 +205,13 @@ class ManeuverStateMachine {
       final double headingTolerance = isUTurn ? 45.0 : 35.0;
       final bool headingAligned = headingDiff.abs() <= headingTolerance;
 
-      // Distance to the NEXT step's polyline (must be on outgoing road)
-      double distToNextRoad = double.infinity;
-      if (nextStep != null) {
-        if (nextStep.points.isNotEmpty) {
-          for (final pt in nextStep.points) {
-            final d = Geolocator.distanceBetween(
-              riderPosition.latitude,
-              riderPosition.longitude,
-              pt.latitude,
-              pt.longitude,
-            );
-            if (d < distToNextRoad) distToNextRoad = d;
-          }
-        } else {
-          final d = Geolocator.distanceBetween(
-            riderPosition.latitude,
-            riderPosition.longitude,
-            nextStep.startLocation.latitude,
-            nextStep.startLocation.longitude,
-          );
-          distToNextRoad = (d <= 50.0) ? 0.0 : d;
-        }
-      }
+      final distToNextRoad = nextStep == null
+          ? double.infinity
+          : OffRouteDetector.distanceToRouteMeters(
+              riderPosition,
+              nextStep.points.length >= 2
+                  ? nextStep.points
+                  : [nextStep.startLocation, nextStep.endLocation]);
 
       // Turn completed criteria:
       // Must be >= 10m past turn point AND heading MUST be aligned with outgoing road
@@ -259,50 +245,22 @@ class ManeuverStateMachine {
         return false;
       }
 
-      // Wrong turn / missed turn check during junction traversal:
-      // If the rider has travelled > 25m past the turn point without heading alignment,
-      // verify if they are merely returning on the current incoming road (e.g. U-turn back)
-      // before declaring a missed turn reroute.
-      if (distFromTurnPoint > 25.0 && !headingAligned) {
-        double distToCurrentRoad = double.infinity;
-        for (final pt in currentStep.points) {
-          final d = Geolocator.distanceBetween(
-            riderPosition.latitude,
-            riderPosition.longitude,
-            pt.latitude,
-            pt.longitude,
-          );
-          if (d < distToCurrentRoad) distToCurrentRoad = d;
-        }
-
-        if (distToCurrentRoad > 30.0) {
+      // Along-route distance clamps to zero beyond the junction. Use direct
+      // distance growth to detect a missed turn, even on an overlapping road.
+      if (directDistance > _lastDistanceMeters &&
+          _minDistanceToTurn <= 30.0 &&
+          directDistance > 35.0 &&
+          !headingAligned &&
+          !isArrive) {
+        _increasingDistanceCount++;
+        if (_increasingDistanceCount >= 2) {
           _stage = ManeuverStage.missed;
-          return true; // REROUTE!
+          return true;
         }
+      } else {
+        _increasingDistanceCount = 0;
       }
-
-      if (distToTurn > _lastDistanceMeters && _minDistanceToTurn <= 25.0) {
-        if (distToTurn > 35.0 && !headingAligned) {
-          _increasingDistanceCount++;
-          if (_increasingDistanceCount >= 2) {
-            double distToCurrentRoad = double.infinity;
-            for (final pt in currentStep.points) {
-              final d = Geolocator.distanceBetween(
-                riderPosition.latitude,
-                riderPosition.longitude,
-                pt.latitude,
-                pt.longitude,
-              );
-              if (d < distToCurrentRoad) distToCurrentRoad = d;
-            }
-            if (distToCurrentRoad > 30.0) {
-              _stage = ManeuverStage.missed;
-              return true; // REROUTE!
-            }
-          }
-        }
-      }
-      _lastDistanceMeters = distToTurn;
+      _lastDistanceMeters = directDistance;
       return false;
     }
 
@@ -322,21 +280,7 @@ class ManeuverStateMachine {
       }
     }
 
-    // Missed Turn Detection:
-    // If rider approached the turn (< 30m) and is now moving away (> 35m) without having turned:
-    if (distToTurn > _lastDistanceMeters &&
-        _minDistanceToTurn <= 30.0 &&
-        distToTurn > 35.0) {
-      _increasingDistanceCount++;
-      if (_increasingDistanceCount >= 2 && !isArrive) {
-        _stage = ManeuverStage.missed;
-        return true; // Trigger reroute!
-      }
-    } else if (distToTurn < _lastDistanceMeters) {
-      _increasingDistanceCount = 0;
-    }
-
-    _lastDistanceMeters = distToTurn;
+    _lastDistanceMeters = directDistance;
     return false;
   }
 

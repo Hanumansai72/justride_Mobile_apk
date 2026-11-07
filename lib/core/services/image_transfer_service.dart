@@ -9,6 +9,7 @@
 //   0xFF23  Image Status   (notify/read)  : [status_code][progress_pct]
 
 import 'dart:async';
+import 'ble_navigation_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
@@ -63,6 +64,7 @@ class ImageTransferService {
   bool get isTransferring => _isTransferring;
 
   Future<bool> discoverCharacteristics(BluetoothDevice device) async {
+    if (!BleNavigationService.instance.photoUploadSupported) return false;
     try {
       final services = await device.discoverServices();
       _controlChr = null;
@@ -98,8 +100,10 @@ class ImageTransferService {
     required BluetoothDevice device,
     required Uint8List rgb565Bytes,
   }) async {
-    if (_isTransferring) return false;
-    if (rgb565Bytes.length != kTotalBytes) {
+    if (_isTransferring || !BleNavigationService.instance.photoUploadSupported)
+      return false;
+    final totalBytes = rgb565Bytes.length;
+    if (totalBytes != kTotalBytes) {
       debugPrint(
           '[IMG] sendImage: expected $kTotalBytes bytes, got ${rgb565Bytes.length}');
       return false;
@@ -143,9 +147,9 @@ class ImageTransferService {
       final startPayload = Uint8List(5);
       startPayload[0] = _kCmdStart;
       final bd = ByteData.sublistView(startPayload, 1, 5);
-      bd.setUint32(0, kTotalBytes, Endian.little);
+      bd.setUint32(0, totalBytes, Endian.little);
 
-      debugPrint('[IMG] Sending START (size=$kTotalBytes bytes)...');
+      debugPrint('[IMG] Sending START (size=$totalBytes bytes)...');
       try {
         await _controlChr!.write(startPayload, withoutResponse: false);
       } catch (_) {
@@ -155,7 +159,7 @@ class ImageTransferService {
       await Future.delayed(const Duration(milliseconds: 250));
 
       // 2. Send RGB565 data chunks
-      final totalChunks = (kTotalBytes / kChunkPayload).ceil();
+      final totalChunks = (totalBytes / kChunkPayload).ceil();
       _updateProgress(
           ImageTransferState.transferring, 0, 'Sending image (0%)...');
 
@@ -163,8 +167,8 @@ class ImageTransferService {
         if (!_isTransferring) throw Exception('Transfer cancelled.');
 
         final start = i * kChunkPayload;
-        final end = (start + kChunkPayload > kTotalBytes)
-            ? kTotalBytes
+        final end = (start + kChunkPayload > totalBytes)
+            ? totalBytes
             : start + kChunkPayload;
         final payload = rgb565Bytes.sublist(start, end);
 
@@ -248,6 +252,7 @@ class ImageTransferService {
 
   /// Sends a clear / reset image command to restore default display screen
   Future<bool> resetImage(BluetoothDevice device) async {
+    if (!BleNavigationService.instance.photoUploadSupported) return false;
     try {
       final services = await device.discoverServices();
       BluetoothCharacteristic? ctrl;

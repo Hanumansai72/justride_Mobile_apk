@@ -45,6 +45,7 @@ class _TripsScreenState extends State<TripsScreen> {
 
   Future<void> _load({bool reset = false}) async {
     if (_loading) return;
+    if (reset) unawaited(_history.refreshTotalDistance());
     setState(() {
       _loading = true;
       _error = null;
@@ -55,7 +56,10 @@ class _TripsScreenState extends State<TripsScreen> {
       _loading = false;
       if (result.success && result.data != null) {
         if (reset) _rides.clear();
-        _rides.addAll(result.data!.items);
+        for (final ride in result.data!.items) {
+          if (!_rides.any((r) => r.sessionId == ride.sessionId))
+            _rides.add(ride);
+        }
         _page = result.data!.page;
         _hasMore = result.data!.hasMore;
       } else {
@@ -82,7 +86,18 @@ class _TripsScreenState extends State<TripsScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             children: [
-              Text('Your rides, newest first', style: AppTextStyles.bodyMedium),
+              ValueListenableBuilder<double?>(
+                valueListenable: _history.totalDistanceMeters,
+                builder: (context, meters, _) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(meters == null ? '— km' : '${(meters / 1000).toStringAsFixed(1)} km',
+                        style: AppTextStyles.headingLarge),
+                    const SizedBox(height: 6),
+                    Text('Total ridden · includes rides ended early', style: AppTextStyles.bodyMedium),
+                  ],
+                ),
+              ),
               const SizedBox(height: 20),
               if (_error != null)
                 Padding(
@@ -116,8 +131,7 @@ class _TripsScreenState extends State<TripsScreen> {
                 const Center(
                     child: Padding(
                   padding: EdgeInsets.all(24),
-                  child:
-                      CircularProgressIndicator(color: AppColors.primary),
+                  child: CircularProgressIndicator(color: AppColors.primary),
                 )),
               if (_hasMore && !_loading && _error == null)
                 OutlinedButton(

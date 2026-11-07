@@ -1,7 +1,11 @@
+import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:http/http.dart' as http;
+import 'ble_navigation_service.dart';
+import 'navigation_service.dart';
+import '../models/power_status.dart';
 
 enum OtaState {
   idle,
@@ -61,6 +65,18 @@ class JustRideOtaService {
 
   bool get isUpdating => _isUpdating;
 
+  static bool imageMatchesChip(List<int> image, int? chipId) =>
+      chipId != null &&
+      image.length >= 24 &&
+      image[0] == 0xe9 &&
+      (image[12] | image[13] << 8) == chipId;
+
+  static bool powerAllowsUpdate(PowerStatus? power, DateTime now) =>
+      power != null &&
+      power.freshAt(now) &&
+      (power.source == 2 ||
+          (power.source == 1 && (power.percentage ?? -1) >= 30));
+
   /// Discover OTA GATT characteristics
   Future<bool> _discoverOtaCharacteristics(BluetoothDevice device) async {
     try {
@@ -111,15 +127,32 @@ class JustRideOtaService {
       debugPrint('[OTA] Fetching firmware binary from: $downloadUrl');
 
       Uint8List firmwareBytes;
-      if (downloadUrl.startsWith('http')) {
-        final response = await http.get(Uri.parse(downloadUrl));
-        if (response.statusCode != 200) {
-          throw Exception(
-              'Failed to download firmware binary (HTTP ${response.statusCode})');
+      final uri = Uri.tryParse(downloadUrl);
+      if (uri != null && uri.scheme == 'https' && uri.host.isNotEmpty) {
+        final request = http.Request('GET', uri)..followRedirects = false;
+        final client = http.Client();
+        try {
+          final response =
+              await client.send(request).timeout(const Duration(seconds: 30));
+          if (response.statusCode != 200)
+            throw StateError(
+                'Firmware download failed. Use a direct HTTPS download URL.');
+          const limit = 0x1b0000;
+          if ((response.contentLength ?? 0) > limit)
+            throw StateError('Firmware exceeds the device update partition.');
+          final bytes = BytesBuilder(copy: false);
+          await for (final chunk
+              in response.stream.timeout(const Duration(seconds: 15))) {
+            if (bytes.length + chunk.length > limit)
+              throw StateError('Firmware exceeds the device update partition.');
+            bytes.add(chunk);
+          }
+          firmwareBytes = bytes.takeBytes();
+        } finally {
+          client.close();
         }
-        firmwareBytes = response.bodyBytes;
       } else {
-        throw Exception('A valid firmware download URL is required.');
+        throw StateError('Firmware downloads require a direct HTTPS URL.');
       }
 
       debugPrint(
@@ -132,8 +165,9 @@ class JustRideOtaService {
     } catch (e) {
       debugPrint('[OTA] Download and flash failed: $e');
       _updateProgress(OtaState.failed, 0.0, 'Update failed',
-          error:
-              'Unable to update your device. Keep it connected and try again.');
+          error: e is StateError
+              ? e.message.toString()
+              : 'Firmware download failed. Check the connection and retry.');
       _isUpdating = false;
       return false;
     }
@@ -156,10 +190,33 @@ class JustRideOtaService {
     _updateProgress(OtaState.preparing, 0.0, 'Preparing JustRide device...');
 
     try {
-      if (firmwareBytes.length < 24 || firmwareBytes[0] != 0xE9) {
+      if (firmwareBytes.length < 24 ||
+          firmwareBytes.length > 0x1b0000 ||
+          firmwareBytes[0] != 0xE9) {
         throw Exception('Invalid ESP32 firmware image.');
       }
+      if (!imageMatchesChip(
+          firmwareBytes, BleNavigationService.instance.firmwareChipId)) {
+        _updateProgress(
+            OtaState.failed, 0, 'Firmware does not match this device',
+            error: 'Reconnect the device and choose firmware for its board.');
+        return false;
+      }
 
+      final ble = BleNavigationService.instance;
+      if (NavigationService.instance.isNavigating)
+        throw StateError('End the ride before updating firmware.');
+      if (ble.firmwareChipId == 9) {
+        if (!ble.signedOtaSupported)
+          throw StateError(
+              'Install the signed Waveshare firmware by USB first.');
+        await ble.requestPowerStatus();
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        if (!powerAllowsUpdate(ble.powerStatus.value, DateTime.now()))
+          throw StateError(
+              'Connect stable USB power or charge above 30% before updating.');
+      }
+      await ble.prepareForOta();
       // 1. Discover OTA GATT Services & Characteristics
       final ok = await _discoverOtaCharacteristics(device);
       if (!ok) {
@@ -177,6 +234,8 @@ class JustRideOtaService {
 
       // 3. Subscribe before START so the final device verification cannot be missed.
       final finalStatus = Completer<int>();
+      final readyStatus = Completer<int>();
+      final writtenStatus = Completer<int>();
       int? deviceFailure;
       bool updateStarted = false;
       bool finishSent = false;
@@ -190,6 +249,15 @@ class JustRideOtaService {
               '[OTA] Notification from ESP32 -> Status: $statusCode, Pct: $progressPct%');
 
           if (!updateStarted) return;
+          if (statusCode == 1 && !readyStatus.isCompleted)
+            readyStatus.complete(statusCode);
+          if (statusCode == 2 &&
+              progressPct == 100 &&
+              !writtenStatus.isCompleted) writtenStatus.complete(statusCode);
+          if (statusCode >= 5 && statusCode <= 8) {
+            if (!readyStatus.isCompleted) readyStatus.complete(statusCode);
+            if (!writtenStatus.isCompleted) writtenStatus.complete(statusCode);
+          }
           if ((statusCode == 4 && finishSent) ||
               (statusCode >= 5 && statusCode <= 8)) {
             if (statusCode != 4) deviceFailure = statusCode;
@@ -210,7 +278,10 @@ class JustRideOtaService {
       updateStarted = true;
       await _controlChr!.write(startPayload, withoutResponse: false);
 
-      await Future.delayed(const Duration(milliseconds: 400));
+      if (await readyStatus.future.timeout(const Duration(seconds: 25)) != 1) {
+        throw StateError(
+            'Device rejected the update. Check power and signed firmware.');
+      }
 
       // Calculate safe chunk size based on MTU (header takes 3 bytes in ATT + 2 bytes sequence)
       // Keep chunks at safe 128 bytes for reliable GATT Write With Response across all Android versions
@@ -241,8 +312,8 @@ class JustRideOtaService {
         packet[1] = (i >> 8) & 0xFF;
         packet.setRange(2, packet.length, chunkData);
 
-        // Write WITH response – waits for ESP32 ATT acknowledgement before
-        // proceeding. Eliminates ERROR_GATT_WRITE_REQUEST_BUSY entirely.
+        // ATT responses acknowledge bounded queue admission. The final device status
+        // confirms all queued bytes reached flash before FINISH.
         bool written = false;
         for (int retry = 0; retry < 4 && !written; retry++) {
           try {
@@ -268,7 +339,12 @@ class JustRideOtaService {
             OtaState.transferring, progress, 'Installing update ($pct%)...');
       }
 
-      _updateProgress(OtaState.verifying, 0.98, 'Verifying update...');
+      if (await writtenStatus.future.timeout(const Duration(seconds: 30)) !=
+          2) {
+        throw StateError('Device could not finish writing the firmware.');
+      }
+      _updateProgress(
+          OtaState.verifying, 0.98, 'Verifying update signature...');
       debugPrint('[OTA] Sending FINISH command...');
       finishSent = true;
       await _controlChr!.write([_kCmdFinish], withoutResponse: false);
@@ -297,14 +373,17 @@ class JustRideOtaService {
     } catch (e) {
       debugPrint('[OTA] Flash error: $e');
       _updateProgress(OtaState.failed, 0.0, 'Update failed',
-          error:
-              'Unable to update your device. Keep it connected and try again.');
+          error: e is StateError
+              ? e.message.toString()
+              : 'Update interrupted or rejected. Keep the device powered and retry.');
       _isUpdating = false;
       try {
         await _controlChr?.write([_kCmdAbort], withoutResponse: true);
       } catch (_) {}
       return false;
     } finally {
+      BleNavigationService.instance.finishOta();
+      _isUpdating = false;
       _statusSub?.cancel();
     }
   }

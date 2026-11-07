@@ -35,6 +35,8 @@ class _GoScreenState extends State<GoScreen>
   bool _isSearching = false;
   bool _isStartFocused = false;
   Timer? _debounceTimer;
+  int _searchGeneration = 0;
+  int _previewGeneration = 0;
 
   bool _isLoadingRoute = false;
   bool _isStartingRide = false;
@@ -109,6 +111,13 @@ class _GoScreenState extends State<GoScreen>
 
   void _onQueryChanged(String query, {required bool isStart}) {
     _debounceTimer?.cancel();
+    final generation = ++_searchGeneration;
+    ++_previewGeneration;
+    setState(() {
+      if (isStart) { _startLocation = null; } else { _destLocation = null; }
+      _previewRoute = null;
+      _isLoadingRoute = false;
+    });
     final clean = query.trim();
     if (clean.length < 2) {
       setState(() {
@@ -121,20 +130,22 @@ class _GoScreenState extends State<GoScreen>
     setState(() => _isSearching = true);
     _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
       try {
-        final results = await GoogleMapsService.instance.searchPlaces(clean);
-        if (!mounted) return;
+        final results = await GoogleMapsService.instance.searchPlaces(clean, autocomplete: true);
+        if (!mounted || generation != _searchGeneration) return;
         setState(() {
           _suggestions = results;
           _isSearching = false;
         });
       } catch (e) {
-        if (!mounted) return;
+        if (!mounted || generation != _searchGeneration) return;
         setState(() => _isSearching = false);
       }
     });
   }
 
   void _selectSuggestion(Destination dest, {required bool isStart}) {
+    _debounceTimer?.cancel();
+    ++_searchGeneration;
     setState(() {
       if (isStart) {
         _startLocation = dest;
@@ -146,21 +157,27 @@ class _GoScreenState extends State<GoScreen>
         _destFocusNode.unfocus();
       }
       _suggestions = [];
+      _isSearching = false;
     });
     _fetchRoutePreview();
   }
 
   void _useCurrentLocationForStart() {
+    _debounceTimer?.cancel();
+    ++_searchGeneration;
     setState(() {
       _startLocation = null;
       _startController.text = 'Current Location';
       _startFocusNode.unfocus();
       _suggestions = [];
+      _isSearching = false;
     });
     _fetchRoutePreview();
   }
 
   void _swapEndpoints() {
+    _debounceTimer?.cancel();
+    ++_searchGeneration;
     setState(() {
       final tempDest = _destLocation;
       final tempText = _destController.text;
@@ -174,44 +191,49 @@ class _GoScreenState extends State<GoScreen>
       _startController.text = tempText.isEmpty ? 'Current Location' : tempText;
 
       _suggestions = [];
+      _isSearching = false;
     });
     _fetchRoutePreview();
   }
 
   Future<void> _fetchRoutePreview() async {
-    if (_destLocation == null ||
-        _destLocation!.latitude == 0.0 ||
-        _destLocation!.longitude == 0.0) {
-      setState(() => _previewRoute = null);
+    final generation = ++_previewGeneration;
+    var dest = _destLocation;
+    var start = _startLocation;
+    if (dest == null) {
+      setState(() { _previewRoute = null; _isLoadingRoute = false; });
       return;
     }
-
-    setState(() => _isLoadingRoute = true);
-
+    setState(() { _isLoadingRoute = true; _previewRoute = null; });
     try {
-      final currentPos = LocationService.instance.currentPosition;
-      final startLatLng = _startLocation != null
-          ? LatLng(_startLocation!.latitude, _startLocation!.longitude)
-          : LatLng(
-              currentPos?.latitude ?? 17.3850,
-              currentPos?.longitude ?? 78.4867,
-            );
-      final destLatLng =
-          LatLng(_destLocation!.latitude, _destLocation!.longitude);
-
-      final route = await GoogleMapsService.instance.calculateRoute(
-        origin: startLatLng,
-        destination: destLatLng,
-      );
-
-      if (mounted) {
-        setState(() {
-          _previewRoute = route;
-          _isLoadingRoute = false;
-        });
+      if (dest.latitude == 0 && dest.longitude == 0) {
+        dest = await GoogleMapsService.instance.resolveDestination(dest);
       }
-    } catch (e) {
-      if (mounted) setState(() => _isLoadingRoute = false);
+      if (start != null && start.latitude == 0 && start.longitude == 0) {
+        start = await GoogleMapsService.instance.resolveDestination(start);
+        if (start == null) return;
+      }
+      if (!mounted || generation != _previewGeneration || dest == null) return;
+      _destLocation = dest;
+      _startLocation = start;
+      final saved = LocationService.instance.currentPosition;
+      final pos = start != null ? null :
+          LocationService.navigationFixFresh(saved, DateTime.now()) ? saved :
+              await LocationService.instance.getCurrentPosition();
+      if (!mounted || generation != _previewGeneration || (start == null && pos == null)) return;
+      final route = await GoogleMapsService.instance.calculateRoute(
+        origin: start != null ? LatLng(start.latitude, start.longitude) : LatLng(pos!.latitude, pos.longitude),
+        destination: LatLng(dest.latitude, dest.longitude),
+      );
+      if (mounted && generation == _previewGeneration) {
+        setState(() => _previewRoute = route);
+      }
+    } catch (_) {
+      // Leave the preview empty so the rider can retry without stale guidance.
+    } finally {
+      if (mounted && generation == _previewGeneration) {
+        setState(() => _isLoadingRoute = false);
+      }
     }
   }
 
@@ -240,7 +262,7 @@ class _GoScreenState extends State<GoScreen>
         );
 
         target = await GoogleMapsService.instance.resolveDestination(
-          Destination(
+          target ?? Destination(
             name: destText,
             address: destText,
             latitude: 0.0,
@@ -441,11 +463,7 @@ class _GoScreenState extends State<GoScreen>
                                 ? GestureDetector(
                                     onTap: () {
                                       _destController.clear();
-                                      setState(() {
-                                        _destLocation = null;
-                                        _suggestions = [];
-                                        _previewRoute = null;
-                                      });
+                                      _onQueryChanged('', isStart: false);
                                     },
                                     child: const Icon(Icons.close_rounded,
                                         size: 16, color: AppColors.textMuted),

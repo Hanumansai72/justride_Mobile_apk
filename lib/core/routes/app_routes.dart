@@ -20,7 +20,6 @@ import '../../features/navigation/screens/active_navigation_screen.dart';
 import '../../features/navigation/screens/go_screen.dart';
 
 import '../../features/device/screens/device_settings_screen.dart';
-import '../../features/device/screens/device_pairing_screen.dart';
 import '../../features/device/screens/display_customization_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/notifications_screen.dart';
@@ -81,7 +80,7 @@ abstract final class AppRoutes {
       go: (context) => const GoScreen(),
       device: (context) => const DeviceScreen(),
       deviceSettings: (context) => const DeviceSettingsScreen(),
-      devicePairing: (context) => const DevicePairingScreen(),
+      devicePairing: (context) => const DeviceScreen(),
       displayCustomization: (context) => const DisplayCustomizationScreen(),
       profile: (context) => const ProfileScreen(),
       profileSettings: (context) => const ProfileScreen(),

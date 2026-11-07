@@ -1,6 +1,7 @@
 import '../features/profile/screens/app_update_screen.dart';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+import '../shared/widgets/visible_page_polling.dart';
 import 'package:flutter/foundation.dart';
 import 'theme/app_colors.dart';
 import '../core/routes/app_routes.dart';
@@ -17,6 +18,7 @@ class JustRideApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: appNavigatorKey,
+      navigatorObservers: [visiblePageObserver],
       title: 'JustRide',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),

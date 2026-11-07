@@ -17,14 +17,15 @@ class BatteryIndicator extends StatelessWidget {
     this.height = 18,
   });
 
-  final int percent;
+  final int? percent;
   final bool showLabel;
   final double width;
   final double height;
 
   Color get _barColor {
-    if (percent >= 50) return AppColors.primary;
-    if (percent >= 25) return AppColors.warning;
+    if (percent == null) return AppColors.textMuted;
+    if (percent! >= 50) return AppColors.primary;
+    if (percent! >= 25) return AppColors.warning;
     return AppColors.errorText;
   }
 
@@ -34,14 +35,15 @@ class BatteryIndicator extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _BatteryIcon(
-          percent: percent,
+          percent: percent ?? 0,
           barColor: _barColor,
           width: width,
           height: height,
         ),
         if (showLabel) ...[
           const SizedBox(width: 6),
-          Text('$percent%', style: AppTextStyles.labelLarge),
+          Text(percent == null ? '—' : '~$percent%',
+              style: AppTextStyles.labelLarge),
         ],
       ],
     );

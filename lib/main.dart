@@ -9,6 +9,7 @@ import 'core/network/api_client.dart';
 import 'core/constants/google_maps_config.dart';
 import 'core/services/bluetooth_service.dart';
 import 'core/services/ble_navigation_service.dart';
+import 'core/services/phone_turn_alerts.dart';
 import 'core/services/share_service.dart';
 import 'core/services/telephony_service.dart';
 import 'core/services/notification_listener_service.dart';
@@ -27,6 +28,7 @@ Future<void> _initializeApp({required bool background}) async {
   PushNotificationService.instance.init();
   JustRideBleService.instance.init();
   BleNavigationService.instance.init();
+  await PhoneTurnAlerts.init();
   DeviceMapService.instance.init();
   await JustRideBleService.instance.initializeCompanion(
       onShowApp: _showApp,
@@ -37,22 +39,32 @@ Future<void> _initializeApp({required bool background}) async {
 Future<void> _showApp() async {
   if (_showingApp) return;
   _showingApp = true;
-  // A companion wake has no Activity channel; load the phone key on UI attach.
-  await GoogleMapsConfig.loadPlatformApiKey();
-  if (!kIsWeb) {
-    ShareService.instance.init();
-    TelephonyService.instance.init();
-    NotificationListenerService.instance.init();
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+  try {
+    // A companion wake has no Activity channel; load the phone key on UI attach.
+    await GoogleMapsConfig.loadPlatformApiKey();
+    if (!kIsWeb) {
+      ShareService.instance.init();
+      TelephonyService.instance.init();
+      NotificationListenerService.instance.init();
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]).timeout(const Duration(seconds: 2), onTimeout: () {});
+    }
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: AppColors.background,
+      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.light,
+    ));
+  } catch (_) {
+    // Optional Android integrations must never prevent the first Flutter frame.
+    debugPrint('[Startup] Native setup unavailable; opening the app.');
   }
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    systemNavigationBarColor: AppColors.background,
-    systemNavigationBarIconBrightness: Brightness.light,
-    statusBarIconBrightness: Brightness.light,
-  ));
-  runApp(const JustRideApp());
+  try {
+    runApp(const JustRideApp());
+  } catch (_) {
+    _showingApp = false;
+    rethrow;
+  }
 }

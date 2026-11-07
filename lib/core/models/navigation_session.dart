@@ -5,7 +5,7 @@ import 'destination.dart';
 /// Stores per-ride telemetry for optional ride history tracking.
 ///
 /// Collected during an active navigation session and saved when the ride ends.
-/// Raw high-frequency GPS coordinates are NOT stored (as per master prompt §30).
+/// Sampled GPS trails are kept separately in app-private files on Android.
 class NavigationSession {
   final String sessionId;
   final DateTime startTime;
@@ -51,6 +51,7 @@ class NavigationSession {
     required double distanceMeters,
     required double averageSpeedKmh,
     required double maxSpeedKmh,
+    int? activeDurationSeconds,
   }) {
     final now = DateTime.now();
     final secs = now.difference(startTime).inSeconds;
@@ -61,7 +62,7 @@ class NavigationSession {
       origin: origin,
       destination: destination,
       distanceMeters: distanceMeters,
-      durationSeconds: secs,
+      durationSeconds: activeDurationSeconds ?? secs,
       averageSpeedKmh: averageSpeedKmh,
       maxSpeedKmh: maxSpeedKmh,
       status: status,

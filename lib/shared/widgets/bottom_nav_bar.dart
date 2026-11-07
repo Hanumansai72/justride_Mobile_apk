@@ -1,106 +1,111 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
-import '../../app/theme/app_text_styles.dart';
-import '../../core/constants/app_constants.dart';
+import '../../core/network/api_client.dart';
 
-/// The persistent bottom navigation bar shared across all screens.
-///
-/// Uses an elevated FAB-style centre button for "Pair Device" / "New Device".
 class JustRideBottomNavBar extends StatelessWidget {
-  const JustRideBottomNavBar({
-    super.key,
-    required this.currentIndex,
-    required this.onTap,
-  });
-
+  const JustRideBottomNavBar(
+      {super.key, required this.currentIndex, required this.onTap});
   final int currentIndex;
   final ValueChanged<int> onTap;
-
-  static const List<_NavItem> _items = [
-    _NavItem(icon: Icons.home_rounded, label: 'Home'),
-    _NavItem(icon: Icons.explore_rounded, label: 'Places'),
-    _NavItem(icon: Icons.bluetooth_rounded, label: 'Device'),
-    _NavItem(icon: Icons.person_rounded, label: 'Profile'),
+  static const labels = ['Home', 'Places', 'Device', 'Profile'];
+  static const icons = [
+    Icons.home_outlined,
+    Icons.explore_outlined,
+    Icons.navigation_outlined
   ];
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: const Border(
-          top: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            children: List.generate(_items.length, (i) {
-              return _RegularNavItem(
-                item: _items[i],
-                isSelected: currentIndex == i,
-                onTap: () => onTap(i),
-              );
-            }),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Private helpers ──────────────────────────────────────────────────────────
-
-class _NavItem {
-  const _NavItem({required this.icon, required this.label});
-  final IconData? icon;
-  final String label;
-}
-
-class _RegularNavItem extends StatelessWidget {
-  const _RegularNavItem({
-    required this.item,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final _NavItem item;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isSelected ? AppColors.primary : AppColors.textMuted;
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: AppConstants.animNormal,
-              width: 58,
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.primaryContainer
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(24),
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<Map<String, dynamic>?>(
+        valueListenable: ApiClient.instance.savedUser,
+        builder: (context, user, _) {
+          final name =
+              (user?['fullName'] ?? user?['name'] ?? user?['username'] ?? '')
+                  .toString()
+                  .trim();
+          final initial =
+              name.isEmpty ? '?' : name.characters.first.toUpperCase();
+          return SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(18, 8, 18, 14),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.surfaceElevated.withValues(alpha: 0.82),
+                        AppColors.surface.withValues(alpha: 0.66),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: AppColors.textPrimary.withValues(alpha: 0.16),
+                    ),
+                  ),
+                  child: Material(
+                    color: AppColors.transparent,
+                    child: SizedBox(
+                      height: 64,
+                      child: Row(
+                        children: List.generate(
+                            4,
+                            (index) => Expanded(
+                                    child: Semantics(
+                                  label: labels[index],
+                                  selected: currentIndex == index,
+                                  button: true,
+                                  child: Tooltip(
+                                      message: labels[index],
+                                      child: InkWell(
+                                        onTap: () => onTap(index),
+                                        child: SizedBox(
+                                            height: 64,
+                                            child: Center(
+                                                child: index == 3
+                                                    ? Container(
+                                                        width: 30,
+                                                        height: 30,
+                                                        alignment:
+                                                            Alignment.center,
+                                                        decoration: BoxDecoration(
+                                                            shape:
+                                                                BoxShape.circle,
+                                                            color: currentIndex == index
+                                                                ? AppColors
+                                                                    .primary
+                                                                : AppColors
+                                                                    .surfaceElevated),
+                                                        child: Text(initial,
+                                                            style: TextStyle(
+                                                                fontSize: 15,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: currentIndex == index
+                                                                    ? AppColors
+                                                                        .onPrimary
+                                                                    : AppColors
+                                                                        .textPrimary)))
+                                                    : Icon(icons[index],
+                                                        size: 25,
+                                                        color: currentIndex == index
+                                                            ? AppColors.primary
+                                                            : AppColors.textMuted))),
+                                      )),
+                                ))),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              child: Icon(item.icon, color: color, size: 22),
             ),
-            const SizedBox(height: 4),
-            AnimatedDefaultTextStyle(
-              duration: AppConstants.animNormal,
-              style: AppTextStyles.labelSmall.copyWith(color: color),
-              child: Text(item.label),
-            ),
-            const SizedBox(height: 2),
-          ],
-        ),
-      ),
-    );
-  }
+          );
+        },
+      );
 }

@@ -229,6 +229,7 @@ class BleNavigationPacket {
     if (isRerouting) flags |= (1 << 1);
     if (gpsAvailable) flags |= (1 << 2);
     if (bleConnected) flags |= (1 << 3);
+    if (navigationStatus == 'PAUSED') flags |= (1 << 4);
     data.setUint8(16, flags);
 
     // Byte 17: Maneuver State code (0: none, 1: straight, 2: approaching, 3: preview, 4: active, 5: completed)
@@ -280,6 +281,7 @@ class BleNavigationPacket {
 
 /// Compact binary packet representing a sliding route window segment (OpCode 0x0B).
 class RouteSegmentPacket {
+  final bool cameraProjected, overview;
   final List<ScreenPoint> points;
   final int completedSegmentCount;
   final int progressPercent;
@@ -287,6 +289,8 @@ class RouteSegmentPacket {
   final ScreenPoint? destinationScreenPoint;
 
   const RouteSegmentPacket({
+    this.cameraProjected = false,
+    this.overview = false,
     required this.points,
     this.completedSegmentCount = 0,
     this.progressPercent = 0,
@@ -296,6 +300,8 @@ class RouteSegmentPacket {
 
   factory RouteSegmentPacket.fromWindow(RouteWindowSegment segment) {
     return RouteSegmentPacket(
+      cameraProjected: segment.cameraProjected,
+      overview: segment.overview,
       points: segment.points,
       completedSegmentCount: segment.completedSegmentCount,
       progressPercent: segment.progressPercent,
@@ -317,7 +323,9 @@ class RouteSegmentPacket {
     data.setUint8(
         2,
         (isDestinationVisible ? 1 : 0) |
-            (completedSegmentCount.clamp(0, 15) << 1));
+            (completedSegmentCount.clamp(0, 15) << 1) |
+            (overview ? 0x20 : 0) |
+            (cameraProjected ? 0x40 : 0));
     // Bytes 3-4: Dest X (uint16 LE)
     data.setUint16(
         3, (destinationScreenPoint?.x ?? 0).clamp(0, 320), Endian.little);
@@ -418,4 +426,15 @@ class LatestNotificationPacket {
       if (a.isNotEmpty) ...[a.length, ...a]
     ]);
   }
+}
+
+/// Round-board home distance; ride duration remains owned by journey recording.
+List<int> encodeHomeDistance(double distanceMeters) {
+  final valid = distanceMeters.isFinite && distanceMeters >= 0;
+  final distance = valid ? distanceMeters.round().clamp(0, 0xffffffff) : 0;
+  return [
+    0x21,
+    valid ? 1 : 0,
+    for (var i = 0; i < 4; i++) (distance >> (8 * i)) & 255
+  ];
 }

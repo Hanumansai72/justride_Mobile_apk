@@ -40,18 +40,20 @@ class DestinationConfirmSheet extends StatefulWidget {
     Destination destination, {
     Destination? startLocation,
   }) {
-    if (_activeSheetContext != null) {
+    if (_activeSheetContext?.mounted == true) {
       try {
         Navigator.of(_activeSheetContext!).pop();
       } catch (_) {}
       _activeSheetContext = null;
     }
 
+    BuildContext? shownContext;
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
+        shownContext = ctx;
         _activeSheetContext = ctx;
         return DestinationConfirmSheet(
           destination: destination,
@@ -59,7 +61,7 @@ class DestinationConfirmSheet extends StatefulWidget {
         );
       },
     ).whenComplete(() {
-      _activeSheetContext = null;
+      if (identical(_activeSheetContext, shownContext)) _activeSheetContext = null;
     });
   }
 
@@ -86,9 +88,11 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
   }
 
   Future<void> _loadRoutePreview() async {
+    if (!mounted) return;
     setState(() {
       _isLoadingPreview = true;
       _errorMessage = null;
+      _previewRoute = null;
     });
 
     try {
@@ -104,10 +108,12 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
               '[DestinationSheet] Successfully resolved: ${dest.latitude}, ${dest.longitude}');
         } else {
           _errorMessage =
-              'Could not locate address coordinates. Tap "Retry Lookup" or check internet.';
+              'Could not resolve the exact shared place. Retry the link or select the place in search.';
         }
       }
-      _resolvedDest = dest;
+      if (!mounted) return;
+      setState(() => _resolvedDest = dest);
+      if (dest.latitude == 0 && dest.longitude == 0) return;
 
       var start = widget.startLocation;
       if (start != null && start.latitude == 0.0 && start.longitude == 0.0) {
@@ -122,7 +128,10 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
       if (dest.latitude != 0.0 &&
           dest.longitude != 0.0 &&
           (widget.startLocation == null || start != null)) {
-        final currentPos = await LocationService.instance.getCurrentPosition();
+        final savedPos = LocationService.instance.currentPosition;
+        final currentPos = start != null ? null :
+            LocationService.navigationFixFresh(savedPos, DateTime.now())
+                ? savedPos : await LocationService.instance.getCurrentPosition();
         final effectiveOrigin =
             (start != null && start.latitude != 0.0 && start.longitude != 0.0)
                 ? LatLng(start.latitude, start.longitude)
@@ -136,6 +145,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
             destination: LatLng(dest.latitude, dest.longitude),
           );
           _previewRoute = route;
+          if (route == null) _errorMessage = 'Route unavailable. Check your connection and retry.';
         } else {
           _errorMessage =
               'Could not acquire phone GPS location. Enable Location permissions.';
@@ -383,7 +393,7 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                             const SizedBox(height: 4),
                             if (hasZeroCoords) ...[
                               Text(
-                                'Resolving location coordinates...',
+                                _isLoadingPreview ? 'Resolving shared place...' : 'Location lookup failed',
                                 style: TextStyle(
                                   fontFamily: 'Stack Sans Text',
                                   fontSize: 13,
@@ -549,7 +559,9 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                           }
 
                           final target = _resolvedDest ?? widget.destination;
-                          Navigator.of(context).pop(true);
+                          final navigator = Navigator.of(context);
+                          final messenger = ScaffoldMessenger.of(context);
+                          navigator.pop(true);
 
                           // Start active navigation
                           final ok =
@@ -557,11 +569,10 @@ class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
                             target,
                             startLocation: _resolvedStart,
                           );
-                          if (ok && context.mounted) {
-                            Navigator.of(context)
-                                .pushNamed('/active-navigation');
-                          } else if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                          if (ok && navigator.mounted) {
+                            navigator.pushNamed('/active-navigation');
+                          } else if (messenger.mounted) {
+                            messenger.showSnackBar(
                               const SnackBar(
                                 content: Text(
                                     'Unable to calculate motorcycle route or obtain GPS. Check permissions.'),

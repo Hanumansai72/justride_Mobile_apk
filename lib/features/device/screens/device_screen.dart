@@ -1,14 +1,14 @@
-import 'dart:async';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import '../../../core/services/bluetooth_service.dart';
+import '../../../core/services/ble_navigation_service.dart';
+import '../../../shared/widgets/visible_page_polling.dart';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
-import '../widgets/device_info_card.dart';
 import '../widgets/device_action_tile.dart';
-import '../widgets/device_health_card.dart';
 import 'device_pairing_screen.dart';
 
 class DeviceScreen extends StatefulWidget {
@@ -18,28 +18,22 @@ class DeviceScreen extends StatefulWidget {
   State<DeviceScreen> createState() => _DeviceScreenState();
 }
 
-class _DeviceScreenState extends State<DeviceScreen> {
+class _DeviceScreenState extends State<DeviceScreen>
+    with VisiblePagePolling<DeviceScreen> {
   final int _navIndex = 2; // Device is index 2
   DeviceModel? _device;
   bool _isLoading = true;
-  Timer? _statusPollTimer;
+  double? _brightnessDraft;
 
   @override
   void initState() {
     super.initState();
     _fetchDevice();
-    // Periodically verify device status with backend every 20s
-    _statusPollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
-      if (mounted && _device != null) {
-        _verifyDeviceStatus();
-      }
-    });
   }
 
   @override
-  void dispose() {
-    _statusPollTimer?.cancel();
-    super.dispose();
+  Future<void> pollVisiblePage() async {
+    if (_device != null) await _verifyDeviceStatus();
   }
 
   Future<void> _fetchDevice() async {
@@ -141,7 +135,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
     }
 
     // If no device is connected or device is blocked, show the radar scanning/pairing screen
-    if (_device == null) {
+    if (BackendService.instance.accountPaired.value == false) {
       return const DevicePairingScreen();
     }
 
@@ -165,80 +159,145 @@ class _DeviceScreenState extends State<DeviceScreen> {
     );
   }
 
-  Widget _buildBody() {
-    return RefreshIndicator(
-      onRefresh: _fetchDevice,
-      color: AppColors.primary,
-      backgroundColor: AppColors.surface,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
+  Widget _buildBody() => RefreshIndicator(
+        onRefresh: _fetchDevice,
+        color: AppColors.primary,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              Image.asset('assets/justride-device.png',
+                  width: 100, height: 112, fit: BoxFit.contain),
+              const SizedBox(width: 18),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(_device?.deviceName ?? 'JustRide',
+                        style: AppTextStyles.headingLarge, maxLines: 3),
+                    const SizedBox(height: 8),
+                    ValueListenableBuilder<BluetoothConnectionState>(
+                      valueListenable:
+                          JustRideBleService.instance.connectionStateNotifier,
+                      builder: (context, _, child) {
+                        final connected =
+                            JustRideBleService.instance.isDeviceConnected;
+                        return Text(
+                            connected
+                                ? 'Connected'
+                                : 'Offline · paired to your account',
+                            style: TextStyle(
+                                color: connected
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                                fontSize: 13));
+                      },
+                    ),
+                  ])),
+            ]),
+            const SizedBox(height: 24),
+            ValueListenableBuilder<BluetoothConnectionState>(
+              valueListenable:
+                  JustRideBleService.instance.connectionStateNotifier,
+              builder: (context, connection, _) => _brightnessControl(),
+            ),
+            const SizedBox(height: 24),
+            ValueListenableBuilder<String?>(
+              valueListenable: BleNavigationService.instance.firmwareVersion,
+              builder: (context, _, child) =>
+                  BleNavigationService.instance.photoUploadSupported
+                      ? Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: DeviceActionTile(
+                            icon: Icons.photo_outlined,
+                            title: 'Display photo',
+                            onTap: () => Navigator.of(context)
+                                .pushNamed('/display-customization'),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+            ),
+            DeviceActionTile(
+                icon: Icons.tune_outlined,
+                title: 'Hardware settings',
+                onTap: () =>
+                    Navigator.of(context).pushNamed('/device-settings')),
+            const SizedBox(height: 20),
+            ValueListenableBuilder<String?>(
+              valueListenable: BleNavigationService.instance.firmwareVersion,
+              builder: (context, version, _) => Text(
+                  'Firmware ${version ?? _device?.firmwareVersion ?? '—'}',
+                  style: AppTextStyles.bodyMedium),
+            ),
+          ],
         ),
-        slivers: [
-          const SliverToBoxAdapter(
-              child: SizedBox(height: AppConstants.spacingMd)),
+      );
 
-          // Device Info Card (live backend data)
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.pagePadding),
-            sliver: SliverToBoxAdapter(
-              child: DeviceInfoCard(
-                deviceName: _device!.deviceName,
-                batteryPercent: _device!.batteryLevel,
-                hasUpdate: _device!.hasUpdateAvailable,
-                firmwareVersion: _device!.firmwareVersion,
-                newVersion: _device!.latestFirmwareVersion,
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(
-              child: SizedBox(height: AppConstants.spacingMd)),
-
-          // Customize Screens
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.pagePadding),
-            sliver: SliverToBoxAdapter(
-              child: DeviceActionTile(
-                icon: Icons.display_settings_rounded,
-                title: 'Customize Screens',
-                subtitle: 'Choose what to show on your device',
-                onTap: () =>
-                    Navigator.of(context).pushNamed('/display-customization'),
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(
-              child: SizedBox(height: AppConstants.spacingMd)),
-
-          // Device Settings
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.pagePadding),
-            sliver: SliverToBoxAdapter(
-              child: DeviceActionTile(
-                icon: Icons.tune_rounded,
-                title: 'Hardware Settings',
-                subtitle: 'Brightness, HUD, shift lights, and diagnostics',
-                onTap: () =>
-                    Navigator.of(context).pushNamed('/device-settings'),
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(
-              child: SizedBox(height: AppConstants.spacingMd)),
-
-          // Device Health Card
-          const SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-            sliver: SliverToBoxAdapter(child: DeviceHealthCard()),
-          ),
-
-          const SliverToBoxAdapter(
-              child: SizedBox(height: AppConstants.spacingSection)),
-        ],
-      ),
+  Widget _brightnessControl() {
+    final ble = BleNavigationService.instance;
+    final connected = JustRideBleService.instance.isDeviceConnected;
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ValueListenableBuilder<int>(
+                valueListenable: ble.manualBrightness,
+                builder: (context, value, _) {
+                  final shown = _brightnessDraft ?? value.toDouble();
+                  return Column(children: [
+                    Row(children: [
+                      const Expanded(
+                          child: Text('Display brightness',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w600))),
+                      Text('${shown.round()}%',
+                          style: const TextStyle(
+                              fontSize: 20, color: AppColors.primary))
+                    ]),
+                    Slider(
+                        value: shown.clamp(0, 100),
+                        min: 0,
+                        max: 100,
+                        label: '${shown.round()}%',
+                        onChanged: connected
+                            ? (value) =>
+                                setState(() => _brightnessDraft = value)
+                            : null,
+                        onChangeEnd: connected
+                            ? (value) async {
+                                final sent =
+                                    await ble.sendSetBrightness(value.round());
+                                if (!mounted || !context.mounted) return;
+                                setState(() => _brightnessDraft = null);
+                                if (!sent)
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              'Could not adjust brightness. Reconnect and retry.')));
+                              }
+                            : null),
+                  ]);
+                }),
+            if (!connected)
+              const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text('Connect the display to adjust brightness.',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13))),
+            const Divider(height: 20),
+            ValueListenableBuilder<bool>(
+                valueListenable: ble.automaticBrightness,
+                builder: (context, value, _) => SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Automatic day/night'),
+                    subtitle: const Text('85% by day · 35% at night'),
+                    value: value,
+                    onChanged: ble.setAutomaticBrightness)),
+          ])),
     );
   }
 }
@@ -246,50 +305,16 @@ class _DeviceScreenState extends State<DeviceScreen> {
 class _DeviceAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(64);
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.background,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-        left: AppConstants.pagePadding,
-        right: AppConstants.pagePadding,
-        bottom: AppConstants.spacingSm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text('Device', style: AppTextStyles.headingLarge),
-                Text(
-                  'Manage your JustRide device',
-                  style: AppTextStyles.bodyMedium,
-                ),
-              ],
-            ),
-          ),
+  Widget build(BuildContext context) => AppBar(
+        title: const Text('Your device'),
+        centerTitle: false,
+        actions: [
           IconButton(
-            onPressed: () => Navigator.of(context).pushNamed('/notifications'),
-            icon: const Icon(Icons.notifications_none_rounded,
-                color: AppColors.textPrimary, size: 24),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            onPressed: () =>
-                Navigator.of(context).pushNamed('/device-settings'),
-            icon: const Icon(Icons.settings_outlined,
-                color: AppColors.textPrimary, size: 24),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
+              tooltip: 'Notifications',
+              icon: const Icon(Icons.notifications_none_outlined),
+              onPressed: () =>
+                  Navigator.of(context).pushNamed('/notifications'))
         ],
-      ),
-    );
-  }
+      );
 }

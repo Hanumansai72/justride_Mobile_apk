@@ -5,6 +5,8 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/bluetooth_service.dart';
+import '../../../core/services/ble_navigation_service.dart';
+import '../../../core/models/power_status.dart';
 
 /// Two side-by-side stat cards: Device Battery and live Device Status.
 class StatsRow extends StatelessWidget {
@@ -56,41 +58,46 @@ class _BatteryStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percent = batteryLevel ?? AppConstants.batteryPercent;
-    return _StatCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return ValueListenableBuilder<PowerStatus?>(
+      valueListenable: BleNavigationService.instance.powerStatus,
+      builder: (context, power, child) {
+        final percent = power?.percentage;
+        return _StatCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('DEVICE BATTERY', style: AppTextStyles.labelSmall),
-              const Spacer(),
-              const Icon(Icons.battery_charging_full_rounded,
-                  size: 14, color: AppColors.textMuted),
+              Row(
+                children: [
+                  Text('DEVICE BATTERY', style: AppTextStyles.labelSmall),
+                  const Spacer(),
+                  const Icon(Icons.battery_std_rounded,
+                      size: 14, color: AppColors.textMuted),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                power?.levelLabel ?? '—',
+                style: AppTextStyles.displayMedium.copyWith(fontSize: 28),
+              ),
+              const SizedBox(height: 4),
+              Text(power?.detailLabel ?? 'Waiting for device measurement',
+                  style: AppTextStyles.labelSmall),
+              const SizedBox(height: 8),
+              // Progress bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppConstants.radiusCircle),
+                child: LinearProgressIndicator(
+                  value: (percent ?? 0) / 100,
+                  backgroundColor: AppColors.border,
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  minHeight: 5,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '$percent%',
-            style: AppTextStyles.displayMedium.copyWith(fontSize: 28),
-          ),
-          const SizedBox(height: 4),
-          Text('${(percent * 0.1).toStringAsFixed(1)}h remaining',
-              style: AppTextStyles.labelSmall),
-          const SizedBox(height: 8),
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppConstants.radiusCircle),
-            child: LinearProgressIndicator(
-              value: percent / 100,
-              backgroundColor: AppColors.border,
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AppColors.primary),
-              minHeight: 5,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

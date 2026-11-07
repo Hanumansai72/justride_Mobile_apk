@@ -11,6 +11,7 @@ import '../../../app/theme/app_colors.dart';
 
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import '../../../core/services/ble_navigation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -60,12 +61,14 @@ class _DisplayCustomizationScreenState
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   @override
   void dispose() {
+    _previewImage?.dispose();
     _imageTransferSvc.dispose();
     super.dispose();
   }
 
   // ── Image Pick ────────────────────────────────────────────────────────────
   Future<void> _pickImage(ImageSource source) async {
+    if (!BleNavigationService.instance.photoUploadSupported) return;
     try {
       final picked = await _imagePicker.pickImage(
         source: source,
@@ -89,6 +92,9 @@ class _DisplayCustomizationScreenState
   }
 
   Future<void> _processImage(Uint8List bytes, String filename) async {
+    if (!BleNavigationService.instance.photoUploadSupported) return;
+    const width = 320, height = 240;
+    _previewImage?.dispose();
     setState(() {
       _isConverting = true;
       _previewImage = null;
@@ -99,8 +105,10 @@ class _DisplayCustomizationScreenState
     try {
       // 1. Process image locally with QR-safe nearest-neighbor conversion
       final results = await Future.wait([
-        ImageConverter.buildPreviewImage(bytes),
-        ImageConverter.convertToRgb565(bytes),
+        ImageConverter.buildPreviewImage(bytes,
+            width: width, height: height, cover: false),
+        ImageConverter.convertToRgb565(bytes,
+            width: width, height: height, cover: false),
       ]);
 
       if (!mounted) return;
@@ -112,7 +120,9 @@ class _DisplayCustomizationScreenState
       });
 
       // 2. Asynchronously backup to backend cloud storage
-      _backupImageToBackend(bytes, filename);
+      if (BleNavigationService.instance.photoUploadSupported) {
+        _backupImageToBackend(bytes, filename);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isConverting = false);
@@ -132,6 +142,8 @@ class _DisplayCustomizationScreenState
       final res = await BackendService.instance.uploadCustomDisplayImage(
         imageBytes: bytes,
         filename: filename.isNotEmpty ? filename : 'custom_display.png',
+        width: 320,
+        height: 240,
       );
       if (mounted && res.success && res.data != null) {
         setState(() {
@@ -149,7 +161,8 @@ class _DisplayCustomizationScreenState
 
   // ── Send to Device ────────────────────────────────────────────────────────
   Future<void> _sendToDevice() async {
-    if (_rgb565Bytes == null) return;
+    if (_rgb565Bytes == null ||
+        !BleNavigationService.instance.photoUploadSupported) return;
 
     final device = JustRideBleService.instance.connectedDevice;
     if (device == null) {
@@ -200,6 +213,7 @@ class _DisplayCustomizationScreenState
   }
 
   Future<void> _resetImage() async {
+    if (!BleNavigationService.instance.photoUploadSupported) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -281,7 +295,13 @@ class _DisplayCustomizationScreenState
     return Scaffold(
       backgroundColor: _C.bg,
       appBar: _buildAppBar(context),
-      body: _buildBody(context),
+      body: ValueListenableBuilder<String?>(
+        valueListenable: BleNavigationService.instance.firmwareVersion,
+        builder: (context, _, child) =>
+            BleNavigationService.instance.photoUploadSupported
+                ? _buildBody(context)
+                : const Center(child: Text('Connect a 2.8-inch display')),
+      ),
     );
   }
 
@@ -692,8 +712,7 @@ class _DisplayCustomizationScreenState
               ),
               const SizedBox(height: 6),
               Text(
-                'Supports QR codes, graphics, photos & documents\n'
-                'Auto-scaled to 320×240 px without distortion or pixel blur',
+                'Scaled to 320×240 pixels',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyMedium.copyWith(
                   fontSize: 12,
@@ -763,8 +782,8 @@ class _DisplayCustomizationScreenState
             ),
             const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined,
-                  color: _C.primary),
+              leading:
+                  const Icon(Icons.photo_library_outlined, color: _C.primary),
               title: Text(
                 'Choose from Gallery',
                 style: TextStyle(
@@ -776,8 +795,7 @@ class _DisplayCustomizationScreenState
               },
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.camera_alt_outlined, color: _C.primary),
+              leading: const Icon(Icons.camera_alt_outlined, color: _C.primary),
               title: Text(
                 'Take a Photo',
                 style: TextStyle(

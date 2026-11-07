@@ -1,137 +1,69 @@
-// lib/core/utils/image_converter.dart
-//
-// Converts any picked image into a 320x240 big-endian RGB565 byte buffer
-// ready for direct streaming to the JustRide ESP32 TFT display via BLE.
-//
-// Key decisions:
-//  * FilterQuality.none  -> nearest-neighbour scaling -> QR codes stay crisp,
-//    no blurring artefacts that would break scanner modules.
-//  * Letterbox with black fill -> correct aspect ratio without stretching.
-//  * Big-endian output  -> ILI9341 SPI controller expects high-byte first;
-//    tft_draw_raw_pixels() sends bytes as-is without swapping.
-
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+/// RGB565 big-endian pixels. Native round photos fill 466x466 with a smooth
+/// centre crop; the original rectangular display keeps its 320x240 format.
 class ImageConverter {
-  static const int kDisplayWidth  = 320;
-  static const int kDisplayHeight = 240;
-  static const int kTotalBytes    = kDisplayWidth * kDisplayHeight * 2; // 153 600
-
-  /// Convert raw image bytes (JPEG / PNG / BMP / WebP) to a 320x240
-  /// big-endian RGB565 Uint8List of exactly kTotalBytes bytes.
-  ///
-  /// Scaling strategy:
-  ///   * Compute uniform scale so the image fits inside 320x240 without
-  ///     exceeding either dimension.
-  ///   * Centre the scaled image on a black canvas.
-  ///   * FilterQuality.none -> nearest-neighbour -> sharp QR codes.
-  static Future<Uint8List> convertToRgb565(Uint8List imageBytes) async {
-    // 1. Decode source image
-    final codec = await ui.instantiateImageCodec(imageBytes);
-    final frame = await codec.getNextFrame();
-    final srcImage = frame.image;
-
-    final srcW = srcImage.width.toDouble();
-    final srcH = srcImage.height.toDouble();
-
-    // 2. Compute letterbox geometry
-    final scaleX = kDisplayWidth  / srcW;
-    final scaleY = kDisplayHeight / srcH;
-    final scale  = scaleX < scaleY ? scaleX : scaleY; // fit-inside
-
-    final fitW = (srcW * scale).roundToDouble();
-    final fitH = (srcH * scale).roundToDouble();
-    final offX = ((kDisplayWidth  - fitW) / 2.0);
-    final offY = ((kDisplayHeight - fitH) / 2.0);
-
-    // 3. Draw onto a 320x240 canvas with black background
-    final recorder = ui.PictureRecorder();
-    final canvas   = ui.Canvas(recorder);
-
-    // Black fill (0x0000 in RGB565 = black)
-    canvas.drawRect(
-      ui.Rect.fromLTWH(0, 0, kDisplayWidth.toDouble(), kDisplayHeight.toDouble()),
-      ui.Paint()..color = const ui.Color(0xFF000000),
-    );
-
-    // Nearest-neighbour blit -- CRITICAL for QR code sharpness
-    canvas.drawImageRect(
-      srcImage,
-      ui.Rect.fromLTWH(0, 0, srcW, srcH),
-      ui.Rect.fromLTWH(offX, offY, fitW, fitH),
-      ui.Paint()..filterQuality = ui.FilterQuality.none,
-    );
-
-    final picture     = recorder.endRecording();
-    final outputImage = await picture.toImage(kDisplayWidth, kDisplayHeight);
-
-    // 4. Extract raw RGBA bytes
-    final byteData = await outputImage.toByteData(
-      format: ui.ImageByteFormat.rawRgba,
-    );
-    if (byteData == null) {
-      throw Exception('[ImageConverter] toByteData() returned null');
+  static const int kDisplayWidth = 320,
+      kDisplayHeight = 240,
+      kTotalBytes = 320 * 240 * 2;
+  static Future<Uint8List> convertToRgb565(Uint8List bytes,
+      {int width = kDisplayWidth,
+      int height = kDisplayHeight,
+      bool cover = false}) async {
+    final image = await buildPreviewImage(bytes,
+        width: width, height: height, cover: cover);
+    try {
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (data == null) throw StateError('Cannot read image pixels');
+      final rgba = data.buffer.asUint8List();
+      final result = Uint8List(width * height * 2);
+      for (int i = 0; i < width * height; i++) {
+        final pixel = ((rgba[i * 4] & 0xf8) << 8) |
+            ((rgba[i * 4 + 1] & 0xfc) << 3) |
+            (rgba[i * 4 + 2] >> 3);
+        result[i * 2] = pixel >> 8;
+        result[i * 2 + 1] = pixel & 255;
+      }
+      return result;
+    } finally {
+      image.dispose();
     }
-    final rgba = byteData.buffer.asUint8List();
-
-    // 5. RGBA8888 -> big-endian RGB565
-    //   RGB565 bit layout: RRRRR GGGGGG BBBBB  (MSB->LSB)
-    //   Stored big-endian: high byte first (as ILI9341 expects on SPI).
-    //
-    //   pixel16 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-    //   byte[2i+0] = pixel16 >> 8     (high byte)
-    //   byte[2i+1] = pixel16 & 0xFF   (low  byte)
-    final rgb565 = Uint8List(kTotalBytes);
-    const pixels = kDisplayWidth * kDisplayHeight;
-
-    for (int i = 0; i < pixels; i++) {
-      final r = rgba[i * 4 + 0];
-      final g = rgba[i * 4 + 1];
-      final b = rgba[i * 4 + 2];
-
-      final int pixel16 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-      rgb565[i * 2 + 0] = (pixel16 >> 8) & 0xFF; // high byte first (big-endian)
-      rgb565[i * 2 + 1] =  pixel16       & 0xFF; // low byte
-    }
-
-    return rgb565;
   }
 
-  /// Convenience: returns a preview ui.Image at 320x240 for the app UI.
-  /// Uses the same letterbox + nearest-neighbour logic as convertToRgb565.
-  static Future<ui.Image> buildPreviewImage(Uint8List imageBytes) async {
-    final codec = await ui.instantiateImageCodec(imageBytes);
+  static Future<ui.Image> buildPreviewImage(Uint8List bytes,
+      {int width = kDisplayWidth,
+      int height = kDisplayHeight,
+      bool cover = false}) async {
+    final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
-    final src   = frame.image;
-
-    final srcW = src.width.toDouble();
-    final srcH = src.height.toDouble();
-    final scale = (kDisplayWidth / srcW) < (kDisplayHeight / srcH)
-        ? (kDisplayWidth / srcW)
-        : (kDisplayHeight / srcH);
-
-    final fitW = srcW * scale;
-    final fitH = srcH * scale;
-
-    final rec    = ui.PictureRecorder();
-    final canvas = ui.Canvas(rec);
-
-    canvas.drawRect(
-      ui.Rect.fromLTWH(0, 0, kDisplayWidth.toDouble(), kDisplayHeight.toDouble()),
-      ui.Paint()..color = const ui.Color(0xFF000000),
-    );
-    canvas.drawImageRect(
-      src,
-      ui.Rect.fromLTWH(0, 0, srcW, srcH),
-      ui.Rect.fromLTWH(
-        (kDisplayWidth  - fitW) / 2,
-        (kDisplayHeight - fitH) / 2,
-        fitW, fitH,
-      ),
-      ui.Paint()..filterQuality = ui.FilterQuality.none,
-    );
-
-    return rec.endRecording().toImage(kDisplayWidth, kDisplayHeight);
+    final source = frame.image;
+    try {
+      final sx = width / source.width, sy = height / source.height;
+      final scale = cover ? (sx > sy ? sx : sy) : (sx < sy ? sx : sy);
+      final w = source.width * scale, h = source.height * scale;
+      final recorder = ui.PictureRecorder();
+      final output = ui.Canvas(recorder);
+      output.drawRect(
+          ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+          ui.Paint()..color = const ui.Color(0xff000000));
+      output.drawImageRect(
+          source,
+          ui.Rect.fromLTWH(
+              0, 0, source.width.toDouble(), source.height.toDouble()),
+          ui.Rect.fromLTWH((width - w) / 2, (height - h) / 2, w, h),
+          ui.Paint()
+            ..filterQuality =
+                cover ? ui.FilterQuality.high : ui.FilterQuality.none);
+      final picture = recorder.endRecording();
+      try {
+        return await picture.toImage(width, height);
+      } finally {
+        picture.dispose();
+      }
+    } finally {
+      source.dispose();
+      codec.dispose();
+    }
   }
 }

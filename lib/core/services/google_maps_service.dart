@@ -63,7 +63,8 @@ class GoogleMapsService {
   /// If Google Places fails or is restricted, it seamlessly falls back to Photon
   /// (Komoot OSM live geocoder) so suggestions always appear instantly beneath
   /// the Destination/Start fields.
-  Future<List<Destination>> searchPlaces(String query) async {
+  Future<List<Destination>> searchPlaces(String query,
+      {bool autocomplete = false}) async {
     final cleanQuery = query.trim();
     if (cleanQuery.length < 2) return const [];
 
@@ -75,6 +76,9 @@ class GoogleMapsService {
         (pos != null && pos.longitude != 0.0) ? pos.longitude : 78.4867;
 
     final key = GoogleMapsConfig.apiKey;
+    final predictions = autocomplete && key.isNotEmpty
+        ? _autocompletePlaces(cleanQuery)
+        : Future<List<Destination>>.value(const []);
     if (key.isNotEmpty) {
       try {
         final response = await _client
@@ -88,6 +92,7 @@ class GoogleMapsService {
               },
               body: jsonEncode({
                 'textQuery': cleanQuery,
+                'pageSize': 20,
                 'languageCode': 'en',
                 'locationBias': {
                   'circle': {
@@ -121,11 +126,16 @@ class GoogleMapsService {
                 );
               })
               .where((place) => place.latitude != 0.0 && place.longitude != 0.0)
-              .take(6)
               .toList(growable: false);
 
-          if (list.isNotEmpty) {
-            return list;
+          final predicted = await predictions;
+          if (list.isNotEmpty || predicted.isNotEmpty) {
+            return [
+              ...predicted.map((p) => list
+                  .firstWhere((d) => d.placeId == p.placeId, orElse: () => p)),
+              ...list
+                  .where((d) => !predicted.any((p) => p.placeId == d.placeId)),
+            ];
           }
         } else {
           debugPrint(
@@ -136,6 +146,9 @@ class GoogleMapsService {
             '[PLACES] Google Places search error: $e, falling back to Photon & Nominatim');
       }
     }
+
+    final predicted = await predictions;
+    if (predicted.isNotEmpty) return predicted;
 
     final suggestions = <Destination>[];
 
@@ -296,7 +309,54 @@ class GoogleMapsService {
       }
     }
 
-    return suggestions.take(8).toList(growable: false);
+    return suggestions.toList(growable: false);
+  }
+
+  Future<List<Destination>> _autocompletePlaces(String query) async {
+    try {
+      final pos = LocationService.instance.currentPosition;
+      final res = await _client
+          .post(
+            Uri.parse('https://places.googleapis.com/v1/places:autocomplete'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': GoogleMapsConfig.apiKey,
+              'X-Goog-FieldMask': 'suggestions.placePrediction'
+            },
+            body: jsonEncode({
+              'input': query,
+              'languageCode': 'en',
+              if (pos != null)
+                'locationBias': {
+                  'circle': {
+                    'center': {
+                      'latitude': pos.latitude,
+                      'longitude': pos.longitude
+                    },
+                    'radius': 50000.0,
+                  }
+                },
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
+      if (res.statusCode != 200) return const [];
+      final suggestions = jsonDecode(res.body)['suggestions'] as List? ?? [];
+      return suggestions
+          .where((s) => s['placePrediction']?['placeId'] != null)
+          .map((s) {
+        final p = s['placePrediction'];
+        return Destination(
+            name: p['structuredFormat']?['mainText']?['text'] ??
+                p['text']?['text'],
+            address: p['text']?['text'],
+            placeId: p['placeId'],
+            latitude: 0,
+            longitude: 0,
+            rawQuery: query);
+      }).toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Reverse geocodes coordinates to a human-readable street or area address.
@@ -397,29 +457,24 @@ class GoogleMapsService {
       return destination;
     }
 
-    // If the destination contains a URL in rawQuery, address, or name, resolve with MapsUrlParser first
+    // The link's pin/place identity is authoritative over a short shared label.
     final candidateUrl =
         destination.rawQuery ?? destination.address ?? destination.name ?? '';
     if (candidateUrl.contains('http://') || candidateUrl.contains('https://')) {
-      final parsed = await MapsUrlParser.parseSharedText(candidateUrl);
-      if (parsed != null) {
-        if (parsed.latitude != 0.0 && parsed.longitude != 0.0) {
-          debugPrint(
-              '[GEOCODE] ✓ Successfully resolved coordinates from URL: ${parsed.latitude}, ${parsed.longitude}');
-          return parsed;
-        }
-        if (parsed.name != null && !parsed.name!.startsWith('http')) {
-          destination = destination.copyWith(
-            name: parsed.name,
-            address: parsed.address,
-            rawQuery: parsed.rawQuery,
-          );
-        }
+      final parsed = await MapsUrlParser.parseSharedText(candidateUrl)
+          .timeout(const Duration(seconds: 9), onTimeout: () => null);
+      if (parsed == null) return null;
+      if (parsed.latitude != 0.0 || parsed.longitude != 0.0) return parsed;
+      if (parsed.placeId == null || parsed.placeId!.isEmpty) {
+        final cid = MapsUrlParser.googleCid(parsed.rawQuery ?? candidateUrl);
+        if (cid == null) return null;
+        return _resolveSharedCid(parsed, cid);
       }
+      destination = parsed;
     }
 
     final rawQueryText =
-        destination.name ?? destination.address ?? destination.rawQuery ?? '';
+        destination.address ?? destination.name ?? destination.rawQuery ?? '';
     final queryText = MapsUrlParser.cleanSearchQuery(rawQueryText);
     debugPrint(
         '[GEOCODE] Attempting to resolve coordinates for query: "$queryText" (placeId: ${destination.placeId})');
@@ -436,7 +491,7 @@ class GoogleMapsService {
               'X-Goog-Api-Key': key,
               'X-Goog-FieldMask': 'id,displayName,formattedAddress,location',
             },
-          );
+          ).timeout(const Duration(seconds: 5));
           debugPrint(
               '[GEOCODE] Google Place Details HTTP status: ${res.statusCode}');
           if (res.statusCode == 200) {
@@ -466,13 +521,17 @@ class GoogleMapsService {
         }
       }
 
+      // Never replace a selected place ID with a different text-search match.
+      if (destination.placeId?.isNotEmpty == true) return null;
+
       // 2. Query Google Geocoding with rawQuery / name / address
       if (queryText.isNotEmpty && !queryText.startsWith('http')) {
         try {
           final geoUrl = Uri.parse(
             '${GoogleMapsConfig.geocodingApiEndpoint}?address=${Uri.encodeComponent(queryText)}&key=$key',
           );
-          final geoRes = await _client.get(geoUrl);
+          final geoRes =
+              await _client.get(geoUrl).timeout(const Duration(seconds: 5));
           debugPrint(
               '[GEOCODE] Google Geocoding HTTP status: ${geoRes.statusCode}');
           if (geoRes.statusCode == 200) {
@@ -563,6 +622,8 @@ class GoogleMapsService {
       debugPrint(
           '[GEOCODE] No Google Maps API key provided. Skipping Google APIs.');
     }
+
+    if (destination.placeId?.isNotEmpty == true) return null;
 
     // Clean query text for open-source geocoders (strip coordinates or strange symbols if any)
     String cleanQuery = queryText.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -663,6 +724,61 @@ class GoogleMapsService {
   }
 
   /// Calculates optimal motorcycle route between origin and destination.
+  Future<Destination?> _resolveSharedCid(Destination source, String cid) async {
+    final key = GoogleMapsConfig.apiKey;
+    final query = source.address ?? source.name ?? '';
+    if (key.isEmpty || query.isEmpty || query.startsWith('http')) return null;
+    try {
+      final response = await _client
+          .post(
+            Uri.parse(GoogleMapsConfig.placesTextSearchEndpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': key,
+              'X-Goog-FieldMask':
+                  'places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri'
+            },
+            body: jsonEncode(
+                {'textQuery': query, 'pageSize': 20, 'languageCode': 'en'}),
+          )
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode != 200) return null;
+      for (final place in jsonDecode(response.body)['places'] as List? ?? []) {
+        if (MapsUrlParser.googleCid(place['googleMapsUri']?.toString() ?? '') !=
+            cid) continue;
+        final point = place['location'];
+        if (point?['latitude'] is! num || point?['longitude'] is! num) continue;
+        return source.copyWith(
+            name: place['displayName']?['text'],
+            address: place['formattedAddress'],
+            placeId: place['id'],
+            latitude: (point['latitude'] as num).toDouble(),
+            longitude: (point['longitude'] as num).toDouble());
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  NavigationRoute _nearbyArrival(LatLng origin, LatLng destination) =>
+      NavigationRoute(
+        provider: 'google',
+        totalDistanceMeters: 0,
+        totalDurationSeconds: 0,
+        polylinePoints: [origin, origin],
+        steps: [
+          RouteStep(
+            startLocation: origin,
+            endLocation: destination,
+            distanceMeters: 0,
+            durationSeconds: 0,
+            maneuver: 'ARRIVE',
+            instruction: 'Already near destination',
+            streetName: 'Destination',
+            points: [destination, destination],
+          )
+        ],
+      );
+
   /// Uses Google Routes API v2 with TWO_WHEELER travel mode, with Directions API fallback,
   /// Only explicit legacy TFT requests may fall back to OSRM.
   Future<NavigationRoute?> calculateRoute({
@@ -815,6 +931,10 @@ class GoogleMapsService {
       }
     }
 
+    if (totalDistance == 0 &&
+        Geolocator.distanceBetween(origin.latitude, origin.longitude,
+                destination.latitude, destination.longitude) <=
+            30) return _nearbyArrival(origin, destination);
     if (polyPoints.length < 2 || rawStepsList.isEmpty || totalDistance <= 0) {
       return null;
     }
@@ -894,6 +1014,10 @@ class GoogleMapsService {
       ));
     }
 
+    if (totalDistance == 0 &&
+        Geolocator.distanceBetween(origin.latitude, origin.longitude,
+                destination.latitude, destination.longitude) <=
+            30) return _nearbyArrival(origin, destination);
     if (polyline.length < 2 || rawStepsList.isEmpty || totalDistance <= 0) {
       return null;
     }
@@ -1046,25 +1170,23 @@ class GoogleMapsService {
   static List<RouteStep> _normalizeSteps(
       List<RouteStep> rawSteps, LatLng origin, LatLng destination) {
     if (rawSteps.isEmpty) return rawSteps;
-    if (rawSteps.length == 1) {
-      final s = rawSteps[0];
-      return [
-        RouteStep(
-          startLocation: s.startLocation,
-          endLocation: s.endLocation,
-          distanceMeters: s.distanceMeters,
-          durationSeconds: s.durationSeconds,
-          maneuver: 'ARRIVE',
-          instruction: s.instruction.isNotEmpty
-              ? s.instruction
-              : 'Arrive at destination',
-          streetName: s.streetName.isNotEmpty ? s.streetName : 'Destination',
-          points: s.points,
-        )
-      ];
-    }
-
     final normalized = <RouteStep>[];
+    final first = rawSteps.first;
+    if (first.maneuver.toUpperCase().contains('U_TURN') ||
+        first.maneuver.toUpperCase().contains('UTURN')) {
+      // Provider actions occur at a step's START. Keep an immediate U-turn
+      // at the origin instead of attaching it to the far end of its exit road.
+      normalized.add(RouteStep(
+        startLocation: first.startLocation,
+        endLocation: first.startLocation,
+        distanceMeters: 0,
+        durationSeconds: 0,
+        maneuver: first.maneuver,
+        instruction: first.instruction,
+        streetName: first.streetName,
+        points: [first.startLocation, first.startLocation],
+      ));
+    }
 
     for (int i = 0; i < rawSteps.length; i++) {
       final cur = rawSteps[i];
@@ -1078,25 +1200,15 @@ class GoogleMapsService {
           distanceMeters: cur.distanceMeters,
           durationSeconds: cur.durationSeconds,
           maneuver: 'ARRIVE',
-          instruction: cur.instruction.isNotEmpty
-              ? cur.instruction
-              : 'Arrive at destination',
+          instruction: 'Arrive at destination',
           streetName:
               cur.streetName.isNotEmpty ? cur.streetName : 'Destination',
           points: cur.points,
         ));
       } else {
-        // Immediate U-turn edge case at the very start of navigation
-        final bool isImmediateUTurn = (i == 0) &&
-            (cur.maneuver.toUpperCase().contains('U_TURN') ||
-                cur.maneuver.toUpperCase().contains('UTURN'));
-
-        String upcomingManeuver =
-            isImmediateUTurn ? cur.maneuver : nxt.maneuver;
-        String upcomingInstruction =
-            isImmediateUTurn ? cur.instruction : nxt.instruction;
-        String upcomingStreet =
-            isImmediateUTurn ? cur.streetName : nxt.streetName;
+        final upcomingManeuver = nxt.maneuver;
+        final upcomingInstruction = nxt.instruction;
+        final upcomingStreet = nxt.streetName;
 
         // Provider actions include ramp/merge topology absent from a polyline.
         // Do not invent or reverse maneuvers from a local bend angle.

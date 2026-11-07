@@ -238,14 +238,6 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "getApiKey" -> result.success(BuildConfig.GOOGLE_MAPS_API_KEY)
-                    "openLocationIq" -> {
-                        try {
-                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://locationiq.com")))
-                            result.success(null)
-                        } catch (_: android.content.ActivityNotFoundException) {
-                            result.error("NO_BROWSER", "No browser is available", null)
-                        }
-                    }
                     else -> result.notImplemented()
                 }
             }

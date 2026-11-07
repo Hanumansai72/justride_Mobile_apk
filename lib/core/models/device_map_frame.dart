@@ -22,6 +22,49 @@ Offset mapPixel(LatLng point, LatLng center, int zoom) {
       DeviceMapConfig.width / 2 + dx, DeviceMapConfig.height / 2 + delta.dy);
 }
 
+LatLng mapCoordinate(Offset pixel, LatLng center, int zoom) {
+  final scale = 256.0 * math.pow(2, zoom);
+  final sin = math.sin(center.latitude.clamp(-85.0, 85.0) * math.pi / 180);
+  final y = .5 -
+      math.log((1 + sin) / (1 - sin)) / (4 * math.pi) +
+      (pixel.dy - DeviceMapConfig.height / 2) / scale;
+  final longitude =
+      center.longitude + (pixel.dx - DeviceMapConfig.width / 2) * 360 / scale;
+  final v = math.pi * (1 - 2 * y);
+  return LatLng(math.atan((math.exp(v) - math.exp(-v)) / 2) * 180 / math.pi,
+      (longitude + 180) % 360 - 180);
+}
+
+/// Same padded, north-up viewport for raster and vector overview. Reserve the
+/// trip card, compass, attribution and marker radius of the existing 2.8" HUD.
+({LatLng center, int zoom}) fitDeviceMapViewport(List<LatLng> points) {
+  if (points.isEmpty) throw const FormatException('No route to fit');
+  final origin = points.first;
+  var minX = double.infinity, minY = double.infinity;
+  var maxX = -double.infinity, maxY = -double.infinity;
+  for (final point in points) {
+    final p = mapPixel(point, origin, 0);
+    minX = math.min(minX, p.dx);
+    maxX = math.max(maxX, p.dx);
+    minY = math.min(minY, p.dy);
+    maxY = math.max(maxY, p.dy);
+  }
+  var zoom = 18;
+  while (zoom > 0 &&
+      ((maxX - minX) * math.pow(2, zoom) > 174 ||
+          (maxY - minY) * math.pow(2, zoom) > 91)) {
+    zoom--;
+  }
+  var center =
+      mapCoordinate(Offset((minX + maxX) / 2, (minY + maxY) / 2), origin, 0);
+  center = mapCoordinate(
+      const Offset(
+          DeviceMapConfig.width / 2 + 12, DeviceMapConfig.height / 2 - 1),
+      center,
+      zoom);
+  return (center: center, zoom: zoom);
+}
+
 int mapCrc32(List<int> bytes) {
   var crc = 0xffffffff;
   for (final b in bytes) {

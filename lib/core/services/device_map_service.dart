@@ -25,6 +25,7 @@ class DeviceMapService {
   Timer? _retry;
   http.Client? _activeClient;
   int? _requestRevision;
+  DateTime _cameraReady = DateTime.fromMillisecondsSinceEpoch(0);
 
   void init() {
     if (_initialized || !DeviceMapConfig.enabled) return;
@@ -34,47 +35,36 @@ class DeviceMapService {
 
   void recenter() {
     _cameraCenter = null;
-    _manualZoom = false;
+    _manualZoom = true;
+    zoom = 16;
     ++_generation;
     _activeClient?.close();
     refresh();
   }
 
   void showOverview() {
-    final points = NavigationService.instance.activeRoute?.polylinePoints;
-    if (points == null || points.isEmpty) return;
-    var minLat = 85.0, maxLat = -85.0, minLng = 180.0, maxLng = -180.0;
-    for (final p in points) {
-      if (p.latitude < minLat) minLat = p.latitude;
-      if (p.latitude > maxLat) maxLat = p.latitude;
-      if (p.longitude < minLng) minLng = p.longitude;
-      if (p.longitude > maxLng) maxLng = p.longitude;
-    }
-    _cameraCenter = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
-    var fitZoom = 18;
-    while (fitZoom > 0 &&
-        points.any((p) {
-          final pixel = mapPixel(p, _cameraCenter!, fitZoom);
-          return pixel.dx < 12 ||
-              pixel.dx > DeviceMapConfig.width - 12 ||
-              pixel.dy < 12 ||
-              pixel.dy > DeviceMapConfig.height - 24;
-        })) {
-      fitZoom--;
-    }
+    final viewport = NavigationService.instance.deviceOverviewViewport;
+    if (viewport == null) return;
+    if (_cameraCenter == viewport.center && zoom == viewport.zoom) return;
+    _cameraCenter = viewport.center;
+    zoom = viewport.zoom;
+    _manualZoom = true;
     ++_generation;
-    setZoom(fitZoom);
+    _activeClient?.close();
     refresh();
   }
 
   void setZoom(int value) {
     _manualZoom = true;
     final next = value.clamp(0, 18);
-    if (next == zoom) return;
+    final wasOverview = _cameraCenter != null;
+    _cameraCenter = null;
+    if (next == zoom && !wasOverview) return;
     zoom = next;
     ++_generation;
     _activeClient?.close();
     _retry?.cancel();
+    _cameraReady = DateTime.now().add(const Duration(milliseconds: 600));
     _retry = Timer(const Duration(milliseconds: 600), () {
       _retry = null;
       refresh();
@@ -96,6 +86,15 @@ class DeviceMapService {
       return;
     }
     final route = nav.activeRoute;
+    final viewport = nav.deviceOverviewViewport;
+    if (viewport != null &&
+        (_cameraCenter != viewport.center || zoom != viewport.zoom)) {
+      _cameraCenter = viewport.center;
+      zoom = viewport.zoom;
+      _manualZoom = true;
+      ++_generation;
+      _activeClient?.close();
+    }
     if (_busy && _requestRevision != nav.routeRevision) {
       ++_generation;
       _activeClient?.close();
@@ -142,7 +141,9 @@ class DeviceMapService {
         return;
       }
     }
-    final wait = _nextAttempt.difference(DateTime.now());
+    final ready =
+        _nextAttempt.isAfter(_cameraReady) ? _nextAttempt : _cameraReady;
+    final wait = ready.difference(DateTime.now());
     if (wait > Duration.zero) {
       _retry ??= Timer(wait, () {
         _retry = null;
@@ -237,11 +238,12 @@ Future<DeviceMapFrame> prepareDeviceMap(Uint8List bytes, LatLng center,
         0, 0, DeviceMapConfig.width.toDouble(), DeviceMapConfig.height - 24));
     final path = ui.Path();
     final first =
-        overview ? 0 : (routeIndex - 8).clamp(0, route.polylinePoints.length);
+        (routeIndex - (overview ? 0 : 8)).clamp(0, route.polylinePoints.length);
     final last = overview
         ? route.polylinePoints.length
         : (first + 512).clamp(0, route.polylinePoints.length);
-    final stride = overview ? ((last + 510) ~/ 511).clamp(1, 1000000) : 1;
+    // Keep all real vertices: uniform thinning can cut corners/flyovers.
+    const stride = 1;
     for (var i = first; i < last; i += stride) {
       final p = mapPixel(route.polylinePoints[i], center, zoom);
       if (i == first) {
@@ -261,6 +263,11 @@ Future<DeviceMapFrame> prepareDeviceMap(Uint8List bytes, LatLng center,
           ..style = ui.PaintingStyle.stroke
           ..strokeWidth = 4
           ..strokeJoin = ui.StrokeJoin.round);
+    if (overview && route.polylinePoints.isNotEmpty) {
+      final end = mapPixel(route.polylinePoints.last, center, zoom);
+      canvas.drawCircle(end, 4, ui.Paint()..color = const ui.Color(0xff25d9a0));
+      canvas.drawCircle(end, 2, ui.Paint()..color = const ui.Color(0xff0b100d));
+    }
     canvas.restore();
     final picture = recorder.endRecording();
     try {

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../models/device_map_frame.dart';
 
 /// A transformed 2D point on the 320x240 landscape HUD canvas.
 class ScreenPoint {
@@ -28,6 +29,7 @@ class RouteWindowSegment {
 
   /// Screen coordinates of the final destination marker if visible
   final ScreenPoint? destinationScreenPoint;
+  final bool cameraProjected, overview;
 
   const RouteWindowSegment({
     required this.points,
@@ -36,6 +38,8 @@ class RouteWindowSegment {
     this.routeIndex = 0,
     this.isDestinationVisible = false,
     this.destinationScreenPoint,
+    this.cameraProjected = false,
+    this.overview = false,
   });
 
   /// Empty / fallback segment
@@ -45,6 +49,8 @@ class RouteWindowSegment {
         progressPercent = 0,
         routeIndex = 0,
         isDestinationVisible = false,
+        cameraProjected = false,
+        overview = false,
         destinationScreenPoint = null;
 }
 
@@ -74,6 +80,9 @@ class RouteWindowTransformer {
     int minimumRouteIndex = 0,
     double? distanceToManeuverMeters,
     double? followingLegDistanceMeters,
+    double windowMeters = windowDistanceMeters,
+    bool focusManeuver = true,
+    ({LatLng center, int zoom})? overviewViewport,
   }) {
     if (polylinePoints.isEmpty) return const RouteWindowSegment.empty();
 
@@ -82,6 +91,7 @@ class RouteWindowTransformer {
     int closestIdx = minimumRouteIndex.clamp(0, polylinePoints.length - 1);
     LatLng roadPosition = polylinePoints[closestIdx];
     double minDistanceSquared = double.infinity;
+    double bestHeadingDifference = double.infinity;
     final lngScale = math.cos(riderPosition.latitude * math.pi / 180.0);
     double searchMeters = 0;
     for (int i = closestIdx; i < polylinePoints.length - 1; i++) {
@@ -104,7 +114,16 @@ class RouteWindowTransformer {
       final x = ax + t * dx;
       final y = ay + t * dy;
       final distanceSquared = x * x + y * y;
-      if (distanceSquared < minDistanceSquared) {
+      final heading = _bearing(a, b);
+      final headingDifference = riderHeadingDeg.isFinite
+          ? ((riderHeadingDeg - heading + 540) % 360 - 180).abs()
+          : 180.0;
+      // At an overlapping U-turn road, choose the segment being travelled.
+      const oneMeterSquared = 1.0 / (111139.0 * 111139.0);
+      if (distanceSquared < minDistanceSquared - oneMeterSquared ||
+          ((distanceSquared - minDistanceSquared).abs() <= oneMeterSquared &&
+              headingDifference < bestHeadingDifference)) {
+        bestHeadingDifference = headingDifference;
         minDistanceSquared = distanceSquared;
         closestIdx = t >= 1.0 ? i + 1 : i;
         roadPosition = LatLng(a.latitude + t * (b.latitude - a.latitude),
@@ -112,8 +131,29 @@ class RouteWindowTransformer {
       }
     }
     final snappedRider = roadPosition;
+    if (overviewViewport != null) {
+      ScreenPoint project(LatLng point) {
+        final p =
+            mapPixel(point, overviewViewport.center, overviewViewport.zoom);
+        return ScreenPoint((160 + (p.dx - 113) / .9).round(),
+            (160 + (p.dy - 148) / .9).round());
+      }
 
-    final approach = distanceToManeuverMeters != null &&
+      final remaining = <LatLng>[
+        snappedRider,
+        ...polylinePoints.skip(closestIdx + 1)
+      ];
+      return RouteWindowSegment(
+          points: _subsample(remaining, maxPointsToSend).map(project).toList(),
+          routeIndex: closestIdx,
+          isDestinationVisible: true,
+          destinationScreenPoint: project(destination),
+          cameraProjected: true,
+          overview: true);
+    }
+
+    final approach = focusManeuver &&
+            distanceToManeuverMeters != null &&
             distanceToManeuverMeters.isFinite &&
             distanceToManeuverMeters >= 0
         ? distanceToManeuverMeters
@@ -129,11 +169,11 @@ class RouteWindowTransformer {
                 ? math.max(0.0, followingLegDistanceMeters * .7)
                 : 30.0);
     final drawDistance = approach == null
-        ? windowDistanceMeters
-        : (approach + exit).clamp(5.0, windowDistanceMeters);
+        ? windowMeters
+        : (approach + exit).clamp(5.0, windowMeters);
     final cameraDistance = approach == null
-        ? windowDistanceMeters
-        : approach.clamp(70.0, windowDistanceMeters);
+        ? windowMeters
+        : approach.clamp(math.min(70.0, windowMeters / 4), windowMeters);
     final pixelMeters = cameraDistance / (riderScreenY - 8);
 
     // Keep a short travelled tail behind the fixed rider anchor. The phone
@@ -286,6 +326,7 @@ class RouteWindowTransformer {
       routeIndex: closestIdx,
       isDestinationVisible: destVisible,
       destinationScreenPoint: destPoint,
+      cameraProjected: true,
     );
   }
 

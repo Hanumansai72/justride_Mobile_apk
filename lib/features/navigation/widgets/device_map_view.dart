@@ -1,9 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../../../core/constants/maps_loader_stub.dart'
-    if (dart.library.js_interop) '../../../core/constants/maps_loader_web.dart'
-    as maps_loader;
 import '../../../core/constants/device_map_config.dart';
 import '../../../core/models/device_map_frame.dart';
 import '../../../core/models/navigation_state.dart';
@@ -44,10 +41,6 @@ class DeviceMapView extends StatelessWidget {
               valueListenable: DeviceMapService.instance.status,
               builder: (context, value, _) =>
                   Text(value, style: const TextStyle(fontSize: 11))),
-          const TextButton(
-              onPressed: maps_loader.openAttribution,
-              child: Text('Search by LocationIQ.com',
-                  style: TextStyle(fontSize: 11))),
         ]),
       );
 }

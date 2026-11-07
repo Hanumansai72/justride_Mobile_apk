@@ -43,6 +43,8 @@ void main() {
           await tester.tap(find.text(entry.$1));
           await tester.pumpAndSettle();
           expect(find.textContaining('Draft for legal review'), findsOneWidget);
+          expect(find.textContaining('Review before publication:'), findsNothing);
+          expect(find.textContaining('SharedPreferences'), findsNothing);
           await tester.scrollUntilVisible(find.text(entry.$2), 500);
           expect(find.text(entry.$2).hitTestable(), findsOneWidget);
           await tester.pageBack();

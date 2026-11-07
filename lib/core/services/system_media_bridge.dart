@@ -6,6 +6,27 @@ const _mediaChannel = MethodChannel('com.justride.app/system_media');
 const _companionChannel = MethodChannel('com.justride.app/companion');
 const _mediaTimeout = Duration(seconds: 3);
 
+void setSystemMediaListener(void Function(Map<Object?, Object?>)? listener) {
+  _mediaChannel.setMethodCallHandler(listener == null ? null : (call) async {
+    if (call.method == 'mediaChanged' && call.arguments is Map) {
+      listener(Map<Object?, Object?>.from(call.arguments as Map));
+    }
+  });
+}
+
+Future<bool> startSystemMediaUpdates() async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+  try {
+    return await _mediaChannel.invokeMethod<Object?>('watchMedia').timeout(_mediaTimeout) == true;
+  } on Exception { return false; }
+}
+
+Future<void> stopSystemMediaUpdates() async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  try { await _mediaChannel.invokeMethod<void>('unwatchMedia').timeout(_mediaTimeout); }
+  on Exception { /* Older native shells keep the polling fallback. */ }
+}
+
 Future<bool> _repairMediaBridge() async {
   try {
     return await _companionChannel

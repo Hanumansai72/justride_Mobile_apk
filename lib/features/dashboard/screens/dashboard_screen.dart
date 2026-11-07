@@ -1,3 +1,4 @@
+import '../../../shared/widgets/visible_page_polling.dart';
 import '../../../core/services/app_update_service.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -36,12 +37,11 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with VisiblePagePolling<DashboardScreen> {
   final int _navIndex = 0;
   UserModel? _user;
   DeviceModel? _device;
   bool _isLoading = true;
-  Timer? _statusPollTimer;
   bool _isHardwareSheetShowing = false;
   AppReleaseModel? _latestRelease;
   late Future<ApiResponse<RideHistoryPage>> _historyFuture;
@@ -58,14 +58,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _fetchDashboardData();
+    unawaited(RideHistoryService.instance.refreshTotalDistance());
     RideHistoryService.instance.changed.addListener(_reloadHistory);
     _checkAppRelease();
-    // Periodically verify device status with backend every 20s
-    _statusPollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
-      if (mounted && _device != null) {
-        _verifyDeviceStatus();
-      }
-    });
 
     // Listen for destinations shared from Google Maps while user is on Dashboard
     ShareService.instance.destinationSharedNotifier
@@ -125,13 +120,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
+  Future<void> pollVisiblePage() async {
+    if (_device != null) await _verifyDeviceStatus();
+  }
+
+  @override
   void dispose() {
     RideHistoryService.instance.changed.removeListener(_reloadHistory);
     JustRideBleService.instance.adapterStateNotifier
         .removeListener(_onBleStateChanged);
     ShareService.instance.destinationSharedNotifier
         .removeListener(_onDestinationShared);
-    _statusPollTimer?.cancel();
     super.dispose();
   }
 
@@ -201,7 +200,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     // If no device is paired with this account, show the scan device radar page directly on Dashboard!
-    if (_device == null) {
+    if (BackendService.instance.accountPaired.value == false) {
       return const DevicePairingScreen();
     }
 

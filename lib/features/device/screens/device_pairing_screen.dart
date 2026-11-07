@@ -80,6 +80,48 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     }
   }
 
+  Future<String?> _requestSetupCode() async {
+    final input = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Device setup code'),
+          content: TextField(
+            controller: input,
+            autofocus: true,
+            obscureText: true,
+            enableSuggestions: false,
+            autocorrect: false,
+            maxLength: 32,
+            decoration: const InputDecoration(
+              labelText: 'Private 32-character setup code',
+              helperText: 'Supplied by your device administrator.',
+              helperMaxLines: 2,
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel')),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: input,
+              builder: (context, value, child) {
+                final code = value.text.trim().toUpperCase();
+                return TextButton(
+                  onPressed: RegExp(r'^[A-F0-9]{32}$').hasMatch(code)
+                      ? () => Navigator.pop(dialogContext, code) : null,
+                  child: const Text('Link device'),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    } finally {
+      Future<void>.delayed(const Duration(seconds: 1), input.dispose);
+    }
+  }
+
   // Rotating scanner line
   late final AnimationController _rotateCtrl;
 
@@ -118,7 +160,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
       if (mounted) _ring3Ctrl.repeat(reverse: true);
     });
 
-    // Initialize BLE and start real-time scan for JustRide devices
+    // Pairing keeps fast discovery; idle reconnects can back off.
+    _bleService.setPairingScanActive(true);
     _bleService.init();
     _bleService.justRideDevicesNotifier.addListener(_resolveDeviceNames);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -151,6 +194,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
 
   @override
   void dispose() {
+    _bleService.setPairingScanActive(false);
     _bleService.justRideDevicesNotifier.removeListener(_resolveDeviceNames);
     _rotateCtrl.dispose();
     _ring1Ctrl.dispose();
@@ -224,15 +268,21 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     // ── Step 2: Backend official pairing (only if not already paired) ──
     final accessReason = checkRes.data?['reason']?.toString() ?? '';
     if (accessReason != 'ALREADY_PAIRED_TO_YOU') {
+      final setupCode = await _requestSetupCode();
+      if (!mounted) return;
+      if (setupCode == null) {
+        setState(() => _connectingDeviceId = null);
+        return;
+      }
       final pairRes = await BackendService.instance.pairDevice(
         bleAddress: devId,
+        setupCode: setupCode,
         deviceName: devName.isNotEmpty ? devName : 'JustRide Module',
         deviceId: devId,
       );
 
-      if (!mounted) return;
-
       if (!pairRes.success) {
+        if (!mounted) return;
         setState(() => _connectingDeviceId = null);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -243,7 +293,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Unable to pair your device. Please try again.',
+                    'Linking failed. Check the private setup code supplied with your device.',
                     style: TextStyle(
                         fontFamily: 'Stack Sans Text',
                         color: AppColors.textPrimary),

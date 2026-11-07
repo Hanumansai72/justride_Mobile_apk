@@ -1,7 +1,7 @@
 name: justride_ui
 description: JustRide production-level Flutter UI for the ride navigation app.
 publish_to: 'none'
-version: 1.2.4+10
+version: 1.2.6+12
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -11,12 +11,11 @@ dependencies:
     sdk: flutter
 
   flutter_blue_plus: ^2.3.12
-  google_fonts: ^6.2.1
   image_picker: ^1.1.2
   http: ^1.6.0
   http_parser: ^4.1.2
   shared_preferences: ^2.5.5
-  smooth_page_indicator: ^1.1.0
+  path_provider: ^2.1.6
   google_maps_flutter: ^2.18.0
   geolocator: ^14.0.3
   flutter_polyline_points: ^3.1.0
@@ -32,6 +31,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/firmware/justride_firmware.bin
+    - assets/firmware/justride_s3_amoled143.bin
     - assets/justride-device.png
     - assets/justride-logo-horizontal.png
     - assets/brands/google-g.png

@@ -6,6 +6,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../shared/widgets/battery_indicator.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/bluetooth_service.dart';
+import '../../../core/services/ble_navigation_service.dart';
 
 /// Card showing the connected Bluetooth device name, status dot and battery.
 class DeviceCard extends StatelessWidget {
@@ -25,11 +26,15 @@ class DeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = device?.deviceName ?? deviceName;
-    final battery = device?.batteryLevel ?? batteryPercent;
 
-    return ValueListenableBuilder<BluetoothConnectionState>(
-      valueListenable: JustRideBleService.instance.connectionStateNotifier,
-      builder: (context, connState, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        JustRideBleService.instance.connectionStateNotifier,
+        BleNavigationService.instance.powerStatus
+      ]),
+      builder: (context, _) {
+        final connState =
+            JustRideBleService.instance.connectionStateNotifier.value;
         final connected = (connState == BluetoothConnectionState.connected ||
                 JustRideBleService.instance.isDeviceConnected) &&
             (device == null || (!device!.isBlocked && device!.isActive));
@@ -113,7 +118,11 @@ class DeviceCard extends StatelessWidget {
                   children: [
                     Text('Battery', style: AppTextStyles.labelSmall),
                     const SizedBox(height: 3),
-                    BatteryIndicator(percent: battery),
+                    BatteryIndicator(
+                        percent: connected
+                            ? BleNavigationService
+                                .instance.powerStatus.value?.percentage
+                            : null),
                   ],
                 ),
                 const SizedBox(width: 6),

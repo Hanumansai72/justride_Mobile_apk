@@ -109,7 +109,7 @@ class TelephonyService {
       callInfoNotifier.value = IncomingCallInfo(
         status: newStatus,
         callerNumber: number,
-        callerName: number.isNotEmpty ? 'Caller: $number' : 'Incoming Call',
+        callerName: args?['name'] as String? ?? '',
       );
 
       await syncDisplay();
@@ -127,8 +127,9 @@ class TelephonyService {
       actions = await _channel.invokeMethod<int>('getCallCapabilities') ?? 0;
     } catch (_) {}
     final info = callInfoNotifier.value;
-    await BleNavigationService.instance
-        .sendCallState(info.status.index, actions, info.displayName);
+    await BleNavigationService.instance.sendCallState(
+        info.status.index, actions, info.displayName,
+        number: info.callerNumber);
   }
 
   Future<bool> answerCall() async {

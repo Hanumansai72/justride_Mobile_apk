@@ -31,12 +31,14 @@ class ApiClient {
   static const String _userKey = 'justride_user_data';
 
   String? _authToken;
+  final savedUser = ValueNotifier<Map<String, dynamic>?>(null);
   bool _isRedirectingToLogin = false;
 
   /// Initialize token from local storage on app start
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _authToken = prefs.getString(_tokenKey);
+    savedUser.value = await getSavedUserData();
   }
 
   String? get token => _authToken;
@@ -52,6 +54,7 @@ class ApiClient {
   Future<void> saveUserData(Map<String, dynamic> userJson) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_userKey, jsonEncode(userJson));
+    savedUser.value = Map<String, dynamic>.of(userJson);
   }
 
   Future<Map<String, dynamic>?> getSavedUserData() async {
@@ -70,6 +73,7 @@ class ApiClient {
   Future<void> clearAuth() async {
     final oldToken = _authToken;
     _authToken = null;
+    savedUser.value = null;
     final fid = await PushNotificationService.instance.disable();
     if (fid != null && oldToken != null) {
       unawaited(_client
@@ -88,6 +92,8 @@ class ApiClient {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
+    await prefs.remove('justride_paired_device');
+    await prefs.remove('justride_saved_mac_address');
     await prefs.remove('resume_active_session');
     await prefs.remove('resume_destination');
   }

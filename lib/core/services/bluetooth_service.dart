@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'navigation_service.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -75,7 +76,9 @@ class JustRideBleService {
     Future<void> apply(Map<dynamic, dynamic> state) async {
       companionEnabled.value = state['enabled'] == true;
       companionSupported.value = state['supported'] == true;
-      _appVisible = state['visible'] == true;
+      final visible = state['visible'] == true;
+      if (visible && !_appVisible) _emptyScanWindows = 0;
+      _appVisible = visible;
       _devicePresent = state['present'] == true;
       _userInitiatedDisconnect = state['paused'] == true;
       _companionReady = true;
@@ -213,6 +216,16 @@ class JustRideBleService {
 
   // ─── Scan configuration ──────────────────────────────────────────────────────
   static const Duration _kScanWindow = Duration(seconds: 15);
+  bool _pairingScanActive = false;
+  int _emptyScanWindows = 0;
+  void setPairingScanActive(bool active) {
+    _pairingScanActive = active;
+    if (active) _emptyScanWindows = 0;
+  }
+
+  @visibleForTesting
+  static Duration scanRetryDelay(int missedWindows, {required bool ridingOrPairing}) =>
+      Duration(seconds: ridingOrPairing ? 2 : (2 * (1 << missedWindows.clamp(0, 4))).clamp(2, 30));
 
   // =========================================================================
   // INIT – call once from screen initState or app startup
@@ -253,8 +266,10 @@ class JustRideBleService {
           !scanning &&
           !_disposed &&
           _connectedDevice == null) {
-        // 2s pause between scans prevents Android BLE scan throttling (5 scans per 30s limit)
-        _scheduleRescan(delay: const Duration(seconds: 2));
+        final fast = _pairingScanActive || _isReconnecting || NavigationService.instance.isNavigating;
+        final delay = scanRetryDelay(_emptyScanWindows, ridingOrPairing: fast);
+        if (!fast) _emptyScanWindows = (_emptyScanWindows + 1).clamp(0, 4);
+        _scheduleRescan(delay: delay);
       }
     });
   }
@@ -270,6 +285,7 @@ class JustRideBleService {
       return;
     }
     _cancelRescan();
+    _emptyScanWindows = 0;
     await _startOneScan();
   }
 
@@ -529,6 +545,19 @@ class JustRideBleService {
       lastBleErrorNotifier.value = null;
       debugPrint('[BLE] ✓ Successfully connected to ${device.remoteId.str}');
 
+      // Native passkey pairing protects the round-board application services.
+      for (final service in svcs) {
+        if (service.uuid != Guid('ff40')) continue;
+        lastBleErrorNotifier.value =
+            'Enter the Bluetooth passkey shown on your JustRide screen.';
+        if (_android) await device.createBond(timeout: 90);
+        final proof = service.characteristics.firstWhere(
+            (characteristic) => characteristic.uuid == Guid('ff41'));
+        final status = await proof.read(timeout: 90);
+        if (status.isEmpty) throw StateError('Secure pairing could not be verified');
+        lastBleErrorNotifier.value = null;
+      }
+
       // Save verified MAC address to SharedPreferences for instant reconnects
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -555,7 +584,7 @@ class JustRideBleService {
       final err = 'Connect failed for ${device.remoteId.str}: $e';
       debugPrint('[BLE] $err');
       lastBleErrorNotifier.value =
-          'Unable to connect. Keep your device nearby and powered on, then try again.';
+          'Unable to connect. Enter the passkey shown on the device. If an old bond fails, confirm Reset on the device, then forget JustRide in Bluetooth settings and retry.';
       try {
         await device.disconnect();
       } catch (_) {}

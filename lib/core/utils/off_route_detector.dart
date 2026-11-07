@@ -76,19 +76,7 @@ class OffRouteDetector {
       return _state;
     }
 
-    // 1. Find minimum distance to the route geometry, not just its vertices.
-    // A sparse polyline can place a rider close to a segment while remaining
-    // farther than the corridor from both endpoint samples.
-    double minDist = double.infinity;
-    for (var i = 0; i < polylinePoints.length; i++) {
-      final d = i == 0
-          ? _distanceToPointMeters(riderPosition, polylinePoints[i])
-          : _distanceToSegmentMeters(
-              riderPosition, polylinePoints[i - 1], polylinePoints[i]);
-      if (d < minDist) {
-        minDist = d;
-      }
-    }
+    final minDist = distanceToRouteMeters(riderPosition, polylinePoints);
 
     final isOutsideCorridor = minDist > _offRouteCorridorMeters;
 
@@ -128,6 +116,18 @@ class OffRouteDetector {
     }
 
     return _state;
+  }
+
+  /// Distance to road segments also works with sparse provider geometry.
+  static double distanceToRouteMeters(LatLng point, List<LatLng> points) {
+    var distance = double.infinity;
+    for (var i = 0; i < points.length; i++) {
+      final candidate = i == 0
+          ? _distanceToPointMeters(point, points[i])
+          : _distanceToSegmentMeters(point, points[i - 1], points[i]);
+      distance = math.min(distance, candidate);
+    }
+    return distance;
   }
 
   static double _distanceToPointMeters(LatLng point, LatLng routePoint) {

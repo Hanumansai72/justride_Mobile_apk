@@ -8,6 +8,8 @@ import '../../../core/models/destination.dart';
 import '../../../core/services/google_maps_service.dart';
 import '../../../core/utils/maps_url_parser.dart';
 import '../../../core/services/navigation_service.dart';
+import '../../../core/services/ble_navigation_service.dart';
+import '../../../core/models/power_status.dart';
 import '../../../shared/widgets/require_device_connection.dart';
 import '../../navigation/widgets/destination_confirm_sheet.dart';
 import '../../../shared/widgets/app_logo.dart';
@@ -127,8 +129,6 @@ class _HomeScreenState extends State<HomeScreen>
           } else if (i == 2) {
             Navigator.of(context).pushNamed('/pair-device');
           } else if (i == 3) {
-            Navigator.of(context).pushNamed('/notifications');
-          } else if (i == 4) {
             Navigator.of(context).pushNamed('/profile');
           }
         },
@@ -393,11 +393,15 @@ class _DeviceCard extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: _StatCell(
-                        label: 'BATTERY',
-                        value: '0%',
-                        icon: Icons.battery_5_bar_rounded,
-                        iconColor: _C.primary,
+                      child: ValueListenableBuilder<PowerStatus?>(
+                        valueListenable:
+                            BleNavigationService.instance.powerStatus,
+                        builder: (context, power, _) => _StatCell(
+                          label: 'BATTERY EST.',
+                          value: power?.levelLabel ?? '—',
+                          icon: Icons.battery_5_bar_rounded,
+                          iconColor: _C.primary,
+                        ),
                       ),
                     ),
                     Expanded(
@@ -533,7 +537,7 @@ class _SearchFieldState extends State<_SearchField> {
 
     setState(() => _isLoadingSuggestions = true);
     _placesDebounce = Timer(const Duration(milliseconds: 250), () async {
-      final matches = await GoogleMapsService.instance.searchPlaces(trimmed);
+      final matches = await GoogleMapsService.instance.searchPlaces(trimmed, autocomplete: true);
       if (mounted && widget.controller.text.trim() == trimmed) {
         setState(() {
           _suggestions = matches;
