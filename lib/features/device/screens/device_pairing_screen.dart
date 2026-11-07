@@ -10,7 +10,6 @@ import '../../../core/services/bluetooth_service.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../shared/widgets/hardware_prompt_sheet.dart';
 import '../../../shared/widgets/app_logo.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
@@ -80,46 +79,19 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     }
   }
 
-  Future<String?> _requestSetupCode() async {
-    final input = TextEditingController();
+  Future<String?> _readSetupCredential(BluetoothDevice device) async {
     try {
-      return await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Device setup code'),
-          content: TextField(
-            controller: input,
-            autofocus: true,
-            obscureText: true,
-            enableSuggestions: false,
-            autocorrect: false,
-            maxLength: 32,
-            decoration: const InputDecoration(
-              labelText: 'Private 32-character setup code',
-              helperText: 'Supplied by your device administrator.',
-              helperMaxLines: 2,
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel')),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: input,
-              builder: (context, value, child) {
-                final code = value.text.trim().toUpperCase();
-                return TextButton(
-                  onPressed: RegExp(r'^[A-F0-9]{32}$').hasMatch(code)
-                      ? () => Navigator.pop(dialogContext, code) : null,
-                  child: const Text('Link device'),
-                );
-              },
-            ),
-          ],
-        ),
-      );
-    } finally {
-      Future<void>.delayed(const Duration(seconds: 1), input.dispose);
-    }
+      for (final service in device.servicesList) {
+        if (service.uuid != Guid('ff40')) continue;
+        for (final characteristic in service.characteristics) {
+          if (characteristic.uuid != Guid('ff42')) continue;
+          final bytes = await characteristic.read();
+          final code = String.fromCharCodes(bytes);
+          return RegExp(r'^[A-F0-9]{32}$').hasMatch(code) ? code : null;
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   // Rotating scanner line
@@ -265,13 +237,24 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
       return;
     }
 
-    // ── Step 2: Backend official pairing (only if not already paired) ──
+    final secureConnected = await _bleService.connectDevice(result.device);
+    if (!mounted) return;
+    if (!secureConnected) {
+      setState(() => _connectingDeviceId = null);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not connect. Confirm the Bluetooth code on your display and try again.')));
+      return;
+    }
+    // Link the account only after authenticated Bluetooth pairing.
     final accessReason = checkRes.data?['reason']?.toString() ?? '';
     if (accessReason != 'ALREADY_PAIRED_TO_YOU') {
-      final setupCode = await _requestSetupCode();
+      final setupCode = await _readSetupCredential(result.device);
       if (!mounted) return;
       if (setupCode == null) {
         setState(() => _connectingDeviceId = null);
+        await _bleService.disconnectDevice(restartScan: false);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('This display needs setup by your device administrator.')));
         return;
       }
       final pairRes = await BackendService.instance.pairDevice(
@@ -282,6 +265,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
       );
 
       if (!pairRes.success) {
+        await _bleService.disconnectDevice(restartScan: false);
         if (!mounted) return;
         setState(() => _connectingDeviceId = null);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -293,7 +277,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Linking failed. Check the private setup code supplied with your device.',
+                    pairRes.message.isNotEmpty ? pairRes.message : 'Could not link this display. Try again.',
                     style: TextStyle(
                         fontFamily: 'Stack Sans Text',
                         color: AppColors.textPrimary),
@@ -349,21 +333,6 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
       backgroundColor: _C.bg,
       appBar: _buildAppBar(context),
       body: _buildBody(),
-      bottomNavigationBar: widget.showBottomNav
-          ? JustRideBottomNavBar(
-              currentIndex: 0,
-              onTap: (i) {
-                if (i == 0) return;
-                if (i == 1) {
-                  Navigator.of(context).pushReplacementNamed('/places');
-                } else if (i == 2) {
-                  Navigator.of(context).pushReplacementNamed('/device');
-                } else if (i == 3) {
-                  Navigator.of(context).pushReplacementNamed('/profile');
-                }
-              },
-            )
-          : null,
     );
   }
 
@@ -681,6 +650,8 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
   Widget _buildDeviceCard(ScanResult result) {
     final devName = _deviceName(result);
     final devId = result.device.remoteId.str;
+    final displayId =
+        devId.length > 5 ? '…${devId.substring(devId.length - 5)}' : devId;
     final signalInfo = JustRideBleService.getSignalInfo(result.rssi);
     final isConnecting = _connectingDeviceId == devId;
 
@@ -753,7 +724,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${signalInfo.$1} (${result.rssi} dBm)',
+                      signalInfo.$1,
                       style: TextStyle(
                         fontFamily: 'Stack Sans Text',
                         fontSize: 11,
@@ -777,7 +748,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'DEVICE MAC / ID',
+                    'Device ID',
                     style: TextStyle(
                       fontFamily: 'Stack Sans Text',
                       fontSize: 10,
@@ -788,7 +759,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    devId,
+                    displayId,
                     style: TextStyle(
                       fontFamily: 'Stack Sans Text',
                       fontSize: 13,
