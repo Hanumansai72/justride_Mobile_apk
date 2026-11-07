@@ -33,8 +33,9 @@ class AppUpdateService extends ChangeNotifier with WidgetsBindingObserver {
       release!.buildNumber > installedBuild!;
   bool get required => hasUpdate && release!.isMandatory;
   bool get showOptionalUpdate => hasUpdate && !required && !_optionalDismissed;
-  bool get blockAccess =>
-      supported && (!startupComplete || required || showOptionalUpdate);
+  // Startup and optional update checks never cover or delay the app.
+  // Keep the existing gate only for a confirmed mandatory newer release.
+  bool get blockAccess => supported && required;
 
   void dismissOptionalUpdate() {
     if (required || !startupComplete) return;

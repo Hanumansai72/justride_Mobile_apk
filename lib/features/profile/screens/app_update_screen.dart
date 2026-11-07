@@ -168,7 +168,7 @@ class AppUpdateScreen extends StatelessWidget {
   }
 }
 
-/// A root overlay cannot be bypassed by back, deep links, or device pairing.
+/// Only a confirmed mandatory update may cover the app; checking stays silent.
 class AppUpdateGate extends StatefulWidget {
   const AppUpdateGate({super.key, required this.child});
   final Widget child;
