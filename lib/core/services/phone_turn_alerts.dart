@@ -41,9 +41,7 @@ class PhoneTurnAlerts {
     try {
       final preferences = await SharedPreferences.getInstance();
       enabled.value = preferences.getBool(_key) ?? false;
-    } catch (error) {
-      debugPrint('[TurnAlerts] Saved preference unavailable: $error');
-    }
+    } catch (error) {}
     NavigationService.instance.navigationStateNotifier
         .addListener(_onNavigation);
   }
@@ -67,8 +65,6 @@ class PhoneTurnAlerts {
         key == _lastManeuver ||
         !LocationService.instance.hasFreshNavigationFix) return;
     _lastManeuver = key;
-    unawaited(HapticFeedback.heavyImpact().catchError((Object error) {
-      debugPrint('[TurnAlerts] Phone haptics unavailable: $error');
-    }));
+    unawaited(HapticFeedback.heavyImpact().catchError((Object error) {}));
   }
 }

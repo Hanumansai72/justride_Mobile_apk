@@ -23,10 +23,9 @@ enum OffRouteState {
 ///   - Short parallel-road mismatches (corridor margin)
 ///   - Slow GPS updates at high speed (time/count dual threshold)
 class OffRouteDetector {
-  /// Rider must be beyond this distance from ALL polyline points to count as
-  /// a potential off-route sample. Wider than the old 40m to account for
-  /// 15-20m typical GPS accuracy drift on phones.
-  static const double _offRouteCorridorMeters = 50.0;
+  // Use a tighter corridor when the GPS fix is accurate. At the weakest
+  // accepted accuracy, keep the original 50 m tolerance.
+  static const double _minimumCorridorMeters = 30;
 
   /// Speed threshold below which we suppress rerouting. A stationary or very
   /// slow rider (< 5 km/h ≈ 1.4 m/s) is likely waiting at a junction — not
@@ -37,9 +36,8 @@ class OffRouteDetector {
   /// transitioning from POSSIBLY_OFF_ROUTE → OFF_ROUTE.
   static const int _confirmationSamples = 3;
 
-  /// How many seconds must elapse in POSSIBLY_OFF_ROUTE before confirming.
-  /// Guards against a burst of bad GPS fixes at high speed.
-  static const int _confirmationSeconds = 4;
+  // Require samples spread over time so one burst can't trigger a route.
+  static const _confirmationTime = Duration(milliseconds: 1500);
 
   OffRouteState _state = OffRouteState.onRoute;
   int _offRouteSampleCount = 0;
@@ -78,19 +76,14 @@ class OffRouteDetector {
 
     final minDist = distanceToRouteMeters(riderPosition, polylinePoints);
 
-    final isOutsideCorridor = minDist > _offRouteCorridorMeters;
+    final corridor = math.max(_minimumCorridorMeters, accuracyMeters * 2);
+    final isOutsideCorridor = minDist > corridor;
 
     if (!isOutsideCorridor) {
       // Back inside corridor — reset to ON_ROUTE immediately.
       _state = OffRouteState.onRoute;
       _offRouteSampleCount = 0;
       _offRouteStartTime = null;
-      return _state;
-    }
-
-    // Outside corridor: suppress if rider is nearly stationary.
-    if (speedMs < _minSpeedForRerouteMs) {
-      // Stay in current state but don't escalate.
       return _state;
     }
 
@@ -105,12 +98,10 @@ class OffRouteDetector {
     // Accumulate evidence in POSSIBLY_OFF_ROUTE.
     if (_state == OffRouteState.possiblyOffRoute) {
       _offRouteSampleCount++;
-      final elapsed = _offRouteStartTime != null
-          ? sampledAt.difference(_offRouteStartTime!).inSeconds
-          : 0;
+      final elapsed = sampledAt.difference(_offRouteStartTime!);
 
       if (_offRouteSampleCount >= _confirmationSamples &&
-          elapsed >= _confirmationSeconds) {
+          elapsed >= _confirmationTime) {
         _state = OffRouteState.offRoute;
       }
     }

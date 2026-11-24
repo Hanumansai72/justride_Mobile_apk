@@ -10,7 +10,6 @@ import '../../../core/services/backend_service.dart';
 import '../../../core/services/ride_history_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../trips/widgets/ride_history_card.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../../device/screens/device_pairing_screen.dart';
 
 import '../../../core/services/share_service.dart';
@@ -23,11 +22,9 @@ import '../../navigation/widgets/destination_confirm_sheet.dart';
 import '../widgets/app_header.dart';
 
 import '../../navigation/widgets/voice_assistant_sheet.dart';
-import '../widgets/device_card.dart';
 import '../widgets/active_navigation_dashboard_card.dart';
 import '../widgets/search_bar_widget.dart';
 import '../widgets/quick_shortcuts.dart';
-import '../widgets/stats_row.dart';
 
 /// Main dashboard screen — the entry point of the JustRide app.
 class DashboardScreen extends StatefulWidget {
@@ -37,8 +34,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with VisiblePagePolling<DashboardScreen> {
-  final int _navIndex = 0;
+class _DashboardScreenState extends State<DashboardScreen>
+    with VisiblePagePolling<DashboardScreen> {
   UserModel? _user;
   DeviceModel? _device;
   bool _isLoading = true;
@@ -105,18 +102,12 @@ class _DashboardScreenState extends State<DashboardScreen> with VisiblePagePolli
         _isHardwareSheetShowing = false;
       }
     } catch (e) {
-      debugPrint('[DashboardScreen] Hardware check error: $e');
       _isHardwareSheetShowing = false;
     }
   }
 
   void _onDestinationShared() {
-    final dest = ShareService.instance.destinationSharedNotifier.value;
-    if (dest != null && mounted) {
-      final startLoc = ShareService.instance.currentSharedStartLocation;
-      ShareService.instance.clearSharedDestination();
-      DestinationConfirmSheet.show(context, dest, startLocation: startLoc);
-    }
+    if (mounted) ShareService.instance.tryPresentSharedDestination(context);
   }
 
   @override
@@ -213,19 +204,6 @@ class _DashboardScreenState extends State<DashboardScreen> with VisiblePagePolli
         backgroundColor: AppColors.surface,
         child: _buildBody(),
       ),
-      bottomNavigationBar: JustRideBottomNavBar(
-        currentIndex: _navIndex,
-        onTap: (i) {
-          if (i == 0) return;
-          if (i == 1) {
-            Navigator.of(context).pushReplacementNamed('/places');
-          } else if (i == 2) {
-            Navigator.of(context).pushReplacementNamed('/device');
-          } else if (i == 3) {
-            Navigator.of(context).pushReplacementNamed('/profile');
-          }
-        },
-      ),
     );
   }
 
@@ -316,22 +294,32 @@ class _DashboardScreenState extends State<DashboardScreen> with VisiblePagePolli
         SliverPadding(
           padding:
               const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
+          sliver: SliverToBoxAdapter(child: _buildTotalDistance()),
+        ),
+        SliverPadding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
           sliver: SliverToBoxAdapter(child: _buildLatestRide()),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
         SliverPadding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(child: DeviceCard(device: _device)),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-        // ── Stats row ─────────────────────────────────────────────────────
-        SliverPadding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppConstants.pagePadding),
-          sliver: SliverToBoxAdapter(child: StatsRow(device: _device)),
-        ),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            sliver: SliverToBoxAdapter(
+                child: ValueListenableBuilder<BluetoothConnectionState>(
+                    valueListenable:
+                        JustRideBleService.instance.connectionStateNotifier,
+                    builder: (context, _, child) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.navigation_outlined),
+                          title: Text(_device?.deviceName ?? 'Your device'),
+                          subtitle: Text(
+                              JustRideBleService.instance.isDeviceConnected
+                                  ? 'Connected'
+                                  : 'Offline'),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () =>
+                              Navigator.of(context).pushNamed('/device'),
+                        )))),
 
         // Bottom breathing room
         const SliverToBoxAdapter(
@@ -341,6 +329,28 @@ class _DashboardScreenState extends State<DashboardScreen> with VisiblePagePolli
     );
   }
 
+  Widget _buildTotalDistance() => ValueListenableBuilder<double?>(
+        valueListenable: RideHistoryService.instance.totalDistanceMeters,
+        builder: (context, meters, _) => Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(children: [
+            const Icon(Icons.route_rounded, color: AppColors.primary),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Text('Total distance', style: AppTextStyles.bodyMedium)),
+            Text(
+              meters == null ? '—' : '${(meters / 1000).toStringAsFixed(1)} km',
+              style: AppTextStyles.headingSmall,
+            ),
+          ]),
+        ),
+      );
   Widget _buildLatestRide() => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -358,8 +368,7 @@ class _DashboardScreenState extends State<DashboardScreen> with VisiblePagePolli
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Padding(
                     padding: EdgeInsets.all(16),
-                    child:
-                        LinearProgressIndicator(color: AppColors.primary));
+                    child: LinearProgressIndicator(color: AppColors.primary));
               }
               final result = snapshot.data;
               if (result == null || !result.success || result.data == null) {

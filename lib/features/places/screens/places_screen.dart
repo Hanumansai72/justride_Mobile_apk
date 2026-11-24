@@ -1,3 +1,4 @@
+import '../../../core/utils/user_facing_error.dart';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
@@ -5,8 +6,6 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/models/destination.dart';
 import '../../../core/services/backend_service.dart';
-import '../../../shared/widgets/app_logo.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../../navigation/widgets/destination_confirm_sheet.dart';
 
 // ── Colour tokens matching Master App Theme ──────────────────────────────────
@@ -46,7 +45,6 @@ class PlacesScreen extends StatefulWidget {
 
 class _PlacesScreenState extends State<PlacesScreen> {
   final _searchController = TextEditingController();
-  final int _navIndex = 1; // Places tab index
   List<SavedPlaceModel> _places = [];
   bool _isLoading = true;
 
@@ -79,7 +77,8 @@ class _PlacesScreenState extends State<PlacesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.bg,
-      appBar: _buildAppBar(),
+      appBar: AppBar(
+          title: const Text('Saved places'), automaticallyImplyLeading: false),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: _C.primary))
           : RefreshIndicator(
@@ -89,63 +88,10 @@ class _PlacesScreenState extends State<PlacesScreen> {
               child: _buildBody(),
             ),
       floatingActionButton: _buildFab(),
-      bottomNavigationBar: JustRideBottomNavBar(
-        currentIndex: _navIndex,
-        onTap: (i) {
-          if (i == 1) return;
-          if (i == 0) {
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          } else if (i == 2) {
-            Navigator.of(context).pushReplacementNamed('/device');
-          } else if (i == 3) {
-            Navigator.of(context).pushReplacementNamed('/profile');
-          }
-        },
-      ),
     );
   }
 
   // ── App Bar ────────────────────────────────────────────────────────────────
-  PreferredSizeWidget _buildAppBar() {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56),
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 56,
-          decoration: const BoxDecoration(
-            color: _C.bg,
-            border: Border(
-              bottom: BorderSide(color: _C.outlineVariant, width: 1),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () {},
-                icon:
-                    const Icon(Icons.menu_rounded, color: _C.textSec, size: 24),
-              ),
-              const AppLogo(
-                iconSize: 16,
-                fontSize: 20,
-                showTagline: false,
-                isCentered: true,
-              ),
-              IconButton(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed('/profile-settings'),
-                icon: const Icon(Icons.settings_outlined,
-                    color: _C.textSec, size: 24),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // ── Body ───────────────────────────────────────────────────────────────────
   Widget _buildBody() {
@@ -240,11 +186,18 @@ class _PlacesScreenState extends State<PlacesScreen> {
                         );
                         DestinationConfirmSheet.show(context, dest);
                       },
-                      onEdit: () {},
                       onDelete: () async {
-                        await BackendService.instance
+                        final result = await BackendService.instance
                             .deleteSavedAddress(item.id);
-                        _fetchPlaces();
+                        if (!context.mounted) return;
+                        if (result.success) {
+                          _fetchPlaces();
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(userFacingError(result.message,
+                                  fallback:
+                                      'This place couldn’t be removed. Please try again.'))));
+                        }
                       },
                     ),
                   );
@@ -328,7 +281,7 @@ class _PlacesScreenState extends State<PlacesScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'ADD PLACE',
+                'Add place',
                 style: TextStyle(
                   fontFamily: 'Stack Sans Text',
                   fontSize: 12,
@@ -350,13 +303,11 @@ class _PlaceCard extends StatefulWidget {
   const _PlaceCard({
     required this.place,
     required this.onNavigate,
-    required this.onEdit,
     required this.onDelete,
   });
 
   final _PlaceItem place;
   final VoidCallback onNavigate;
-  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -447,7 +398,7 @@ class _PlaceCardState extends State<_PlaceCard> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'NAVIGATE',
+                      'Preview route',
                       style: TextStyle(
                         fontFamily: 'Stack Sans Text',
                         fontSize: 12,
@@ -461,17 +412,6 @@ class _PlaceCardState extends State<_PlaceCard> {
               ),
               Row(
                 children: [
-                  IconButton(
-                    onPressed: widget.onEdit,
-                    icon: const Icon(
-                      Icons.edit_outlined,
-                      color: _C.textSec,
-                      size: 20,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                  const SizedBox(width: 16),
                   IconButton(
                     onPressed: widget.onDelete,
                     icon: const Icon(

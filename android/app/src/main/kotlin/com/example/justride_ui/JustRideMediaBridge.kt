@@ -16,7 +16,6 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.os.SystemClock
 import android.view.KeyEvent
-import android.util.Log
 import io.flutter.plugin.common.StandardMethodCodec
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -97,7 +96,7 @@ class JustRideMediaBridge(context: Context) : ContextWrapper(context.application
         mediaChannel!!.setMethodCallHandler { call, result ->
                 val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
                 if (audioManager == null) {
-                    result.error("AUDIO_SERVICE_UNAVAILABLE", "AudioManager is null", null)
+                    result.error("AUDIO_SERVICE_UNAVAILABLE", "Audio controls are unavailable. Open your music app and try again.", null)
                     return@setMethodCallHandler
                 }
 
@@ -163,8 +162,8 @@ class JustRideMediaBridge(context: Context) : ContextWrapper(context.application
                     "getMediaSnapshot" -> result.success(mediaSnapshot(audioManager))
                     else -> result.notImplemented()
                 } } catch(e: Exception) {
-                    Log.w("JustRideMedia", "${call.method} failed: ${e.javaClass.simpleName}")
-                    result.error("MEDIA_${call.method}", e.javaClass.simpleName, null)
+
+                    result.error("MEDIA_${call.method}", "Playback controls are unavailable. Open your music app and try again.", null)
                 }
             }
         if (restartWatching) startWatching()

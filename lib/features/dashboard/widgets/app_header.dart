@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
-import '../../../app/theme/app_text_styles.dart';
 import '../../../shared/widgets/app_logo.dart';
 
 /// Top app-bar area containing the JustRide logo and notification bell.

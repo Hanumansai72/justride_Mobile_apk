@@ -1,3 +1,4 @@
+import 'package:justride_ui/core/network/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -23,7 +24,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = size;
       addTearDown(tester.view.reset);
-      await http.runWithClient(() async {
+      await ApiClient.runWithClient(() async {
         await tester.pumpWidget(app(const AboutScreen()));
         await tester.pumpAndSettle();
         expect(find.text('Open Source Licenses'), findsNothing);

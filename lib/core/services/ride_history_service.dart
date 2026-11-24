@@ -69,11 +69,14 @@ class RideHistoryService {
     return points;
   }
 
-  Future<List<NavigationSession>> localHistory(String owner) async {
+  Future<List<NavigationSession>> localHistory(String owner,
+      {int? recentLimit}) async {
     if (kIsWeb) return [];
     final prefs = await SharedPreferences.getInstance();
     final rides = <NavigationSession>[];
-    for (final id in prefs.getStringList('local_rides_$owner') ?? <String>[]) {
+    final ids = prefs.getStringList('local_rides_$owner') ?? const <String>[];
+    for (final id
+        in recentLimit == null ? ids : ids.reversed.take(recentLimit)) {
       try {
         final file = await _file(owner, id, 'json');
         if (await file.exists())
@@ -93,6 +96,9 @@ class RideHistoryService {
   Future<void> _totalWrites = Future<void>.value();
   String? _totalOwner, _totalRequestOwner;
   Future<double>? _totalRequest;
+  String? _totalRequestToken;
+  int _rideRevision = 0;
+  static const _cloudDistanceKey = ':cloud';
   String get _accountOwner => _api.isAuthenticated
       ? (_api.savedUser.value?['_id'] ?? _api.savedUser.value?['id'] ?? 'guest')
           .toString()
@@ -126,29 +132,87 @@ class RideHistoryService {
     });
   }
 
-  static bool _countedRide(NavigationSession ride) =>
-      ride.endTime != null &&
-      (ride.status == 'completed' || ride.status == 'stopped') &&
-      ride.distanceMeters.isFinite &&
-      ride.distanceMeters >= 0;
+  static bool _countedRide(NavigationSession ride) => ride.isMeaningfulRide;
 
-  /// All pages, keyed by session ID: synced and local copies count only once.
+  /// Refresh the total without downloading full ride records.
   Future<double> refreshTotalDistance() {
     final owner = _accountOwner;
-    if (_totalRequest != null && _totalRequestOwner == owner)
-      return _totalRequest!;
+    final token = _api.token;
+    if (_totalRequest != null &&
+        _totalRequestOwner == owner &&
+        _totalRequestToken == token) return _totalRequest!;
     _totalRequestOwner = owner;
+    _totalRequestToken = token;
     late Future<double> request;
-    request = _refreshTotalDistance(owner).whenComplete(() {
+    request = _refreshTotalDistance(owner, token).whenComplete(() {
       if (identical(_totalRequest, request)) _totalRequest = null;
     });
     _totalRequest = request;
     return request;
   }
 
-  Future<double> _refreshTotalDistance(String owner) async {
+  Future<double> _refreshTotalDistance(String owner, String? token) async {
+    bool current() => owner == _accountOwner && token == _api.token;
+    if (_totalOwner != owner) totalDistanceMeters.value = null;
+    final cached = await _cachedDistances(owner);
+    if (!current()) return 0;
+    final cachedTotal =
+        cached.values.fold<double>(0, (sum, value) => sum + value);
+    if (cached.isNotEmpty) {
+      _totalOwner = owner;
+      totalDistanceMeters.value = cachedTotal;
+    }
+    if (owner == 'guest' || token == null) return _refreshLegacyTotal(owner);
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!current()) return 0;
+    final revision = _rideRevision;
+    final pending = <String, double>{};
+    for (final json
+        in prefs.getStringList('pending_rides_$owner') ?? const <String>[]) {
+      try {
+        final ride = NavigationSession.fromJson(json);
+        if (_countedRide(ride)) pending[ride.sessionId] = ride.distanceMeters;
+      } catch (_) {
+        // A damaged local entry should not hide the rest of the total.
+      }
+    }
+    if (pending.length > 100) return _refreshLegacyTotal(owner);
+
+    final result = await _api.post<double>('/rides/summary',
+        body: {'pendingSessionIds': pending.keys.toList()},
+        headers: {'Authorization': 'Bearer $token'},
+        fromJson: (json) => (json['distanceMeters'] as num).toDouble());
+    if (!current()) return 0;
+    if (result.statusCode == 404) return _refreshLegacyTotal(owner);
+    final cloud = result.data;
+    if (!result.success || cloud == null || !cloud.isFinite || cloud < 0) {
+      return totalDistanceMeters.value ?? cachedTotal;
+    }
+
+    // The saved snapshot remains usable offline. A newer ride invalidates the
+    // response, so it cannot replace a total already updated by a local save.
+    final snapshot = {_cloudDistanceKey: cloud, ...pending};
+    final total = snapshot.values.fold<double>(0, (sum, value) => sum + value);
+    final write = _totalWrites.catchError((Object _) {}).then((_) async {
+      if (!current() || revision != _rideRevision) return;
+      await prefs.setString('ride_distances_$owner', jsonEncode(snapshot));
+      if (current() && revision == _rideRevision) {
+        _totalOwner = owner;
+        totalDistanceMeters.value = total;
+      }
+    });
+    _totalWrites = write;
+    await write;
+    return current() ? totalDistanceMeters.value ?? cachedTotal : 0;
+  }
+
+  Future<double> _refreshLegacyTotal(String owner) async {
     if (_totalOwner != owner) totalDistanceMeters.value = null;
     var distances = await _cachedDistances(owner);
+    if (distances.containsKey(_cloudDistanceKey)) {
+      return distances.values.fold<double>(0, (sum, value) => sum + value);
+    }
     for (final ride in await localHistory(owner)) {
       if (_countedRide(ride)) distances[ride.sessionId] = ride.distanceMeters;
     }
@@ -193,7 +257,7 @@ class RideHistoryService {
   Future<String?> currentUserId() async {
     if (!_api.isAuthenticated) return null;
     final user = await _api.getSavedUserData();
-    final id = user?['_id']?.toString();
+    final id = (user?['_id'] ?? user?['id'])?.toString();
     return id != null && id.isNotEmpty ? id : null;
   }
 
@@ -201,36 +265,38 @@ class RideHistoryService {
     _serial = _serial.then((_) => operation()).catchError((Object error) {
       storageError.value =
           'Could not save the latest journey data. Check available phone storage.';
-      debugPrint(
-          '[RideHistory] Could not save/sync ride: ${error.runtimeType}');
     });
     return _serial;
   }
 
   Future<void> save(NavigationSession ride, String owner) => _run(() async {
         final prefs = await SharedPreferences.getInstance();
+        var alreadySaved = false;
         if (!kIsWeb) {
           final file = await _file(owner, ride.sessionId, 'json');
           await file.writeAsString(ride.toJson(), flush: true);
           final ids = prefs.getStringList('local_rides_$owner') ?? [];
-          if (!ids.contains(ride.sessionId)) {
+          alreadySaved = ids.contains(ride.sessionId);
+          if (!alreadySaved) {
             ids.add(ride.sessionId);
             await prefs.setStringList('local_rides_$owner', ids);
           }
-          final distances = await _cachedDistances(owner);
-          if (_countedRide(ride))
-            distances[ride.sessionId] = ride.distanceMeters;
-          await _storeDistances(owner, distances);
-          changed.value++;
         }
+        if (owner != 'guest') {
+          final key = 'pending_rides_$owner';
+          final pending = prefs.getStringList(key) ?? [];
+          if (!pending.any((json) =>
+              NavigationSession.fromJson(json).sessionId == ride.sessionId)) {
+            pending.add(ride.toJson());
+            await prefs.setStringList(key, pending);
+          }
+        }
+        _rideRevision++;
+        if (!alreadySaved && _countedRide(ride)) {
+          await _storeDistances(owner, {ride.sessionId: ride.distanceMeters});
+        }
+        if (!kIsWeb) changed.value++;
         if (owner == 'guest') return;
-        final key = 'pending_rides_$owner';
-        final pending = prefs.getStringList(key) ?? [];
-        if (!pending.any((json) =>
-            NavigationSession.fromJson(json).sessionId == ride.sessionId)) {
-          pending.add(ride.toJson());
-          await prefs.setStringList(key, pending);
-        }
         await _flush(owner);
       });
 
@@ -263,8 +329,7 @@ class RideHistoryService {
   Future<ApiResponse<RideHistoryPage>> getPage(
       {int page = 1, int limit = 10}) async {
     final owner = await currentUserId() ?? 'guest';
-    bool hasDistance(NavigationSession ride) =>
-        ride.distanceMeters.isFinite && ride.distanceMeters > 0;
+    bool hasDistance(NavigationSession ride) => ride.isMeaningfulRide;
     final local = (await localHistory(owner)).where(hasDistance).toList();
     RideHistoryPage? data;
     if (owner != 'guest') {

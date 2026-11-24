@@ -92,7 +92,7 @@ class LastRouteCard extends StatelessWidget {
                         onPressed: onStartRide,
                         icon: const Icon(Icons.chevron_right_rounded,
                             color: AppColors.background, size: 22),
-                        label: Text('START RIDE', style: AppTextStyles.button),
+                        label: Text('Start ride', style: AppTextStyles.button),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(

@@ -43,7 +43,7 @@ void main() {
     final service = RideHistoryService.instance;
     var offline = true;
     final posted = <String>[];
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       final session = NavigationSession.fromMap(ride('same-session', 'Office'));
       await service.save(session, 'a');
       final prefs = await SharedPreferences.getInstance();
@@ -94,7 +94,7 @@ void main() {
   });
 
   test('signup binds new ride history to the newly registered user', () async {
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       final result = await BackendService.instance.register(
         name: 'New rider',
         email: 'test@example.invalid',
@@ -147,7 +147,7 @@ void main() {
     tester.view.physicalSize = const Size(480, 1100);
     addTearDown(tester.view.reset);
     final reads = <Uri>[];
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       await tester.pumpWidget(app(const DashboardScreen()));
       await tester.pumpAndSettle();
       expect(find.text('Latest ride'), findsOneWidget);

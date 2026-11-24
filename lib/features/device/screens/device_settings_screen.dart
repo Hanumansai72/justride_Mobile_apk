@@ -5,6 +5,7 @@ import '../../../app/theme/app_colors.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../../../core/services/ota_service.dart';
 import '../../../core/services/backend_service.dart';
+import '../../../core/utils/user_facing_error.dart';
 import '../../../core/models/app_models.dart';
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/device_unlink_dialog.dart';
@@ -13,7 +14,6 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/bluetooth_service.dart';
 import '../../../core/services/ble_navigation_service.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 
 // â”€â”€ Colour tokens matching the HTML design â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _SC {
@@ -34,17 +34,123 @@ class DeviceSettingsScreen extends StatefulWidget {
 }
 
 class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
+  Future<void> _applySetting(Future<bool> change) async {
+    if (!await change && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Could not update the display. Connect it and try again.')));
+    }
+  }
+
+  Future<void> _chooseNotificationApps() async {
+    final notifications = NotificationListenerService.instance;
+    await notifications.settingsReady;
+    final List<MapEntry<String, String>> apps;
+    try {
+      apps = (await notifications.installedApps()).entries.toList()
+        ..sort((a, b) =>
+            a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not load installed apps. Try again.')));
+      }
+      return;
+    }
+    if (!mounted) return;
+    final draft = {...notifications.allowedPackages.value};
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(builder: (context, setDraft) {
+        return AlertDialog(
+          title: const Text('Apps allowed during rides'),
+          content: SizedBox(
+            width: 360,
+            child: apps.isEmpty
+                ? const Text('No installed apps found.')
+                : SizedBox(
+                    height: 360,
+                    child: ListView.builder(
+                      itemCount: apps.length,
+                      itemBuilder: (context, index) {
+                        final app = apps[index];
+                        return CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(app.value),
+                          value: draft.contains(app.key),
+                          onChanged: (enabled) => setDraft(() {
+                            if (enabled == true) {
+                              draft.add(app.key);
+                            } else {
+                              draft.remove(app.key);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, draft),
+                child: const Text('Save')),
+          ],
+        );
+      }),
+    );
+    if (result != null) await notifications.setAllowedPackages(result);
+  }
+
+  Widget _rideNotificationSettings() {
+    final notifications = NotificationListenerService.instance;
+    return ValueListenableBuilder<RideNotificationMode>(
+      valueListenable: notifications.rideMode,
+      builder: (context, mode, _) => Column(children: [
+        ListTile(
+          title: const Text('Notifications during rides'),
+          subtitle: const Text('Applies to JustRide while navigating'),
+          trailing: DropdownButton<RideNotificationMode>(
+            value: mode,
+            underline: const SizedBox(),
+            items: const [
+              DropdownMenuItem(
+                  value: RideNotificationMode.callsOnly,
+                  child: Text('Calls only')),
+              DropdownMenuItem(
+                  value: RideNotificationMode.selectedApps,
+                  child: Text('Selected apps')),
+              DropdownMenuItem(
+                  value: RideNotificationMode.off, child: Text('Off')),
+            ],
+            onChanged: (value) {
+              if (value != null) notifications.setRideMode(value);
+            },
+          ),
+        ),
+        if (mode == RideNotificationMode.selectedApps)
+          ValueListenableBuilder<Set<String>>(
+            valueListenable: notifications.allowedPackages,
+            builder: (context, packages, _) => ListTile(
+              title: const Text('Choose allowed apps'),
+              subtitle: Text(packages.isEmpty
+                  ? 'Calls only until you select apps'
+                  : '${packages.length} selected · Alerts hidden near turns'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _chooseNotificationApps,
+            ),
+          ),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: AppColors.background,
         appBar:
             AppBar(title: const Text('Hardware settings'), centerTitle: false),
-        bottomNavigationBar: JustRideBottomNavBar(
-            currentIndex: 2,
-            onTap: (index) {
-              const routes = ['/dashboard', '/places', '/device', '/profile'];
-              Navigator.of(context).pushReplacementNamed(routes[index]);
-            }),
         body: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
             children: [
@@ -54,7 +160,9 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
                     builder: (context, value, _) => SwitchListTile.adaptive(
                         title: const Text('Larger riding controls'),
                         value: value,
-                        onChanged: BleNavigationService.instance.setGloveMode)),
+                        onChanged: (enabled) => _applySetting(
+                            BleNavigationService.instance
+                                .setGloveMode(enabled)))),
                 ValueListenableBuilder<int>(
                     valueListenable: BleNavigationService.instance.sleepMinutes,
                     builder: (context, value, _) => Padding(
@@ -79,8 +187,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
                               ],
                               onChanged: (next) {
                                 if (next != null)
-                                  BleNavigationService.instance
-                                      .setSleepMinutes(next);
+                                  _applySetting(BleNavigationService.instance
+                                      .setSleepMinutes(next));
                               }),
                         ]))),
                 ValueListenableBuilder<bool>(
@@ -120,6 +228,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
                         value: value,
                         onChanged: NotificationListenerService
                             .instance.setDisplayEnabled)),
+                if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+                  _rideNotificationSettings(),
                 ValueListenableBuilder<int>(
                     valueListenable: BleNavigationService.instance.mediaState,
                     builder: (context, state, _) => ListTile(
@@ -209,14 +319,14 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
           ],
         ),
         content: Text(
-          'This will restart the JustRide motorcycle cockpit HUD display.',
+          'Restart your JustRide device?',
           style: TextStyle(
               fontFamily: 'Stack Sans Text', color: _SC.textSec, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('CANCEL',
+            child: Text('Cancel',
                 style: TextStyle(
                     fontFamily: 'Stack Sans Text', color: _SC.textSec)),
           ),
@@ -229,8 +339,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(ok
-                        ? 'Restart command sent to JustRide HUD'
-                        : 'Device not connected via Bluetooth'),
+                        ? 'Your device is restarting.'
+                        : 'Your device is offline. Connect it and try again.'),
                     backgroundColor: ok ? _SC.primary : _SC.errorRed,
                   ),
                 );
@@ -277,14 +387,14 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
           ],
         ),
         content: Text(
-          'This will reset the HUD display brightness (70%), recenter navigation camera, and return to Home screen.',
+          'Reset your display preferences? Your device will return to its home screen.',
           style: TextStyle(
               fontFamily: 'Stack Sans Text', color: _SC.textSec, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('CANCEL',
+            child: Text('Cancel',
                 style: TextStyle(
                     fontFamily: 'Stack Sans Text', color: _SC.textSec)),
           ),
@@ -292,13 +402,12 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
             onPressed: () async {
               Navigator.of(ctx).pop();
               final ok = await BleNavigationService.instance.sendResetDevice();
-              await BleNavigationService.instance.sendSetBrightness(70);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(ok
-                        ? 'Reset command sent to JustRide HUD'
-                        : 'Device not connected via Bluetooth'),
+                        ? 'Display preferences reset.'
+                        : 'Your device is offline. Connect it and try again.'),
                     backgroundColor: ok ? _SC.primary : _SC.errorRed,
                   ),
                 );
@@ -416,7 +525,9 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
                   if (progress.error != null) ...[
                     const SizedBox(height: 12),
                     Text(
-                      'Error: ${progress.error}',
+                      userFacingError(progress.error,
+                          fallback:
+                              'Update could not be completed. Please try again.'),
                       style: const TextStyle(color: _SC.errorRed, fontSize: 13),
                     ),
                   ],
@@ -462,15 +573,13 @@ class _FirmwareUpdateCardState extends State<_FirmwareUpdateCard> {
               : 'assets/firmware/justride_firmware.bin';
           final byteData = await rootBundle.load(asset);
           final realFirmwareBytes = byteData.buffer.asUint8List();
-          debugPrint(
-              '[OTA] Loaded bundled firmware binary: ${realFirmwareBytes.length} bytes, magic: 0x${realFirmwareBytes[0].toRadixString(16)}');
+
           await JustRideOtaService.instance.flashFirmware(
             device: dev,
             firmwareBytes: realFirmwareBytes,
           );
         }
       } catch (err) {
-        debugPrint('[OTA] Error starting firmware flash: $err');
         JustRideOtaService.instance.progressNotifier.value = OtaProgress(
           state: OtaState.failed,
           progress: 0.0,

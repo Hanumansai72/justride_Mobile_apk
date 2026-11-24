@@ -21,7 +21,7 @@ void main() {
       expect(results, isEmpty);
     });
 
-    testWidgets('GoScreen renders Start and Destination fields and Start Ride button',
+    testWidgets('GoScreen renders route inputs and the preview button',
         (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -30,16 +30,10 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Check header title
-      expect(find.text('Go'), findsOneWidget);
-      // Check Start field default
-      expect(find.text('Current Location'), findsOneWidget);
-      // Check Destination field hint
-      expect(find.text('Enter destination (e.g. Uppal Bus Stop)...'), findsOneWidget);
-      // Check START RIDE button
-      expect(find.text('START RIDE'), findsOneWidget);
-      // Check quick places chips
-      expect(find.text('Uppal Bus Stop'), findsOneWidget);
+      expect(find.text('Plan a ride'), findsOneWidget);
+      expect(find.text('Current location'), findsOneWidget);
+      expect(find.text('Destination'), findsOneWidget);
+      expect(find.text('Preview route'), findsOneWidget);
     });
 
     testWidgets('VoiceAssistantSheet renders mic and quick destinations',

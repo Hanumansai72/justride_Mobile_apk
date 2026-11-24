@@ -6,7 +6,6 @@ import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../core/services/ble_navigation_service.dart';
 import '../../../core/services/notification_listener_service.dart';
-import '../../../shared/widgets/app_logo.dart';
 
 // â”€â”€ Colour tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _C {
@@ -42,7 +41,7 @@ class _Notif {
   final _NotifState state;
 }
 
-const _chips = ['ALL', 'APP & APK', 'FIRMWARE', 'DEVICE', 'SECURITY'];
+const _chips = ['All', 'App updates', 'Device updates', 'Device', 'Security'];
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class NotificationsScreen extends StatefulWidget {
@@ -115,10 +114,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.bg,
-      appBar: _buildAppBar(),
+      appBar: AppBar(
+          title: const Text('Notifications'), automaticallyImplyLeading: true),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: _C.primary))
+          ? const Center(child: CircularProgressIndicator(color: _C.primary))
           : RefreshIndicator(
               onRefresh: _fetchNotifications,
               color: _C.primary,
@@ -129,52 +128,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   // â”€â”€ App Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  PreferredSizeWidget _buildAppBar() {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56),
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 56,
-          decoration: const BoxDecoration(
-            color: _C.bg,
-            border: Border(
-              bottom: BorderSide(color: _C.outlineVariant, width: 1),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () {
-                  if (Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
-                  } else {
-                    Navigator.of(context).pushReplacementNamed('/dashboard');
-                  }
-                },
-                icon: const Icon(Icons.arrow_back_rounded,
-                    color: _C.textSec, size: 24),
-              ),
-              const AppLogo(
-                iconSize: 16,
-                fontSize: 20,
-                showTagline: false,
-                isCentered: true,
-              ),
-              IconButton(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed('/profile-settings'),
-                icon: const Icon(Icons.settings_outlined,
-                    color: _C.textSec, size: 24),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildBody() {
@@ -194,14 +147,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             crossAxisAlignment: WrapCrossAlignment.center,
             runSpacing: 12,
             children: [
-              Text(
-                'Notifications',
-                style: AppTextStyles.headingLarge.copyWith(
-                  fontSize: 24,
-                  color: _C.onSurface,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
               Wrap(
                 spacing: 12,
                 runSpacing: 8,
@@ -221,8 +166,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content:
-                                    Text('Latest notification sent to HUD')),
+                                content: Text(
+                                    'Latest notification shown on your device')),
                           );
                         }
                       }
@@ -242,7 +187,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               size: 12, color: _C.primary),
                           const SizedBox(width: 4),
                           Text(
-                            'HUD ACCESS',
+                            'Device notifications',
                             style: TextStyle(
                               fontFamily: 'Stack Sans Text',
                               fontSize: 10,
@@ -257,7 +202,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   GestureDetector(
                     onTap: _isUpdatingRead ? null : () => _markRead(),
                     child: Text(
-                      'MARK ALL READ',
+                      'Mark all read',
                       style: TextStyle(
                         fontFamily: 'Stack Sans Text',
                         fontSize: 11,

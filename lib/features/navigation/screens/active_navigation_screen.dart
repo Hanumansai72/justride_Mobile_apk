@@ -1,3 +1,5 @@
+import '../widgets/route_preview_map.dart';
+import '../../../core/services/notification_listener_service.dart';
 import '../../../core/models/ride_state.dart';
 import '../../../core/models/destination.dart';
 import '../../../core/services/google_maps_service.dart';
@@ -7,7 +9,6 @@ import '../../../core/constants/google_maps_config.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../app/theme/app_colors.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/models/navigation_state.dart';
 import '../../../core/services/navigation_service.dart';
 import '../../../core/services/ride_history_service.dart';
@@ -40,9 +41,23 @@ class ActiveNavigationScreen extends StatefulWidget {
 
 class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
   GoogleMapController? _mapController;
+  NavigationRoute? _drawnRoute;
+  Set<Polyline> _routePolylines = const {};
   bool _isFollowingUser = true;
   bool _isMapReady = false;
   BitmapDescriptor? _bikeMarkerIcon;
+  final _ridePanelKey = GlobalKey();
+  double _ridePanelHeight = 260;
+
+  void _measureRidePanel() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final height = _ridePanelKey.currentContext?.size?.height;
+      if (height != null && (height - _ridePanelHeight).abs() > 1) {
+        setState(() => _ridePanelHeight = height);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -58,9 +73,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
           _bikeMarkerIcon = icon;
         });
       }
-    } catch (e) {
-      debugPrint('[ActiveNav] Error generating bike marker icon: $e');
-    }
+    } catch (e) {}
   }
 
   /// Generates a high-contrast, directional motorcycle icon for Google Maps.
@@ -70,61 +83,28 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
     final pictureRecorder = ui.PictureRecorder();
     final canvas = Canvas(pictureRecorder);
 
-    // 1. Forward directional indicator tip (pointing UP / North in direction of travel)
-    final arrowPaint = Paint()
-      ..color = AppColors.primary
-      ..style = PaintingStyle.fill;
-    final arrowPath = Path()
-      ..moveTo(center.dx, 8.0)
-      ..lineTo(center.dx - 14.0, 36.0)
-      ..lineTo(center.dx + 14.0, 36.0)
+    final chevron = Path()
+      ..moveTo(center.dx, 10)
+      ..lineTo(119, 120)
+      ..lineTo(center.dx, 96)
+      ..lineTo(21, 120)
       ..close();
-    canvas.drawPath(arrowPath, arrowPaint);
-
-    // 2. Outer pulse / glow halo
-    final glowPaint = Paint()
-      ..color = AppColors.primary.withValues(alpha: 0.22)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, 48.0, glowPaint);
-
-    // 3. Dark Disc Body
-    final discPaint = Paint()
-      ..color = AppColors.backgroundInset
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, 38.0, discPaint);
-
-    // 4. Emerald Accent Border
-    final borderPaint = Paint()
-      ..color = AppColors.primary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5;
-    canvas.drawCircle(center, 38.0, borderPaint);
-
-    // 5. White Motorcycle / Two-Wheeler Icon in Center
-    final textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
-      text: TextSpan(
-        text: String.fromCharCode(Icons.two_wheeler_rounded.codePoint),
-        style: TextStyle(
-          fontSize: 42.0,
-          fontFamily: Icons.two_wheeler_rounded.fontFamily,
-          package: Icons.two_wheeler_rounded.fontPackage,
-          color: AppColors.textPrimary,
-        ),
-      ),
-    );
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(center.dx - textPainter.width / 2,
-          center.dy - textPainter.height / 2),
-    );
+    canvas.drawPath(chevron, Paint()..color = AppColors.primary);
+    canvas.drawPath(
+        chevron,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6
+          ..strokeJoin = StrokeJoin.round
+          ..color = Colors.white);
 
     final picture = pictureRecorder.endRecording();
     final image = await picture.toImage(size.toInt(), size.toInt());
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     final bytes = byteData!.buffer.asUint8List();
-    return BitmapDescriptor.bytes(bytes);
+    picture.dispose();
+    image.dispose();
+    return BitmapDescriptor.bytes(bytes, width: 48, height: 48);
   }
 
   // Dark navigation map style
@@ -186,6 +166,28 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         body: ValueListenableBuilder<NavigationState>(
           valueListenable: NavigationService.instance.navigationStateNotifier,
           builder: (context, state, _) {
+            _measureRidePanel();
+            if (state.rideState == RideState.idle ||
+                state.rideState == RideState.cancelled) {
+              return SafeArea(
+                  child: Center(
+                      child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.route_outlined,
+                                size: 40, color: AppColors.primary),
+                            const SizedBox(height: 20),
+                            const Text('Plan your next ride',
+                                style: TextStyle(
+                                    fontSize: 24, fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 24),
+                            FilledButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pushNamed('/go'),
+                                child: const Text('Choose a destination')),
+                          ]))));
+            }
             if (state.rideState == RideState.arrived) {
               return SafeArea(
                   child: Center(
@@ -195,7 +197,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                   const Icon(Icons.flag_rounded,
                       color: AppColors.primary, size: 64),
                   const SizedBox(height: 24),
-                  const Text("You've Reached Your Destination",
+                  const Text("You've arrived",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           fontSize: 28, color: AppColors.textPrimary)),
@@ -235,7 +237,12 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
             }
 
             final markers = <Marker>{};
-            final polylines = <Polyline>{};
+            if (!identical(_drawnRoute, route)) {
+              _drawnRoute = route;
+              _routePolylines = route == null || route.polylinePoints.isEmpty
+                  ? const {}
+                  : selectedRoutePolylines(route, width: 7);
+            }
 
             // Rider GPS Marker
             if (state.currentLatitude != 0) {
@@ -268,29 +275,23 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               );
             }
 
-            // Active route uses the customer site's navigation accent.
-            if (route != null && route.polylinePoints.isNotEmpty) {
-              polylines.add(
-                Polyline(
-                  polylineId: const PolylineId('active_route'),
-                  points: route.polylinePoints,
-                  color: AppColors.primary,
-                  width: 7,
-                  jointType: JointType.round,
-                  endCap: Cap.roundCap,
-                  startCap: Cap.roundCap,
-                ),
-              );
-            }
-
             return Stack(
               children: [
                 // 1. Google Map View
-                if (!GoogleMapsConfig.hasApiKey ||
+                if (route != null && NavigationService.instance.hasOfflineTour)
+                  Positioned.fill(
+                    bottom: 210,
+                    top: 100,
+                    child: RecordedTrackMap(
+                        route: route,
+                        rider: LatLng(
+                            state.currentLatitude, state.currentLongitude)),
+                  )
+                else if (!GoogleMapsConfig.hasApiKey ||
                     (kIsWeb && !GoogleMapsConfig.webMapsLoaded))
                   const Center(
                       child: Text(
-                          'Map unavailable. Check your internet connection and try again.'))
+                          'The map is unavailable. Turn instructions will remain visible during your ride.'))
                 else
                   Listener(
                     onPointerMove: (_) {
@@ -317,7 +318,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                       ),
                       style: _darkMapStyle,
                       markers: markers,
-                      polylines: polylines,
+                      polylines: _routePolylines,
                       myLocationEnabled:
                           false, // Using custom directional rider marker
                       myLocationButtonEnabled: false,
@@ -365,7 +366,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                             ),
                             const SizedBox(height: 24),
                             Text(
-                              'Loading Map & Route...',
+                              'Loading your route…',
                               style: TextStyle(
                                 fontFamily: 'Stack Sans Text',
                                 color: _C.onSurface,
@@ -376,7 +377,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Initializing GPS lock and route telemetry',
+                              'Finding your location',
                               style: TextStyle(
                                 fontFamily: 'Stack Sans Text',
                                 color: _C.textSec,
@@ -407,7 +408,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 // 4. Floating HUD Map Controls (Recenter, Zoom In, Zoom Out, Route Overview)
                 Positioned(
                   right: 16,
-                  bottom: 240,
+                  bottom: _ridePanelHeight + 16,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -419,7 +420,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                             ? _C.primary
                             : AppColors.textSecondary,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(24),
                           side: BorderSide(
                             color:
                                 _isFollowingUser ? _C.primary : _C.cardBorder,
@@ -436,7 +437,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         backgroundColor: _C.cardBg,
                         foregroundColor: AppColors.textPrimary,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(24),
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
@@ -452,7 +453,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         backgroundColor: _C.cardBg,
                         foregroundColor: AppColors.textPrimary,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(24),
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
@@ -468,7 +469,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         backgroundColor: _C.cardBg,
                         foregroundColor: _C.blueAccent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(24),
                           side: const BorderSide(color: _C.cardBorder),
                         ),
                         onPressed: () {
@@ -508,18 +509,25 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Column(
+                    key: _ridePanelKey,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // Incoming / Active Call HUD Overlay at the bottom
-                      ValueListenableBuilder<IncomingCallInfo>(
+                      ValueListenableBuilder<RideNotificationMode>(
                         valueListenable:
-                            TelephonyService.instance.callInfoNotifier,
-                        builder: (context, callInfo, _) {
-                          if (!callInfo.hasActiveCall) {
-                            return const SizedBox.shrink();
-                          }
-                          return NavigationCallOverlay(callInfo: callInfo);
-                        },
+                            NotificationListenerService.instance.rideMode,
+                        builder: (context, mode, child) =>
+                            mode == RideNotificationMode.off
+                                ? const SizedBox.shrink()
+                                : child!,
+                        child: ValueListenableBuilder<IncomingCallInfo>(
+                          valueListenable:
+                              TelephonyService.instance.callInfoNotifier,
+                          builder: (context, callInfo, _) =>
+                              callInfo.hasActiveCall
+                                  ? NavigationCallOverlay(callInfo: callInfo)
+                                  : const SizedBox.shrink(),
+                        ),
                       ),
                       _buildBottomHud(state, isBleConnected),
                     ],
@@ -551,7 +559,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                   color: AppColors.errorText, size: 20),
               const SizedBox(width: 8),
               Text(
-                'GPS SIGNAL LOST',
+                'Location unavailable',
                 style: TextStyle(
                   fontFamily: 'Stack Sans Text',
                   fontSize: 13,
@@ -584,10 +592,10 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isRerouting ? _C.cardBg : _C.cardBg.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(
           color: isRerouting ? _C.amber : _C.primary.withValues(alpha: 0.5),
-          width: 2,
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
@@ -602,8 +610,8 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         children: [
           // Maneuver Turn Icon
           Container(
-            width: 54,
-            height: 54,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
               color: isRerouting
                   ? _C.amber.withValues(alpha: 0.15)
@@ -615,7 +623,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                 : Icon(
                     ManeuverMapper.toIcon(maneuver),
                     color: _C.primary,
-                    size: 32,
+                    size: 40,
                   ),
           ),
           const SizedBox(width: 14),
@@ -626,71 +634,35 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     Text(
                       isRerouting
-                          ? 'OFF ROUTE'
+                          ? 'Updating route'
                           : state.maneuverDistanceFormatted,
                       style: TextStyle(
                         fontFamily: 'Stack Sans Text',
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w500,
                         color: isRerouting ? _C.amber : _C.onSurface,
                         letterSpacing: -0.5,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    if (!isRerouting)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: _C.primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _C.primary.withValues(alpha: 0.4),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              ManeuverMapper.toArrowSymbol(maneuver),
-                              style: TextStyle(
-                                fontFamily: 'Stack Sans Text',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w900,
-                                color: _C.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              ManeuverMapper.toRiderActionText(maneuver),
-                              style: TextStyle(
-                                fontFamily: 'Stack Sans Text',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: _C.primary,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                   ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 8),
                 Text(
-                  isRerouting ? state.maneuverText : state.maneuverText,
+                  state.maneuverText,
                   style: TextStyle(
                     fontFamily: 'Stack Sans Text',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
                     color: _C.textSec,
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -728,7 +700,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                         child: ValueListenableBuilder<int>(
                             valueListenable: nav.stopsChanged,
                             builder: (context, _, child) => Column(children: [
-                                  const Text('Journey stops',
+                                  const Text('Ride stops',
                                       style: TextStyle(fontSize: 22)),
                                   const Text(
                                       'Active stop stays first. Use Skip to change it.'),
@@ -847,34 +819,38 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
     return Container(
       decoration: const BoxDecoration(
         color: _C.cardBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
         border: Border(top: BorderSide(color: _C.cardBorder, width: 1.5)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
       child: SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextButton.icon(
-                onPressed: _manageStops,
-                icon: const Icon(Icons.playlist_add),
-                label: Text(
-                    'To ${NavigationService.instance.currentDestination?.displayTitle ?? "Destination"} · Stops')),
-            TextButton.icon(
-                onPressed: () {
-                  if (state.rideState == RideState.paused) {
-                    NavigationService.instance.resumeNavigation();
-                  } else {
-                    NavigationService.instance.pauseNavigation();
-                  }
-                },
-                icon: Icon(state.rideState == RideState.paused
-                    ? Icons.play_arrow
-                    : Icons.pause),
-                label: Text(state.rideState == RideState.paused
-                    ? 'Resume journey'
-                    : 'Pause journey')),
+            Row(children: [
+              Expanded(
+                  child: TextButton.icon(
+                      onPressed: NavigationService.instance.hasOfflineTour
+                          ? null
+                          : _manageStops,
+                      style: TextButton.styleFrom(
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(vertical: 10)),
+                      icon: const Icon(Icons.location_on_outlined, size: 20),
+                      label: Text(
+                          NavigationService
+                                  .instance.currentDestination?.displayTitle ??
+                              'Destination',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis))),
+              if (state.rideState == RideState.paused)
+                TextButton(
+                  onPressed: NavigationService.instance.resumeNavigation,
+                  child: const Text('Resume ride'),
+                ),
+            ]),
+            const Divider(height: 24),
             ValueListenableBuilder<String?>(
                 valueListenable: RideHistoryService.instance.storageError,
                 builder: (context, message, _) => message == null
@@ -887,7 +863,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
               children: [
                 // 1. Live Speedometer — uses speedDisplay which returns '--' on GPS loss
                 _buildTelemetryColumn(
-                  label: 'SPEED',
+                  label: 'Speed',
                   value: state.speedDisplay,
                   unit: state.gpsAvailable ? 'KM/H' : '',
                   valueColor: state.gpsAvailable ? _C.primary : _C.textSec,
@@ -896,7 +872,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
 
                 // 2. Remaining Distance
                 _buildTelemetryColumn(
-                  label: 'REMAINING',
+                  label: 'Remaining',
                   value: state.remainingDistanceFormatted,
                   unit: '',
                   valueColor: _C.onSurface,
@@ -905,7 +881,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
 
                 // 3. ETA
                 _buildTelemetryColumn(
-                  label: 'ARRIVAL',
+                  label: 'Arrival',
                   value: state.arrivalTimeFormatted,
                   unit: '(${state.remainingDurationFormatted})',
                   valueColor: _C.blueAccent,
@@ -925,7 +901,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                     color: isBleConnected
                         ? _C.blueAccent.withValues(alpha: 0.12)
                         : AppColors.surfaceElevated,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(24),
                     border: Border.all(
                       color: isBleConnected
                           ? _C.blueAccent.withValues(alpha: 0.3)
@@ -945,10 +921,10 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        isBleConnected ? 'TFT HUD SYNCED' : 'HUD DISCONNECTED',
+                        isBleConnected ? 'Device connected' : 'Device offline',
                         style: TextStyle(
                           fontFamily: 'Stack Sans Text',
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: isBleConnected
                               ? _C.blueAccent
@@ -969,17 +945,17 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
                     elevation: 0,
                     side: const BorderSide(color: _C.red, width: 1.2),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(24),
                     ),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                   ),
                   icon: const Icon(Icons.stop_circle_outlined, size: 18),
                   label: Text(
-                    'END RIDE',
+                    'End ride',
                     style: TextStyle(
                       fontFamily: 'Stack Sans Text',
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -998,48 +974,45 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
     required String unit,
     required Color valueColor,
   }) {
-    return Column(
+    return Expanded(
+        child: Column(
       children: [
         Text(
           label,
           style: TextStyle(
             fontFamily: 'Stack Sans Text',
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
             color: _C.textSec,
           ),
         ),
-        const SizedBox(height: 2),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'Stack Sans Text',
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: valueColor,
-              ),
-            ),
-            if (unit.isNotEmpty) ...[
-              const SizedBox(width: 4),
-              Text(
-                unit,
+        const SizedBox(height: 6),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
                 style: TextStyle(
                   fontFamily: 'Stack Sans Text',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: _C.textSec,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w500,
+                  color: valueColor,
                 ),
               ),
-            ],
-          ],
+            )),
+        const SizedBox(height: 4),
+        Text(
+          unit.isEmpty ? ' ' : unit,
+          style: TextStyle(
+            fontFamily: 'Stack Sans Text',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _C.textSec,
+          ),
         ),
       ],
-    );
+    ));
   }
 
   void _returnHome() {
@@ -1053,20 +1026,20 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
         backgroundColor: _C.cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'End Navigation?',
+          'End this ride?',
           style: TextStyle(
               fontFamily: 'Stack Sans Text',
               color: _C.onSurface,
               fontWeight: FontWeight.w700),
         ),
         content: Text(
-          'Are you sure you want to stop active motorcycle navigation?',
+          'Your progress will be saved in ride history.',
           style: TextStyle(fontFamily: 'Stack Sans Text', color: _C.textSec),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('CONTINUE RIDE',
+            child: Text('Continue ride',
                 style: TextStyle(
                     fontFamily: 'Stack Sans Text', color: _C.primary)),
           ),
@@ -1075,7 +1048,7 @@ class _ActiveNavigationScreenState extends State<ActiveNavigationScreen> {
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.error,
                 foregroundColor: AppColors.textPrimary),
-            child: Text('STOP',
+            child: Text('End ride',
                 style: TextStyle(
                     fontFamily: 'Stack Sans Text',
                     fontWeight: FontWeight.w700)),

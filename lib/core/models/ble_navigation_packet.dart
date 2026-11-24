@@ -48,7 +48,13 @@ enum JustRideManeuverCode {
   roundabout(10),
   roundaboutExit(11),
   merge(12),
-  fork(13);
+  fork(13),
+  exitLeft(14),
+  exitRight(15),
+  forkLeft(16),
+  forkRight(17),
+  rampLeft(18),
+  rampRight(19);
 
   final int value;
   const JustRideManeuverCode(this.value);
@@ -82,9 +88,19 @@ enum JustRideManeuverCode {
       case 'MERGE':
         return JustRideManeuverCode.merge;
       case 'FORK':
-      case 'FORK_LEFT':
-      case 'FORK_RIGHT':
         return JustRideManeuverCode.fork;
+      case 'FORK_LEFT':
+        return JustRideManeuverCode.forkLeft;
+      case 'FORK_RIGHT':
+        return JustRideManeuverCode.forkRight;
+      case 'EXIT_LEFT':
+        return JustRideManeuverCode.exitLeft;
+      case 'EXIT_RIGHT':
+        return JustRideManeuverCode.exitRight;
+      case 'RAMP_LEFT':
+        return JustRideManeuverCode.rampLeft;
+      case 'RAMP_RIGHT':
+        return JustRideManeuverCode.rampRight;
       case 'ARRIVE':
       case 'REACHED':
         return JustRideManeuverCode.arrive;
@@ -283,6 +299,7 @@ class BleNavigationPacket {
 class RouteSegmentPacket {
   final bool cameraProjected, overview;
   final List<ScreenPoint> points;
+  final List<int> traffic;
   final int completedSegmentCount;
   final int progressPercent;
   final bool isDestinationVisible;
@@ -292,6 +309,7 @@ class RouteSegmentPacket {
     this.cameraProjected = false,
     this.overview = false,
     required this.points,
+    this.traffic = const [],
     this.completedSegmentCount = 0,
     this.progressPercent = 0,
     this.isDestinationVisible = false,
@@ -303,6 +321,7 @@ class RouteSegmentPacket {
       cameraProjected: segment.cameraProjected,
       overview: segment.overview,
       points: segment.points,
+      traffic: segment.traffic,
       completedSegmentCount: segment.completedSegmentCount,
       progressPercent: segment.progressPercent,
       isDestinationVisible: segment.isDestinationVisible,
@@ -310,9 +329,12 @@ class RouteSegmentPacket {
     );
   }
 
-  Uint8List toBinary() {
+  Uint8List toBinary({bool includeTraffic = false}) {
     final count = points.length.clamp(0, 16);
-    final totalLen = 8 + count * 4;
+    final edges = count - 1;
+    final hasTraffic = includeTraffic && edges > 0 && traffic.length >= edges;
+    final trafficBytes = hasTraffic ? (edges + 3) ~/ 4 : 0;
+    final totalLen = 8 + count * 4 + trafficBytes;
     final data = ByteData(totalLen);
 
     // Byte 0: OpCode
@@ -325,7 +347,8 @@ class RouteSegmentPacket {
         (isDestinationVisible ? 1 : 0) |
             (completedSegmentCount.clamp(0, 15) << 1) |
             (overview ? 0x20 : 0) |
-            (cameraProjected ? 0x40 : 0));
+            (cameraProjected ? 0x40 : 0) |
+            (hasTraffic ? 0x80 : 0));
     // Bytes 3-4: Dest X (uint16 LE)
     data.setUint16(
         3, (destinationScreenPoint?.x ?? 0).clamp(0, 320), Endian.little);
@@ -342,6 +365,14 @@ class RouteSegmentPacket {
     }
 
     data.setUint8(offset, progressPercent.clamp(0, 100));
+    // Four consecutive road edges per byte, least-significant bits first.
+    if (hasTraffic) {
+      for (var i = 0; i < edges; i++) {
+        final index = offset + 1 + i ~/ 4;
+        data.setUint8(
+            index, data.getUint8(index) | ((traffic[i] & 3) << ((i % 4) * 2)));
+      }
+    }
 
     return data.buffer.asUint8List();
   }
@@ -436,5 +467,26 @@ List<int> encodeHomeDistance(double distanceMeters) {
     0x21,
     valid ? 1 : 0,
     for (var i = 0; i < 4; i++) (distance >> (8 * i)) & 255
+  ];
+}
+
+/// Completed ride metrics shown by the round display.
+List<int> encodeRideSummary(
+    double distanceMeters, int durationSeconds, double averageSpeedKmh) {
+  final valid = distanceMeters.isFinite &&
+      distanceMeters > 0 &&
+      averageSpeedKmh.isFinite &&
+      averageSpeedKmh >= 0 &&
+      durationSeconds > 0;
+  final distance = valid ? distanceMeters.round().clamp(0, 0xffffffff) : 0;
+  final duration = valid ? durationSeconds.clamp(0, 0xffffffff) : 0;
+  final speed = valid ? (averageSpeedKmh * 10).round().clamp(0, 0xffff) : 0;
+  return [
+    0x22,
+    valid ? 1 : 0,
+    for (var i = 0; i < 4; i++) (distance >> (8 * i)) & 255,
+    for (var i = 0; i < 4; i++) (duration >> (8 * i)) & 255,
+    speed & 255,
+    (speed >> 8) & 255,
   ];
 }

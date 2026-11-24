@@ -24,6 +24,7 @@ void main() {
       expect(speedFilter.process(rawSpeedMs: 0.5), 0.0); // 1.8 km/h < 2.5 km/h deadband
 
       // Riding at 36 km/h (10 m/s)
+      expect(speedFilter.process(rawSpeedMs: 10.0), 0.0); // First moving sample confirms on the next fix.
       final ridingSpeed = speedFilter.process(rawSpeedMs: 10.0);
       expect(ridingSpeed, closeTo(36.0, 0.1));
 

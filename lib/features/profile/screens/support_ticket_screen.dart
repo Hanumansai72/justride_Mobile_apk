@@ -206,9 +206,9 @@ class _SupportTicketScreenState extends State<SupportTicketScreen> {
     final result = await BackendService.instance
         .sendTicketMessage(ticketId: _ticket!.id, message: _reply.text.trim());
     if (!mounted) return;
-    if (result.success) {
+    if (result.success && result.data != null) {
       _reply.clear();
-      await _load();
+      setState(() => _ticket = result.data);
     } else {
       _failure(result.message);
     }
@@ -221,9 +221,8 @@ class _SupportTicketScreenState extends State<SupportTicketScreen> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
-            title: Text(_ticket == null
-                ? 'Create support ticket'
-                : _ticket!.ticketNumber),
+            title: Text(
+                _ticket == null ? 'Contact support' : _ticket!.ticketNumber),
             actions: [
               if (_ticket != null)
                 IconButton(
@@ -231,7 +230,7 @@ class _SupportTicketScreenState extends State<SupportTicketScreen> {
                     onPressed: _busy || _loading ? null : _load,
                     icon: const Icon(Icons.refresh)),
               IconButton(
-                  tooltip: 'My Tickets',
+                  tooltip: 'Support requests',
                   onPressed: _busy
                       ? null
                       : () => Navigator.pushNamed(context, '/my-tickets'),
@@ -253,7 +252,7 @@ class _SupportTicketScreenState extends State<SupportTicketScreen> {
   Widget _createForm() => Form(
       key: _form,
       child: ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('Tell us what happened.',
+        const Text('Describe the issue',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         const Text(

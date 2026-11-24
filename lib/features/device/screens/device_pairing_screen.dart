@@ -1,10 +1,8 @@
 import '../../../app/theme/app_colors.dart';
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' hide BluetoothService;
 import '../../../app/theme/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../core/services/bluetooth_service.dart';
 import 'package:geolocator/geolocator.dart';
@@ -17,11 +15,8 @@ class _C {
   static const surfCont = AppColors.surface;
   static const primary = AppColors.primary;
   static const onPrimary = AppColors.onPrimary;
-  static const onSurface = AppColors.textPrimary;
   static const textSec = AppColors.textSecondary;
   static const outlineVariant = AppColors.border;
-  static const tertiary = AppColors.primary;
-  static const error = AppColors.errorText;
 }
 
 class DevicePairingScreen extends StatefulWidget {
@@ -33,8 +28,7 @@ class DevicePairingScreen extends StatefulWidget {
   State<DevicePairingScreen> createState() => _DevicePairingScreenState();
 }
 
-class _DevicePairingScreenState extends State<DevicePairingScreen>
-    with TickerProviderStateMixin {
+class _DevicePairingScreenState extends State<DevicePairingScreen> {
   final JustRideBleService _bleService = JustRideBleService.instance;
   String? _connectingDeviceId;
   final Map<String, String> _registeredNames = {};
@@ -79,58 +73,40 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     }
   }
 
-  Future<String?> _readSetupCredential(BluetoothDevice device) async {
-    try {
-      for (final service in device.servicesList) {
+  Future<String> _readSetupCredential(BluetoothDevice device) async {
+    var services = device.servicesList;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      for (final service in services) {
         if (service.uuid != Guid('ff40')) continue;
         for (final characteristic in service.characteristics) {
           if (characteristic.uuid != Guid('ff42')) continue;
-          final bytes = await characteristic.read();
-          final code = String.fromCharCodes(bytes);
-          return RegExp(r'^[A-F0-9]{32}$').hasMatch(code) ? code : null;
+          try {
+            final bytes = await characteristic.read();
+            final code = String.fromCharCodes(bytes);
+            if (RegExp(r'^[A-F0-9]{32}$').hasMatch(code)) return code;
+          } catch (_) {
+            throw StateError(
+                'Could not read device setup over Bluetooth. Reconnect and confirm the pairing code, then retry.');
+          }
+          throw StateError(
+              'The display returned incomplete setup data. Contact your device administrator.');
         }
       }
-    } catch (_) {}
-    return null;
+      if (attempt == 0) {
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+          await device.clearGattCache();
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+        services = await device.discoverServices();
+      }
+    }
+    throw StateError(
+        'The display setup service is unavailable. Update the firmware, forget the old Bluetooth pairing, and reconnect.');
   }
-
-  // Rotating scanner line
-  late final AnimationController _rotateCtrl;
-
-  // 3 radar pulse rings with staggered delays
-  late final AnimationController _ring1Ctrl;
-  late final AnimationController _ring2Ctrl;
-  late final AnimationController _ring3Ctrl;
 
   @override
   void initState() {
     super.initState();
-
-    _rotateCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3000),
-    )..repeat();
-
-    _ring1Ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-
-    _ring2Ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    );
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) _ring2Ctrl.repeat(reverse: true);
-    });
-
-    _ring3Ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    );
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) _ring3Ctrl.repeat(reverse: true);
-    });
 
     // Pairing keeps fast discovery; idle reconnects can back off.
     _bleService.setPairingScanActive(true);
@@ -168,10 +144,6 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
   void dispose() {
     _bleService.setPairingScanActive(false);
     _bleService.justRideDevicesNotifier.removeListener(_resolveDeviceNames);
-    _rotateCtrl.dispose();
-    _ring1Ctrl.dispose();
-    _ring2Ctrl.dispose();
-    _ring3Ctrl.dispose();
     // Do NOT dispose _bleService singleton here!
     // Disposing the singleton drops active BLE connections app-wide when navigating away.
     super.dispose();
@@ -223,7 +195,7 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 Expanded(
                   child: Text(
                     errorMsg,
-                    style: TextStyle(
+                    style: const TextStyle(
                         fontFamily: 'Stack Sans Text',
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600),
@@ -242,21 +214,30 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     if (!secureConnected) {
       setState(() => _connectingDeviceId = null);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not connect. Confirm the Bluetooth code on your display and try again.')));
+          content: Text(
+              'Could not connect. Confirm the Bluetooth code on your display and try again.')));
       return;
     }
     // Link the account only after authenticated Bluetooth pairing.
     final accessReason = checkRes.data?['reason']?.toString() ?? '';
     if (accessReason != 'ALREADY_PAIRED_TO_YOU') {
-      final setupCode = await _readSetupCredential(result.device);
-      if (!mounted) return;
-      if (setupCode == null) {
+      late final String setupCode;
+      try {
+        setupCode = await _readSetupCredential(result.device);
+      } catch (error) {
+        if (!mounted) return;
         setState(() => _connectingDeviceId = null);
         await _bleService.disconnectDevice(restartScan: false);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('This display needs setup by your device administrator.')));
+        final message = error is StateError
+            ? error.message.toString()
+            : 'Could not refresh the Bluetooth connection. Reconnect the display and retry.';
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(message)));
+        }
         return;
       }
+      if (!mounted) return;
       final pairRes = await BackendService.instance.pairDevice(
         bleAddress: devId,
         setupCode: setupCode,
@@ -277,8 +258,10 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    pairRes.message.isNotEmpty ? pairRes.message : 'Could not link this display. Try again.',
-                    style: TextStyle(
+                    pairRes.message.isNotEmpty
+                        ? pairRes.message
+                        : 'Could not link this display. Try again.',
+                    style: const TextStyle(
                         fontFamily: 'Stack Sans Text',
                         color: AppColors.textPrimary),
                   ),
@@ -305,16 +288,16 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
         duration: const Duration(seconds: 3),
         content: Row(
           children: [
-            const Icon(Icons.check_circle_rounded, color: _C.onPrimary),
+            const Icon(Icons.check_circle_rounded, color: _C.primary),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 connected
-                    ? 'Paired & synced! $devName is connected.'
+                    ? 'Display connected.'
                     : 'Device paired. Unable to connect right now. Please try again.',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'Stack Sans Text',
-                  color: _C.onPrimary,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -391,572 +374,333 @@ class _DevicePairingScreenState extends State<DevicePairingScreen>
     );
   }
 
-  // ── Body ───────────────────────────────────────────────────────────────────
   Widget _buildBody() {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppConstants.pagePadding,
-        vertical: AppConstants.spacingLg,
-      ),
-      child: Column(
-        children: [
-          // ── Bluetooth Disabled Warning Banner ──────────────────────────
-          ValueListenableBuilder<BluetoothAdapterState>(
-            valueListenable: _bleService.adapterStateNotifier,
-            builder: (context, adapterState, _) {
-              if (adapterState == BluetoothAdapterState.off) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: AppConstants.spacingMd),
-                  padding: const EdgeInsets.all(AppConstants.spacingMd),
-                  decoration: BoxDecoration(
-                    color: _C.error.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-                    border: Border.all(color: _C.error.withValues(alpha: 0.5)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.bluetooth_disabled_rounded,
-                          color: _C.error, size: 28),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Bluetooth is Turned Off',
-                              style: TextStyle(
-                                fontFamily: 'Stack Sans Text',
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Enable Bluetooth to discover JustRide devices.',
-                              style: TextStyle(
-                                fontFamily: 'Stack Sans Text',
-                                color: _C.textSec,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => _bleService.turnOnBluetooth(),
-                        style: TextButton.styleFrom(
-                          backgroundColor: AppColors.error,
-                          foregroundColor: AppColors.textPrimary,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text('Turn On',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-
-          Padding(
-            padding: const EdgeInsets.only(bottom: 24),
-            child: Image.asset(
-              'assets/justride-device.png',
-              width: 180,
-              height: 180,
-              fit: BoxFit.contain,
-              semanticLabel: 'JustRide Aventura circular navigation device',
-            ),
-          ),
-          // ── Header ──────────────────────────────────────────────────────
-          Text(
-            'Connect Your JustRide',
-            style: AppTextStyles.headingLarge.copyWith(
-              fontSize: 24,
-              color: _C.onSurface,
-              fontWeight: FontWeight.w700,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppConstants.spacingSm),
-
-          // ── Live Scanning Indicator Subtitle ────────────────────────────
-          ValueListenableBuilder<bool>(
-            valueListenable: _bleService.isScanningNotifier,
-            builder: (context, isScanning, _) {
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isScanning ? _C.primary : _C.textSec,
-                      boxShadow: isScanning
-                          ? [
-                              BoxShadow(
-                                color: _C.primary.withValues(alpha: 0.8),
-                                blurRadius: 6,
-                                spreadRadius: 2,
-                              ),
-                            ]
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                      child: Text(
-                    isScanning
-                        ? 'Scanning for JustRide devices in real time...'
-                        : 'Scan paused. Tap radar to rescan.',
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: isScanning ? _C.primary : _C.textSec,
-                      fontSize: 14,
-                      fontWeight:
-                          isScanning ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                    textAlign: TextAlign.center,
-                  )),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: AppConstants.spacingLg),
-
-          // ── Radar Scanner ──────────────────────────────────────────────
-          GestureDetector(
-            onTap: _startScanning,
-            child: _buildRadar(),
-          ),
-          const SizedBox(height: AppConstants.spacingLg),
-
-          // ── Real-Time Detected JustRide Device(s) List ───────────────────
-          ValueListenableBuilder<List<ScanResult>>(
-            valueListenable: _bleService.justRideDevicesNotifier,
-            builder: (context, discoveredDevices, _) {
-              if (discoveredDevices.isEmpty) {
-                return const SizedBox.shrink();
-              }
-
-              return Column(
+    return SafeArea(
+      top: false,
+      child: LayoutBuilder(builder: (context, constraints) {
+        final visualSize = constraints.maxHeight < 660 ? 128.0 : 176.0;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(
-                        left: 4, bottom: AppConstants.spacingSm),
-                    child: Text(
-                      'Discovered Devices (${discoveredDevices.length})',
-                      style: TextStyle(
-                        fontFamily: 'Stack Sans Text',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: _C.primary,
-                      ),
+                  Center(
+                    child: ListenableBuilder(
+                      listenable: Listenable.merge([
+                        _bleService.isScanningNotifier,
+                        _bleService.justRideDevicesNotifier,
+                        _bleService.adapterStateNotifier,
+                      ]),
+                      builder: (context, _) {
+                        final enabled =
+                            _bleService.adapterStateNotifier.value ==
+                                BluetoothAdapterState.on;
+                        return _DiscoveryVisual(
+                          size: visualSize,
+                          scanning:
+                              enabled && _bleService.isScanningNotifier.value,
+                          detected: enabled &&
+                              _bleService
+                                  .justRideDevicesNotifier.value.isNotEmpty,
+                          enabled: enabled,
+                        );
+                      },
                     ),
                   ),
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: discoveredDevices.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: AppConstants.spacingMd),
-                    itemBuilder: (context, index) {
-                      return _buildDeviceCard(discoveredDevices[index]);
+                  const SizedBox(height: 28),
+                  Text('Connect your display',
+                      style: AppTextStyles.headingLarge.copyWith(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.6,
+                      )),
+                  const SizedBox(height: 8),
+                  Text('Turn on your JustRide and keep it nearby.',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: _C.textSec,
+                        height: 1.5,
+                      )),
+                  const SizedBox(height: 28),
+                  ValueListenableBuilder<BluetoothAdapterState>(
+                    valueListenable: _bleService.adapterStateNotifier,
+                    builder: (context, adapter, _) {
+                      final bluetoothOff = adapter == BluetoothAdapterState.off;
+                      if (bluetoothOff) {
+                        return Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: _C.surfCont,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: _C.outlineVariant),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.bluetooth_disabled_rounded,
+                                  color: _C.textSec, size: 28),
+                              const SizedBox(height: 12),
+                              Text('Bluetooth is off',
+                                  style: AppTextStyles.headingMedium),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton(
+                                  onPressed: () =>
+                                      _bleService.turnOnBluetooth(),
+                                  style: _connectStyle,
+                                  child: const Text('Turn on Bluetooth'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: _bleService.isScanningNotifier,
+                        builder: (context, scanning, _) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text('Nearby displays',
+                                        style: AppTextStyles.headingSmall),
+                                  ),
+                                  if (scanning) ...[
+                                    const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: _C.primary),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text('Searching',
+                                        style: AppTextStyles.bodySmall),
+                                  ] else
+                                    TextButton.icon(
+                                      onPressed: _connectingDeviceId == null
+                                          ? _startScanning
+                                          : null,
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: _C.primary,
+                                        minimumSize: const Size(48, 48),
+                                      ),
+                                      icon: const Icon(Icons.refresh_rounded,
+                                          size: 18),
+                                      label: const Text('Scan again'),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              ValueListenableBuilder<List<ScanResult>>(
+                                valueListenable:
+                                    _bleService.justRideDevicesNotifier,
+                                builder: (context, devices, _) {
+                                  if (devices.isEmpty) {
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 24),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                              Icons.bluetooth_searching_rounded,
+                                              color: _C.textSec,
+                                              size: 28),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Text(
+                                              scanning
+                                                  ? 'Looking for your display…'
+                                                  : 'No display found. Move closer and scan again.',
+                                              style: AppTextStyles.bodyMedium
+                                                  .copyWith(height: 1.5),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                  return Column(
+                                    children: [
+                                      for (final device in devices)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 12),
+                                          child: _buildDeviceCard(device),
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      );
                     },
                   ),
                 ],
-              );
-            },
-          ),
-          const SizedBox(height: AppConstants.spacingSection),
-        ],
-      ),
-    );
-  }
-
-  // ── Empty State when no JustRide device has appeared yet ────────────────────
-  // ── Radar ──────────────────────────────────────────────────────────────────
-  Widget _buildRadar() {
-    const size = 230.0;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Ring 1 (20% opacity base, pulses)
-          _RadarRing(controller: _ring1Ctrl, baseOpacity: 0.20),
-          // Ring 2 (40% opacity base, staggered)
-          _RadarRing(controller: _ring2Ctrl, baseOpacity: 0.40),
-          // Ring 3 (60% opacity base, staggered)
-          _RadarRing(controller: _ring3Ctrl, baseOpacity: 0.60),
-
-          // Rotating scanner arc
-          AnimatedBuilder(
-            animation: _rotateCtrl,
-            builder: (_, __) => Transform.rotate(
-              angle: _rotateCtrl.value * 2 * math.pi,
-              child: Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _C.primary.withValues(alpha: 0.0),
-                  ),
-                ),
-                child: CustomPaint(
-                  painter: _ScannerLinePainter(),
-                ),
-              ),
-            ),
-          ),
-
-          // Central Bluetooth core
-          Container(
-            width: 84,
-            height: 84,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _C.surfCont,
-              border: Border.all(color: _C.outlineVariant),
-              boxShadow: [
-                BoxShadow(
-                  color: _C.primary.withValues(alpha: 0.25),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: const Icon(Icons.bluetooth_searching_rounded,
-                color: _C.primary, size: 36),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Detected JustRide Device Card ──────────────────────────────────────────
-  Widget _buildDeviceCard(ScanResult result) {
-    final devName = _deviceName(result);
-    final devId = result.device.remoteId.str;
-    final displayId =
-        devId.length > 5 ? '…${devId.substring(devId.length - 5)}' : devId;
-    final signalInfo = JustRideBleService.getSignalInfo(result.rssi);
-    final isConnecting = _connectingDeviceId == devId;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: _C.surfCont,
-        border:
-            Border.all(color: _C.primary.withValues(alpha: 0.6), width: 1.5),
-        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-        boxShadow: [
-          BoxShadow(
-            color: _C.primary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(AppConstants.spacingMd),
-      child: Column(
-        children: [
-          // Title + signal
-          Container(
-            padding: const EdgeInsets.only(bottom: AppConstants.spacingSm),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: _C.outlineVariant, width: 1),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: _C.primary.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.two_wheeler_rounded,
-                            color: _C.primary, size: 18),
-                      ),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          devName.isNotEmpty ? devName : 'JustRide Module',
-                          style: TextStyle(
-                            fontFamily: 'Stack Sans Text',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: _C.onSurface,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  children: [
-                    Icon(
-                      signalInfo.$2 == 3
-                          ? Icons.signal_cellular_alt_rounded
-                          : signalInfo.$2 == 2
-                              ? Icons.signal_cellular_alt_2_bar_rounded
-                              : Icons.signal_cellular_alt_1_bar_rounded,
-                      color: _C.primary,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      signalInfo.$1,
-                      style: TextStyle(
-                        fontFamily: 'Stack Sans Text',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                        color: _C.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-
-          // ID + Status row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Device ID',
-                    style: TextStyle(
-                      fontFamily: 'Stack Sans Text',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                      color: _C.textSec,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    displayId,
-                    style: TextStyle(
-                      fontFamily: 'Stack Sans Text',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _C.onSurface,
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'STATUS',
-                    style: TextStyle(
-                      fontFamily: 'Stack Sans Text',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                      color: _C.textSec,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isConnecting ? 'Connecting...' : 'Ready to Pair',
-                    style: TextStyle(
-                      fontFamily: 'Stack Sans Text',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isConnecting ? _C.tertiary : _C.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: AppConstants.spacingMd),
-
-          // Connect button
-          _ConnectButton(
-            isLoading: isConnecting,
-            onTap: () => _connectToDiscoveredDevice(result),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Radar Ring ─────────────────────────────────────────────────────────────────
-class _RadarRing extends StatelessWidget {
-  const _RadarRing({
-    required this.controller,
-    required this.baseOpacity,
-  });
-  final AnimationController controller;
-  final double baseOpacity;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (_, __) {
-        final t = controller.value;
-        final scale = 0.65 + 0.35 * t;
-        final opacity = baseOpacity * (1.0 - t) + 0.2 * t;
-        return Transform.scale(
-          scale: scale,
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: _C.primary.withValues(alpha: opacity),
-                width: 2,
               ),
             ),
           ),
         );
-      },
+      }),
     );
   }
-}
 
-// ── Scanner Line Painter ───────────────────────────────────────────────────────
-class _ScannerLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
+  ButtonStyle get _connectStyle => FilledButton.styleFrom(
+        backgroundColor: _C.primary,
+        foregroundColor: _C.onPrimary,
+        disabledBackgroundColor: AppColors.primaryContainer,
+        disabledForegroundColor: _C.textSec,
+        minimumSize: const Size(48, 54),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        textStyle: AppTextStyles.labelLarge.copyWith(fontSize: 16),
+      );
 
-    final paint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          AppColors.primary.withValues(alpha: 0.0),
-          AppColors.primary.withValues(alpha: 0.6),
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - 1),
-      -math.pi / 2,
-      0.01,
-      false,
-      paint,
-    );
-
-    final linePaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          Colors.transparent,
-          AppColors.primary.withValues(alpha: 0.4),
-        ],
-      ).createShader(Rect.fromPoints(center, Offset(size.width / 2, 0)))
-      ..strokeWidth = 1.5;
-    canvas.drawLine(center, Offset(size.width / 2, 0), linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ── Connect Button ─────────────────────────────────────────────────────────────
-class _ConnectButton extends StatefulWidget {
-  const _ConnectButton({
-    required this.onTap,
-    this.isLoading = false,
-  });
-  final VoidCallback onTap;
-  final bool isLoading;
-
-  @override
-  State<_ConnectButton> createState() => _ConnectButtonState();
-}
-
-class _ConnectButtonState extends State<_ConnectButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown:
-          widget.isLoading ? null : (_) => setState(() => _pressed = true),
-      onTapUp: widget.isLoading
-          ? null
-          : (_) {
-              setState(() => _pressed = false);
-              widget.onTap();
-            },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: AppConstants.animFast,
-        child: Container(
-          width: double.infinity,
-          height: 52,
-          decoration: BoxDecoration(
-            color: _C.primary,
-            borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-            boxShadow: [
-              BoxShadow(
-                color: _C.primary.withValues(alpha: 0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+  Widget _buildDeviceCard(ScanResult result) {
+    final name = _deviceName(result);
+    final connecting = _connectingDeviceId == result.device.remoteId.str;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _C.surfCont,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _C.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.navigation_rounded,
+                    color: _C.primary, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(name.isNotEmpty ? name : 'JustRide display',
+                    style: AppTextStyles.headingMedium, softWrap: true),
               ),
             ],
           ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _connectingDeviceId == null
+                  ? () => _connectToDiscoveredDevice(result)
+                  : null,
+              style: _connectStyle,
+              child: connecting
+                  ? const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: _C.textSec,
+                            semanticsLabel: 'Connecting to display',
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text('Connecting…'),
+                      ],
+                    )
+                  : const Text('Connect display'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Only animates during a live scan; detection replaces search with the display icon.
+class _DiscoveryVisual extends StatelessWidget {
+  const _DiscoveryVisual(
+      {required this.size,
+      required this.scanning,
+      required this.detected,
+      required this.enabled});
+
+  final double size;
+  final bool scanning, detected, enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final active = scanning && !detected;
+    return Semantics(
+      label: detected
+          ? 'Display found'
+          : active
+              ? 'Searching for displays'
+              : enabled
+                  ? 'Scan paused'
+                  : 'Bluetooth is off',
+      liveRegion: true,
+      child: SizedBox.square(
+        dimension: size,
+        child: Stack(
           alignment: Alignment.center,
-          child: widget.isLoading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: _C.onPrimary,
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.bluetooth_connected_rounded,
-                        color: _C.onPrimary, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Connect JustRide',
-                      style: TextStyle(
-                        fontFamily: 'Stack Sans Text',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: _C.onPrimary,
-                      ),
-                    ),
-                  ],
+          children: [
+            for (final scale in [1.0, 0.76])
+              Container(
+                width: size * scale,
+                height: size * scale,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: detected
+                          ? _C.primary.withValues(alpha: 0.3)
+                          : _C.outlineVariant),
                 ),
+              ),
+            if (active)
+              SizedBox.square(
+                dimension: size,
+                child: CircularProgressIndicator(
+                  value: reduceMotion ? 1 : null,
+                  strokeWidth: 2,
+                  color: _C.primary,
+                ),
+              ),
+            Container(
+              width: size * 0.52,
+              height: size * 0.52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: detected ? AppColors.primaryContainer : _C.surfCont,
+                border: Border.all(color: _C.outlineVariant),
+              ),
+              child: AnimatedSwitcher(
+                duration: Duration(milliseconds: reduceMotion ? 0 : 220),
+                child: Icon(
+                  detected
+                      ? Icons.navigation_rounded
+                      : enabled
+                          ? Icons.bluetooth_searching_rounded
+                          : Icons.bluetooth_disabled_rounded,
+                  key: ValueKey((detected, enabled)),
+                  color: enabled ? _C.primary : _C.textSec,
+                  size: size * 0.23,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

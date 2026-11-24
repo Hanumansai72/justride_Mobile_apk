@@ -138,9 +138,7 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
           _checkAllResolved();
         }
       }
-    } catch (e) {
-      debugPrint('[HardwarePromptSheet] state check error: $e');
-    }
+    } catch (e) {}
   }
 
   void _checkAllResolved() {
@@ -159,7 +157,6 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
     try {
       await JustRideBleService.instance.turnOnBluetooth();
     } catch (e) {
-      debugPrint('[HardwarePromptSheet] Enable BT error: $e');
     } finally {
       if (mounted) {
         await Future.delayed(const Duration(milliseconds: 600));
@@ -173,7 +170,6 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
     try {
       await Geolocator.openLocationSettings();
     } catch (e) {
-      debugPrint('[HardwarePromptSheet] Open location settings error: $e');
     } finally {
       if (mounted) {
         setState(() => _isCheckingGps = false);
@@ -265,7 +261,7 @@ class _HardwarePromptSheetState extends State<HardwarePromptSheet>
                     Text(
                       allResolved
                           ? 'Bluetooth and GPS are active. Resuming JustRide...'
-                          : 'Turn on Bluetooth and GPS for live HUD & navigation.',
+                          : 'Turn on Bluetooth and location to start your ride.',
                       style: TextStyle(
                         fontFamily: 'Stack Sans Text',
                         color: _textSecondary,

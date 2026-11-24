@@ -5,7 +5,6 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
 import '../../../shared/widgets/app_logo.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
 class _C {
@@ -30,7 +29,6 @@ class ProfileSettingsScreen extends StatefulWidget {
 class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   bool _metricUnits = true;
   bool _pushNotifications = true;
-  final int _navIndex = 3; // Profile tab is index 3 in 4-tab bar
 
   UserModel? _user;
   bool _isLoading = true;
@@ -69,7 +67,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             side: const BorderSide(color: _C.cardBorder),
           ),
           title: Text(
-            'Edit Profile',
+            'Edit profile',
             style: TextStyle(
               fontFamily: 'Stack Sans Text',
               color: _C.onSurface,
@@ -89,7 +87,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       fontSize: 14),
                   cursorColor: _C.primary,
                   decoration: InputDecoration(
-                    labelText: 'Full Name',
+                    labelText: 'Full name',
                     labelStyle: TextStyle(
                         fontFamily: 'Stack Sans Text', color: _C.textSec),
                     enabledBorder: const UnderlineInputBorder(
@@ -109,7 +107,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       fontSize: 14),
                   cursorColor: _C.primary,
                   decoration: InputDecoration(
-                    labelText: 'Phone Number',
+                    labelText: 'Phone number',
                     labelStyle: TextStyle(
                         fontFamily: 'Stack Sans Text', color: _C.textSec),
                     enabledBorder: const UnderlineInputBorder(
@@ -126,7 +124,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL',
+              child: Text('Cancel',
                   style: TextStyle(
                       fontFamily: 'Stack Sans Text', color: _C.textSec)),
             ),
@@ -196,7 +194,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             side: const BorderSide(color: _C.cardBorder),
           ),
           title: Text(
-            'Change Password',
+            'Change password',
             style: TextStyle(
               fontFamily: 'Stack Sans Text',
               color: _C.onSurface,
@@ -255,7 +253,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL',
+              child: Text('Cancel',
                   style: TextStyle(
                       fontFamily: 'Stack Sans Text', color: _C.textSec)),
             ),
@@ -326,25 +324,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       backgroundColor: _C.bg,
       appBar: _buildAppBar(),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: _C.primary))
+          ? const Center(child: CircularProgressIndicator(color: _C.primary))
           : _buildBody(),
-      bottomNavigationBar: JustRideBottomNavBar(
-        currentIndex: _navIndex,
-        onTap: (i) {
-          if (i == 3) {
-            Navigator.of(context).pushReplacementNamed('/profile');
-            return;
-          }
-          if (i == 0) {
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          } else if (i == 1) {
-            Navigator.of(context).pushReplacementNamed('/places');
-          } else if (i == 2) {
-            Navigator.of(context).pushReplacementNamed('/device');
-          }
-        },
-      ),
     );
   }
 
@@ -413,17 +394,17 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             children: [
               _SettingsRow(
                 icon: Icons.person_outline_rounded,
-                label: 'Edit Profile',
+                label: 'Edit profile',
                 onTap: _showEditProfileDialog,
               ),
               _SettingsRow(
                 icon: Icons.lock_outline_rounded,
-                label: 'Change Password',
+                label: 'Change password',
                 onTap: _showChangePasswordDialog,
               ),
               _SettingsRow(
                 icon: Icons.delete_forever_rounded,
-                label: 'Delete Account',
+                label: 'Delete account',
                 onTap: _showDeleteAccountDialog,
               ),
             ],

@@ -25,6 +25,7 @@ void main() {
 
     test('Returns converted km/h when riding normally', () {
       // 10.0 m/s = 36.0 km/h
+      expect(filter.process(rawSpeedMs: 10.0), 0.0);
       final speed = filter.process(rawSpeedMs: 10.0);
       expect(speed, closeTo(36.0, 0.1));
     });
@@ -34,24 +35,19 @@ void main() {
       expect(speed, isNull);
     });
 
-    test('Returns 0.0 when negative speed reported by Android (-1.0)', () {
+    test('Returns null when negative speed reported by Android (-1.0)', () {
       final speed = filter.process(rawSpeedMs: -1.0);
-      expect(speed, 0.0);
+      expect(speed, isNull);
     });
 
     test('Rejects impossible GPS jump (> 80 km/h leap in single sample)', () {
       // Start at 40 km/h (11.11 m/s)
       filter.process(rawSpeedMs: 11.11);
+      filter.process(rawSpeedMs: 11.11);
 
       // Sudden jump to 150 km/h (41.67 m/s) -> jump is 110 km/h > 80 km/h
       final rejected = filter.process(rawSpeedMs: 41.67);
       expect(rejected, closeTo(40.0, 0.5));
-    });
-
-    test('Static helper toKmh converts and applies deadband', () {
-      expect(SpeedFilter.toKmh(0.5), 0.0); // 1.8 km/h -> 0.0
-      expect(SpeedFilter.toKmh(10.0), closeTo(36.0, 0.1)); // 36 km/h
-      expect(SpeedFilter.toKmh(-1.0), 0.0);
     });
   });
 

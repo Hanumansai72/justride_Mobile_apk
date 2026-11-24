@@ -29,6 +29,7 @@ import '../../features/profile/screens/support_ticket_screen.dart';
 import '../../features/profile/screens/about_screen.dart';
 import '../../features/profile/screens/legal_screen.dart';
 import '../../features/profile/screens/delete_account_screen.dart';
+import '../../features/community/community_explore_screen.dart';
 
 /// Central Route Registry for the JustRide application.
 abstract final class AppRoutes {
@@ -41,6 +42,7 @@ abstract final class AppRoutes {
   static const String dashboard = '/dashboard';
   static const String home = '/home';
   static const String places = '/places';
+  static const String community = '/community';
   static const String addPlace = '/add-place';
   static const String trips = '/trips';
   static const String activeNavigation = '/active-navigation';
@@ -74,6 +76,7 @@ abstract final class AppRoutes {
       dashboard: (context) => const DashboardScreen(),
       home: (context) => const HomeScreen(),
       places: (context) => const PlacesScreen(),
+      community: (context) => const CommunityExploreScreen(),
       addPlace: (context) => const AddPlaceScreen(),
       trips: (context) => const TripsScreen(),
       activeNavigation: (context) => const ActiveNavigationScreen(),

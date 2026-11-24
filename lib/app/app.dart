@@ -9,6 +9,8 @@ import '../core/routes/app_routes.dart';
 /// Global Navigation Key for handling automatic session expiry redirects
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
+final appMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 /// Root widget of the JustRide application.
 /// Configures named routes so screens can be accessed directly by URL path.
 class JustRideApp extends StatelessWidget {
@@ -18,6 +20,7 @@ class JustRideApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: appNavigatorKey,
+      scaffoldMessengerKey: appMessengerKey,
       navigatorObservers: [visiblePageObserver],
       title: 'JustRide',
       debugShowCheckedModeBanner: false,

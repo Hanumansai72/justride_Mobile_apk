@@ -1,3 +1,4 @@
+import 'package:justride_ui/core/network/api_client.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -38,7 +39,7 @@ void main() {
       item('c', 'Already read', true)
     ];
     final patches = <String>[];
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       Future<void> open() async {
         await tester.pumpWidget(MaterialApp(
             theme: buildAppTheme(), home: const NotificationsScreen()));
@@ -94,7 +95,7 @@ void main() {
     var calls = 0;
     var isRead = false;
     final retryResponse = Completer<http.Response>();
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       await tester.pumpWidget(MaterialApp(
           theme: buildAppTheme(), home: const NotificationsScreen()));
       await tester.pumpAndSettle();

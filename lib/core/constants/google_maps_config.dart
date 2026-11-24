@@ -33,10 +33,7 @@ abstract final class GoogleMapsConfig {
         try {
           await maps_loader.load(apiKey);
           webMapsLoaded = true;
-        } catch (_) {
-          debugPrint(
-              '[Maps] Browser map could not load. Other app features remain available.');
-        }
+        } catch (_) {}
       }
       return;
     }

@@ -5,8 +5,6 @@ import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
-import '../../../shared/widgets/app_logo.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 import 'support_ticket_screen.dart';
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
@@ -18,11 +16,9 @@ class _C {
   static const primary = AppColors.primary;
   static const onPrimary = AppColors.onPrimary;
   static const tertiary = AppColors.primary;
-  static const secondary = AppColors.primary;
   static const onSurface = AppColors.textPrimary;
   static const textSec = AppColors.textSecondary;
   static const outlineVariant = AppColors.border;
-  static const error = AppColors.errorLight;
 }
 
 enum _TicketStatus { inProgress, open, closed }
@@ -60,7 +56,6 @@ class MyTicketsScreen extends StatefulWidget {
 
 class _MyTicketsScreenState extends State<MyTicketsScreen> {
   int _selectedFilterIndex = 0;
-  final int _navIndex = 3; // Profile tab active
   List<SupportTicketModel> _tickets = [];
   bool _isLoading = true;
 
@@ -97,7 +92,9 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.bg,
-      appBar: _buildAppBar(),
+      appBar: AppBar(
+          title: const Text('Support requests'),
+          automaticallyImplyLeading: true),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: _C.primary))
           : RefreshIndicator(
@@ -107,60 +104,6 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
               child: _buildBody(),
             ),
       floatingActionButton: _buildFab(),
-      bottomNavigationBar: JustRideBottomNavBar(
-        currentIndex: _navIndex,
-        onTap: (i) {
-          if (i == 3) return;
-          if (i == 0) {
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          } else if (i == 1) {
-            Navigator.of(context).pushReplacementNamed('/places');
-          } else if (i == 2) {
-            Navigator.of(context).pushReplacementNamed('/device');
-          }
-        },
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar() {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56),
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 56,
-          decoration: const BoxDecoration(
-            color: _C.bg,
-            border: Border(
-              bottom: BorderSide(color: _C.outlineVariant, width: 1),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_rounded,
-                    color: _C.primary, size: 24),
-              ),
-              const AppLogo(
-                iconSize: 16,
-                fontSize: 20,
-                showTagline: false,
-                isCentered: true,
-              ),
-              IconButton(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed('/profile-settings'),
-                icon: const Icon(Icons.settings_outlined,
-                    color: _C.primary, size: 24),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -188,22 +131,8 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    Text(
-                      'My Tickets',
-                      style: AppTextStyles.headingLarge.copyWith(
-                        fontSize: 24,
-                        color: _C.onSurface,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
                     const SizedBox(height: AppConstants.spacingSm),
-                    Text(
-                      'Manage and track your support requests.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: _C.textSec,
-                        fontSize: 15,
-                      ),
-                    ),
+
                     const SizedBox(height: AppConstants.spacingLg),
 
                     // Filter chips

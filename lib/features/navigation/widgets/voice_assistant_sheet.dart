@@ -103,7 +103,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
       if (mounted) {
         setState(() {
           _isProcessing = false;
-          _statusText = 'Error searching place. Try again.';
+          _statusText =
+              'Search is unavailable. Check your connection and try again.';
         });
       }
     }

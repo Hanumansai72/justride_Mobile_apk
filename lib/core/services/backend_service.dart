@@ -209,10 +209,12 @@ class BackendService {
   Future<void> saveLocalDevice(DeviceModel device) async {
     final prefs = await SharedPreferences.getInstance();
     final user = await _api.getSavedUserData();
-    await prefs.setString('justride_paired_device', jsonEncode({
-      ...device.toJson(),
-      '_account_id': user?['_id'] ?? user?['id'],
-    }));
+    await prefs.setString(
+        'justride_paired_device',
+        jsonEncode({
+          ...device.toJson(),
+          '_account_id': user?['_id'] ?? user?['id'],
+        }));
     _pairingToken = _api.token;
     accountPaired.value = true;
     if (device.bleAddress != null && device.bleAddress!.isNotEmpty) {
@@ -440,9 +442,16 @@ class BackendService {
   Future<ApiResponse<SavedPlaceModel>> createSavedAddress({
     required String label,
     required String address,
-    double latitude = 17.3850,
-    double longitude = 78.4867,
+    required double latitude,
+    required double longitude,
   }) async {
+    if (!latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude.abs() > 90 ||
+        longitude.abs() > 180 ||
+        (latitude == 0 && longitude == 0)) {
+      return ApiResponse.error('Choose a location before saving this place.');
+    }
     return _api.post<SavedPlaceModel>(
       ApiEndpoints.addresses,
       body: {
@@ -588,29 +597,20 @@ class BackendService {
           fileContentType: contentType,
           fromJson: (json) => Map<String, dynamic>.from(json));
 
-  Future<ApiResponse<ChatMessageModel>> sendTicketMessage({
+  Future<ApiResponse<SupportTicketModel>> sendTicketMessage({
     required String ticketId,
     required String message,
     List<String>? attachments,
   }) async {
-    return _api.post<ChatMessageModel>(
+    return _api.post<SupportTicketModel>(
       ApiEndpoints.addTicketMessage(ticketId),
       body: {
         'message': message,
         'body': message,
         if (attachments != null) 'attachments': attachments,
       },
-      fromJson: (json) {
-        if (json is Map &&
-            json.containsKey('messages') &&
-            json['messages'] is List &&
-            (json['messages'] as List).isNotEmpty) {
-          return ChatMessageModel.fromJson(
-              (json['messages'] as List).last as Map<String, dynamic>);
-        }
-        return ChatMessageModel.fromJson(
-            json is Map && json.containsKey('data') ? json['data'] : json);
-      },
+      fromJson: (json) =>
+          SupportTicketModel.fromJson(Map<String, dynamic>.from(json as Map)),
     );
   }
 
@@ -620,7 +620,8 @@ class BackendService {
   Future<ApiResponse<Map<String, dynamic>>> uploadCustomDisplayImage({
     required List<int> imageBytes,
     required String filename,
-    int width=320,int height=240,
+    int width = 320,
+    int height = 240,
   }) async {
     return _api.uploadMultipart<Map<String, dynamic>>(
       ApiEndpoints.uploadImage,

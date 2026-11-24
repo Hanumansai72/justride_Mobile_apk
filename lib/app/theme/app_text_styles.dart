@@ -59,7 +59,7 @@ abstract final class AppTextStyles {
 
   static TextStyle get bodySmall => TextStyle(
         fontFamily: 'Stack Sans Text',
-        fontSize: 11,
+        fontSize: 13,
         fontWeight: FontWeight.w400,
         color: AppColors.textSecondary,
       );
@@ -70,23 +70,23 @@ abstract final class AppTextStyles {
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
-        letterSpacing: 0.5,
+        letterSpacing: 0,
       );
 
   static TextStyle get labelMedium => TextStyle(
         fontFamily: 'Stack Sans Text',
-        fontSize: 11,
+        fontSize: 13,
         fontWeight: FontWeight.w500,
         color: AppColors.textSecondary,
-        letterSpacing: 0.4,
+        letterSpacing: 0,
       );
 
   static TextStyle get labelSmall => TextStyle(
         fontFamily: 'Stack Sans Text',
-        fontSize: 10,
+        fontSize: 13,
         fontWeight: FontWeight.w400,
         color: AppColors.textMuted,
-        letterSpacing: 0.6,
+        letterSpacing: 0,
       );
 
   // ── Brand ──────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ abstract final class AppTextStyles {
 
   static TextStyle get brandTagline => TextStyle(
         fontFamily: 'Stack Sans Text',
-        fontSize: 9,
+        fontSize: 13,
         fontWeight: FontWeight.w500,
         color: AppColors.textSecondary,
         letterSpacing: 2.5,

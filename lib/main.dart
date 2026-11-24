@@ -24,6 +24,29 @@ Future<void> companionMain() => _initializeApp(background: true);
 
 Future<void> _initializeApp({required bool background}) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kReleaseMode) {
+    ErrorWidget.builder = (_) => Material(
+        color: AppColors.background,
+        child: Center(
+            child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.refresh_rounded,
+                      color: AppColors.primary, size: 32),
+                  const SizedBox(height: 16),
+                  const Text('This screen couldn’t load.',
+                      style: TextStyle(fontSize: 20)),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                      onPressed: () => appNavigatorKey.currentState
+                          ?.pushNamedAndRemoveUntil(
+                              ApiClient.instance.isAuthenticated
+                                  ? '/dashboard'
+                                  : '/login',
+                              (_) => false),
+                      child: const Text('Return home')),
+                ]))));
+  }
   await ApiClient.instance.init();
   PushNotificationService.instance.init();
   JustRideBleService.instance.init();
@@ -59,7 +82,6 @@ Future<void> _showApp() async {
     ));
   } catch (_) {
     // Optional Android integrations must never prevent the first Flutter frame.
-    debugPrint('[Startup] Native setup unavailable; opening the app.');
   }
   try {
     runApp(const JustRideApp());

@@ -1,67 +1,53 @@
+import '../../../core/services/fuel_stop_service.dart';
+import '../../../core/services/ride_planning_store.dart';
+import 'fuel_range_dialog.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/models/bike_route_preferences.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../app/theme/app_colors.dart';
-import '../../../core/constants/app_constants.dart';
+import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/destination.dart';
 import '../../../core/services/navigation_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/google_maps_service.dart';
 import '../../../core/services/bluetooth_service.dart';
+import '../../../core/utils/user_facing_error.dart';
 import '../../../shared/widgets/require_device_connection.dart';
+import 'route_preview_map.dart';
+import 'route_weather_panel.dart';
 
-// ── Colour tokens matching JustRide HUD theme ──────────────────────────────
-class _C {
-  static const bg = AppColors.background;
-  static const cardBg = AppColors.surface;
-  static const cardBorder = AppColors.border;
-  static const primary = AppColors.primary;
-  static const onPrimary = AppColors.onPrimary;
-  static const onSurface = AppColors.textPrimary;
-  static const textSec = AppColors.textSecondary;
-  static const blueAccent = AppColors.primary;
-  static const amber = AppColors.warning;
-}
-
-/// Confirmation sheet shown when user selects or shares a destination before starting ride.
 class DestinationConfirmSheet extends StatefulWidget {
+  const DestinationConfirmSheet(
+      {super.key,
+      required this.destination,
+      this.startLocation,
+      this.commute = false});
   final Destination destination;
   final Destination? startLocation;
-
-  const DestinationConfirmSheet({
-    super.key,
-    required this.destination,
-    this.startLocation,
-  });
-
+  final bool commute;
   static BuildContext? _activeSheetContext;
 
-  static Future<bool?> show(
-    BuildContext context,
-    Destination destination, {
-    Destination? startLocation,
-  }) {
-    if (_activeSheetContext?.mounted == true) {
-      try {
-        Navigator.of(_activeSheetContext!).pop();
-      } catch (_) {}
-      _activeSheetContext = null;
-    }
-
+  static Future<bool?> show(BuildContext context, Destination destination,
+      {Destination? startLocation, bool commute = false}) {
+    if (_activeSheetContext?.mounted == true)
+      Navigator.of(_activeSheetContext!).pop();
     BuildContext? shownContext;
     return showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        shownContext = ctx;
-        _activeSheetContext = ctx;
-        return DestinationConfirmSheet(
-          destination: destination,
-          startLocation: startLocation,
-        );
-      },
-    ).whenComplete(() {
-      if (identical(_activeSheetContext, shownContext)) _activeSheetContext = null;
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: AppColors.transparent,
+        builder: (context) {
+          shownContext = context;
+          _activeSheetContext = context;
+          return DestinationConfirmSheet(
+              destination: destination,
+              startLocation: startLocation,
+              commute: commute);
+        }).whenComplete(() {
+      if (identical(_activeSheetContext, shownContext))
+        _activeSheetContext = null;
     });
   }
 
@@ -71,662 +57,581 @@ class DestinationConfirmSheet extends StatefulWidget {
 }
 
 class _DestinationConfirmSheetState extends State<DestinationConfirmSheet> {
-  bool _isLoadingPreview = true;
-  NavigationRoute? _previewRoute;
-  Destination? _resolvedDest;
-  Destination? _resolvedStart;
-  String? _errorMessage;
+  bool _loading = true, _starting = false;
+  int _generation = 0;
+  static const _preferencesKey = 'bike_route_preferences';
+  BikeRoutePreferences _preferences = const BikeRoutePreferences();
+  List<NavigationRoute> _options = [];
+  NavigationRoute? _route;
+  LatLng? _previewOrigin;
+  Destination? _destination, _start;
+  String? _error, _fuelMessage;
+  bool _findingFuel = false, _savingCommute = false;
+  FuelStopPlan? _fuelStop;
+  double? _fuelRangeKm;
+  static bool _located(Destination value) =>
+      value.latitude.isFinite &&
+      value.longitude.isFinite &&
+      value.latitude.abs() <= 90 &&
+      value.longitude.abs() <= 180 &&
+      (value.latitude != 0 || value.longitude != 0);
 
   @override
   void initState() {
     super.initState();
-    // Auto-reconnect BLE if currently disconnected so HUD is ready
-    if (!JustRideBleService.instance.isDeviceConnected) {
-      JustRideBleService.instance.reconnect();
-    }
-    _loadRoutePreview();
+    _restorePreferences();
   }
 
-  Future<void> _loadRoutePreview() async {
+  Future<void> _restorePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
+    _preferences =
+        BikeRoutePreferences.fromFlags(prefs.getInt(_preferencesKey) ?? 0);
+    await _loadPreview();
+  }
+
+  Future<void> _editPreferences() async {
+    var tolls = _preferences.avoidTolls;
+    var highways = _preferences.avoidHighways;
+    var ferries = _preferences.avoidFerries;
+    final updated = await showDialog<BikeRoutePreferences>(
+      context: context,
+      builder: (context) => StatefulBuilder(builder: (context, setDraft) {
+        return AlertDialog(
+          title: const Text('Bike route preferences'),
+          contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              SwitchListTile(
+                  title: const Text('Avoid tolls'),
+                  value: tolls,
+                  onChanged: (value) => setDraft(() => tolls = value)),
+              SwitchListTile(
+                  title: const Text('Avoid highways'),
+                  value: highways,
+                  onChanged: (value) => setDraft(() => highways = value)),
+              SwitchListTile(
+                  title: const Text('Avoid ferries'),
+                  value: ferries,
+                  onChanged: (value) => setDraft(() => ferries = value)),
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                    'Routes may still include these if there is no practical alternative.'),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                  context,
+                  BikeRoutePreferences(
+                      avoidTolls: tolls,
+                      avoidHighways: highways,
+                      avoidFerries: ferries)),
+              child: const Text('Apply'),
+            ),
+          ],
+        );
+      }),
+    );
+    if (!mounted || updated == null || updated.flags == _preferences.flags)
+      return;
+    _preferences = updated;
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    await prefs.setInt(_preferencesKey, updated.flags);
+    if (mounted) await _loadPreview();
+  }
+
+  Future<Destination?> _resolve(Destination value) async {
+    if (_located(value)) return value;
+    return await GoogleMapsService.instance.resolveDestination(value);
+  }
+
+  Future<void> _loadPreview() async {
+    final generation = ++_generation;
     setState(() {
-      _isLoadingPreview = true;
-      _errorMessage = null;
-      _previewRoute = null;
+      _loading = true;
+      _error = null;
+      _route = null;
+      _fuelStop = null;
+      _fuelMessage = null;
     });
-
     try {
-      var dest = widget.destination;
-      if (dest.latitude == 0.0 && dest.longitude == 0.0) {
-        debugPrint(
-            '[DestinationSheet] Resolving coordinates for "${dest.displayTitle}"...');
-        final resolved =
-            await GoogleMapsService.instance.resolveDestination(dest);
-        if (resolved != null && resolved.latitude != 0.0) {
-          dest = resolved;
-          debugPrint(
-              '[DestinationSheet] Successfully resolved: ${dest.latitude}, ${dest.longitude}');
-        } else {
-          _errorMessage =
-              'Could not resolve the exact shared place. Retry the link or select the place in search.';
-        }
+      final destination = await _resolve(widget.destination);
+      if (destination == null || !_located(destination)) {
+        throw StateError(
+            'We couldn’t find this destination. Try again or choose it from search.');
       }
-      if (!mounted) return;
-      setState(() => _resolvedDest = dest);
-      if (dest.latitude == 0 && dest.longitude == 0) return;
-
-      var start = widget.startLocation;
-      if (start != null && start.latitude == 0.0 && start.longitude == 0.0) {
-        start = await GoogleMapsService.instance.resolveDestination(start);
-        if (start == null ||
-            (start.latitude == 0.0 && start.longitude == 0.0)) {
-          _errorMessage = 'Could not locate the entered start address.';
-        }
+      final start = widget.startLocation == null
+          ? null
+          : await _resolve(widget.startLocation!);
+      if (widget.startLocation != null && (start == null || !_located(start))) {
+        throw StateError(
+            'We couldn’t find the starting point. Choose it from search.');
       }
-      _resolvedStart = start;
-
-      if (dest.latitude != 0.0 &&
-          dest.longitude != 0.0 &&
-          (widget.startLocation == null || start != null)) {
-        final savedPos = LocationService.instance.currentPosition;
-        final currentPos = start != null ? null :
-            LocationService.navigationFixFresh(savedPos, DateTime.now())
-                ? savedPos : await LocationService.instance.getCurrentPosition();
-        final effectiveOrigin =
-            (start != null && start.latitude != 0.0 && start.longitude != 0.0)
-                ? LatLng(start.latitude, start.longitude)
-                : (currentPos != null
-                    ? LatLng(currentPos.latitude, currentPos.longitude)
-                    : null);
-
-        if (effectiveOrigin != null) {
-          final route = await GoogleMapsService.instance.calculateRoute(
-            origin: effectiveOrigin,
-            destination: LatLng(dest.latitude, dest.longitude),
-          );
-          _previewRoute = route;
-          if (route == null) _errorMessage = 'Route unavailable. Check your connection and retry.';
-        } else {
-          _errorMessage =
-              'Could not acquire phone GPS location. Enable Location permissions.';
-        }
+      final saved = LocationService.instance.currentPosition;
+      final position = start != null
+          ? null
+          : LocationService.navigationFixFresh(saved, DateTime.now())
+              ? saved
+              : await LocationService.instance.getCurrentPosition();
+      if (start == null && position == null) {
+        throw StateError(
+            'Your location is unavailable. Turn on location access and try again.');
       }
-    } catch (e) {
-      _errorMessage = 'Unable to load the route preview. Please try again.';
+      final origin = start != null
+          ? LatLng(start.latitude, start.longitude)
+          : LatLng(position!.latitude, position.longitude);
+      final options = await GoogleMapsService.instance.bikeRouteOptions(
+          origin: origin,
+          destination: LatLng(destination.latitude, destination.longitude),
+          preferences: _preferences);
+      final route = options.firstOrNull;
+      if (route == null ||
+          route.polylinePoints.isEmpty ||
+          route.steps.isEmpty) {
+        throw StateError(_preferences.hasAvoidances
+            ? 'No bike route was returned. Check your connection or change your route preferences.'
+            : 'We couldn’t find a route. Check your connection or choose another destination.');
+      }
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _destination = destination;
+        _start = start;
+        _options = options;
+        _previewOrigin = origin;
+        _route = route;
+      });
+    } on StateError catch (error) {
+      if (mounted && generation == _generation)
+        setState(() => _error = userFacingError(error.message.toString()));
+    } catch (_) {
+      if (mounted && generation == _generation)
+        setState(() => _error =
+            'We couldn’t load the route. Check your connection and try again.');
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingPreview = false);
+      if (mounted && generation == _generation)
+        setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveCommute() async {
+    final destination = _destination;
+    if (_savingCommute || destination == null) return;
+    setState(() => _savingCommute = true);
+    try {
+      final owner = await RidePlanningStore.owner();
+      final saved = await RidePlanningStore.commutes(owner);
+      final entry = SavedCommute(destination: destination, start: _start);
+      final rows = [
+        entry,
+        ...saved.where((item) => item.toJson() != entry.toJson())
+      ];
+      final success =
+          await RidePlanningStore.saveCommutes(owner, rows.take(6).toList());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(success
+              ? 'Saved in Ride tools → Commutes'
+              : 'Could not save this commute.')));
+    } finally {
+      if (mounted) setState(() => _savingCommute = false);
+    }
+  }
+
+  Future<void> _findFuel() async {
+    if (_findingFuel ||
+        _route == null ||
+        _previewOrigin == null ||
+        _destination == null) return;
+    final planned = _route!;
+    final range = await showFuelRangeDialog(context);
+    if (!mounted || range == null || !identical(planned, _route)) return;
+    final generation = _generation;
+    final destination = _destination!;
+    setState(() {
+      _findingFuel = true;
+      _fuelRangeKm = range;
+      _fuelMessage = null;
+      _fuelStop = null;
+    });
+    try {
+      final result = await FuelStopService().find(
+          route: planned,
+          origin: _previewOrigin!,
+          destination: LatLng(destination.latitude, destination.longitude),
+          rangeKm: range,
+          preferences: _preferences);
+      if (!mounted || generation != _generation || !identical(planned, _route))
+        return;
+      setState(() {
+        _fuelStop = result;
+        if (result == null)
+          _fuelMessage =
+              'No reachable fuel stop found near this route. Refuel before departure if needed.';
+      });
+    } catch (_) {
+      if (mounted && generation == _generation) {
+        setState(() => _fuelMessage =
+            'Could not check fuel stops. Try again when connected.');
       }
+    } finally {
+      if (mounted) setState(() => _findingFuel = false);
+    }
+  }
+
+  Future<void> _startRide() async {
+    if (_starting ||
+        _loading ||
+        _findingFuel ||
+        _route == null ||
+        _destination == null) return;
+    if (!await requireDeviceConnection(context) || !mounted) return;
+    setState(() {
+      _starting = true;
+      _error = null;
+    });
+    try {
+      if (_start == null) {
+        final location = LocationService.instance;
+        final cached = location.currentPosition;
+        final fix = LocationService.navigationFixFresh(cached, DateTime.now())
+            ? cached
+            : await location.getCurrentPosition();
+        if (!mounted) return;
+        if (fix == null ||
+            !LocationService.navigationFixFresh(fix, DateTime.now())) {
+          setState(() =>
+              _error = 'Your current location is unavailable. Try again.');
+          return;
+        }
+        final origin = _previewOrigin!;
+        if (Geolocator.distanceBetween(origin.latitude, origin.longitude,
+                fix.latitude, fix.longitude) >
+            50) {
+          setState(() {
+            _route = null;
+            _error =
+                'Your location changed. Try again to refresh the bike routes.';
+          });
+          return;
+        }
+      }
+      final fuel = _fuelStop;
+      final started = await NavigationService.instance.startNavigation(
+          fuel?.station ?? _destination!,
+          startLocation: _start,
+          selectedRoute: fuel?.toStation ?? _route,
+          journeyStops: fuel == null ? null : [fuel.station, _destination!],
+          preferences: _preferences);
+      if (!mounted) return;
+      if (!started) {
+        setState(() => _error =
+            'Your ride couldn’t start. Check your location and connection, then try again.');
+        return;
+      }
+      final navigator = Navigator.of(context);
+      navigator.pop(true);
+      navigator.pushNamed('/active-navigation');
+    } catch (_) {
+      if (mounted)
+        setState(() => _error = 'Your ride couldn’t start. Please try again.');
+    } finally {
+      if (mounted) setState(() => _starting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder(
-      valueListenable: JustRideBleService.instance.connectionStateNotifier,
-      builder: (context, connState, _) {
-        final dest = _resolvedDest ?? widget.destination;
-        final isBleConnected = JustRideBleService.instance.isDeviceConnected;
-        final hasZeroCoords = dest.latitude == 0.0 && dest.longitude == 0.0;
-
-        return Container(
-          decoration: const BoxDecoration(
-            color: _C.bg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: _C.cardBorder, width: 1.5),
-            ),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Drag handle
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Header title row
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _C.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                            color: _C.primary.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.two_wheeler_rounded,
-                              color: _C.primary, size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            'MOTORCYCLE ROUTE',
-                            style: TextStyle(
-                              fontFamily: 'Stack Sans Text',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: _C.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    // BLE HUD status badge with tap-to-reconnect action
-                    InkWell(
-                      onTap: isBleConnected
-                          ? null
-                          : () async {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      'Reconnecting to JustRide HUD device...'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                              await JustRideBleService.instance.reconnect();
-                            },
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isBleConnected
-                              ? _C.blueAccent.withValues(alpha: 0.15)
-                              : AppColors.errorText.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isBleConnected
-                                ? _C.blueAccent.withValues(alpha: 0.4)
-                                : AppColors.errorText.withValues(alpha: 0.4),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isBleConnected
-                                  ? Icons.bluetooth_connected
-                                  : Icons.bluetooth_searching,
-                              size: 13,
-                              color: isBleConnected
-                                  ? _C.blueAccent
-                                  : AppColors.errorText,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              isBleConnected
-                                  ? 'DEVICE READY'
-                                  : 'NO HUD (TAP RECONNECT)',
-                              style: TextStyle(
-                                fontFamily: 'Stack Sans Text',
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: isBleConnected
-                                    ? _C.blueAccent
-                                    : AppColors.errorText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-
-                // Live BLE Error / Disconnect warning banner
-                ValueListenableBuilder<String?>(
-                  valueListenable:
-                      JustRideBleService.instance.lastBleErrorNotifier,
-                  builder: (context, bleErr, _) {
-                    if (bleErr == null || isBleConnected)
-                      return const SizedBox.shrink();
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.errorText.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: AppColors.errorText.withValues(alpha: 0.5)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              color: AppColors.errorText, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
+    final destination = _destination ?? widget.destination;
+    final address = destination.address;
+    final showAddress = address != null &&
+        address.isNotEmpty &&
+        address != destination.displayTitle &&
+        !address.contains('://') &&
+        !RegExp(r'^[-+]?\d+\.\d+[, ]').hasMatch(address);
+    return Material(
+      color: AppColors.surface,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.9),
+            child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                          child: Container(
+                              width: 36,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                  color: AppColors.textMuted,
+                                  borderRadius: BorderRadius.circular(2)))),
+                      const SizedBox(height: 24),
+                      Row(children: [
+                        Expanded(
                             child: Text(
-                              'BLE Notice: $bleErr',
-                              style: TextStyle(
-                                  fontFamily: 'Stack Sans Text',
-                                  fontSize: 12,
-                                  color: AppColors.textPrimary),
-                            ),
-                          ),
+                                widget.commute
+                                    ? 'Commute now'
+                                    : 'Route preview',
+                                style: AppTextStyles.headingLarge)),
+                        IconButton(
+                            tooltip: 'Close preview',
+                            onPressed: _starting
+                                ? null
+                                : () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded))
+                      ]),
+                      const SizedBox(height: 16),
+                      Text(destination.displayTitle,
+                          style: AppTextStyles.headingMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      if (showAddress) ...[
+                        const SizedBox(height: 6),
+                        Text(address,
+                            style: AppTextStyles.bodyMedium,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis)
+                      ],
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        const Icon(Icons.trip_origin, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: Text(
+                                _start?.displayTitle ??
+                                    widget.startLocation?.displayTitle ??
+                                    'Your current location',
+                                style: AppTextStyles.bodyMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis))
+                      ]),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: _loading || _starting || _findingFuel
+                              ? null
+                              : _editPreferences,
+                          icon: const Icon(Icons.tune_rounded),
+                          label: const Text('Route preferences'),
+                        ),
+                      ),
+                      if (_preferences.hasAvoidances)
+                        Text('Prefer to avoid: ${[
+                          if (_preferences.avoidTolls) 'tolls',
+                          if (_preferences.avoidHighways) 'highways',
+                          if (_preferences.avoidFerries) 'ferries',
+                        ].join(', ')}'),
+                      const SizedBox(height: 12),
+                      if (_loading)
+                        const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Center(child: CircularProgressIndicator()))
+                      else if (_route != null) ...[
+                        if (_options.length > 1) ...[
+                          _routeChoices(),
+                          const SizedBox(height: 12),
                         ],
-                      ),
-                    );
-                  },
-                ),
-
-                // Destination card
-                if (_resolvedStart != null) ...[
-                  _buildEndpointRow(
-                    icon: Icons.trip_origin_rounded,
-                    label: 'START',
-                    value: _resolvedStart!.displayTitle,
-                    color: _C.blueAccent,
-                  ),
-                ] else ...[
-                  _buildEndpointRow(
-                    icon: Icons.my_location_rounded,
-                    label: 'START',
-                    value: 'Current phone location',
-                    color: _C.blueAccent,
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(AppConstants.spacingMd),
-                  decoration: BoxDecoration(
-                    color: _C.cardBg,
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-                    border: Border.all(
-                      color: hasZeroCoords
-                          ? AppColors.errorText.withValues(alpha: 0.5)
-                          : _C.cardBorder,
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: hasZeroCoords
-                              ? AppColors.errorText.withValues(alpha: 0.15)
-                              : _C.primary.withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
+                        if (widget.commute)
+                          const Text(
+                              'Current traffic estimates · choose the route before riding'),
+                        RoutePreviewMap(
+                          key: ObjectKey(_options),
+                          route: _route!,
+                          alternatives: _options,
+                          height: (MediaQuery.sizeOf(context).height * 0.42)
+                              .clamp(250.0, 380.0)
+                              .toDouble(),
                         ),
-                        child: Icon(
-                          hasZeroCoords
-                              ? Icons.location_off_rounded
-                              : Icons.location_on_rounded,
-                          color:
-                              hasZeroCoords ? AppColors.errorText : _C.primary,
-                          size: 24,
+                        RouteTrafficLegend(route: _route!),
+                        const SizedBox(height: 20),
+                        Row(children: [
+                          Expanded(
+                              child: _metric('Distance',
+                                  _distance(_route!.totalDistanceMeters))),
+                          Expanded(
+                              child: _metric('Travel time',
+                                  _duration(_route!.totalDurationSeconds)))
+                        ]),
+                      ],
+                      if (_route != null) ...[
+                        RouteWeatherPanel(
+                          key: ObjectKey(_route),
+                          route: _route!,
                         ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              dest.displayTitle,
-                              style: TextStyle(
-                                fontFamily: 'Stack Sans Text',
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                color: _C.onSurface,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            if (hasZeroCoords) ...[
-                              Text(
-                                _isLoadingPreview ? 'Resolving shared place...' : 'Location lookup failed',
-                                style: TextStyle(
-                                  fontFamily: 'Stack Sans Text',
-                                  fontSize: 13,
-                                  color: _C.amber,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              InkWell(
-                                onTap: _isLoadingPreview
-                                    ? null
-                                    : _loadRoutePreview,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.refresh_rounded,
-                                        size: 14, color: _C.primary),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Tap here to retry lookup',
-                                      style: TextStyle(
-                                        fontFamily: 'Stack Sans Text',
-                                        fontSize: 12,
-                                        color: _C.primary,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ] else ...[
-                              Text(
-                                dest.displaySubtitle,
-                                style: TextStyle(
-                                  fontFamily: 'Stack Sans Text',
-                                  fontSize: 13,
-                                  color: _C.textSec,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'GPS: ${dest.latitude.toStringAsFixed(5)}, ${dest.longitude.toStringAsFixed(5)}',
-                                style: TextStyle(
-                                  fontFamily: 'Stack Sans Text',
-                                  fontSize: 11,
-                                  color: _C.primary,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Route metrics preview (Distance + ETA)
-                if (_isLoadingPreview) ...[
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                                color: _C.primary, strokeWidth: 2),
+                        const SizedBox(height: 12),
+                        Wrap(spacing: 8, children: [
+                          OutlinedButton.icon(
+                            onPressed:
+                                _starting || _findingFuel ? null : _findFuel,
+                            icon: const Icon(Icons.local_gas_station_outlined),
+                            label: Text(_findingFuel
+                                ? 'Checking fuel stops…'
+                                : 'Plan fuel stop'),
                           ),
-                          SizedBox(width: 10),
+                          if (!widget.commute)
+                            TextButton.icon(
+                              onPressed: _starting || _savingCommute
+                                  ? null
+                                  : _saveCommute,
+                              icon: const Icon(Icons.bookmark_add_outlined),
+                              label: const Text('Save commute'),
+                            ),
+                        ]),
+                        if (_fuelStop != null || _fuelMessage != null)
                           Text(
-                            'Finding route & resolving coordinates...',
-                            style: TextStyle(color: _C.textSec, fontSize: 13),
+                              'Estimated range before reserve: ${_fuelRangeKm!.floor()} km'),
+                        if (_fuelMessage != null) Text(_fuelMessage!),
+                        if (_fuelStop case final stop?)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.local_gas_station),
+                            title: Text(
+                                'First stop: ${stop.station.displayTitle}'),
+                            subtitle: Text(
+                                '${_distance(stop.toStation.totalDistanceMeters)} to fuel · about ${_duration(stop.detourSeconds)} extra'),
+                            trailing: IconButton(
+                              tooltip: 'Remove fuel stop',
+                              onPressed: _starting
+                                  ? null
+                                  : () => setState(() => _fuelStop = null),
+                              icon: const Icon(Icons.close),
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ] else if (_previewRoute != null) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMetricTile(
-                          icon: Icons.timer_outlined,
-                          label: 'ESTIMATED TIME',
-                          value: _formatDuration(
-                              _previewRoute!.totalDurationSeconds),
-                          color: _C.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildMetricTile(
-                          icon: Icons.route_rounded,
-                          label: 'DISTANCE',
-                          value: _formatDistance(
-                              _previewRoute!.totalDistanceMeters),
-                          color: _C.blueAccent,
-                        ),
-                      ),
-                    ],
-                  ),
-                ] else if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _C.amber.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border:
-                          Border.all(color: _C.amber.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                          fontFamily: 'Stack Sans Text',
-                          fontSize: 12,
-                          color: _C.amber),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-
-                // Action Buttons
-                ElevatedButton(
-                  onPressed: _isLoadingPreview ||
-                          (dest.latitude == 0.0 && dest.longitude == 0.0) ||
-                          (widget.startLocation != null &&
-                              _resolvedStart == null)
-                      ? null
-                      : () async {
-                          if (!await requireDeviceConnection(context) ||
-                              !context.mounted) return;
-                          // Start Ride Safety Check (Master Prompt §29)
-                          final hasGps =
-                              LocationService.instance.isGpsAvailable;
-                          final currentPos =
-                              LocationService.instance.currentPosition;
-                          if (!hasGps && currentPos == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    'Waiting for initial GPS fix... Please ensure Location is ON.'),
-                                backgroundColor: AppColors.warning,
-                              ),
-                            );
-                            return;
-                          }
-                          if (currentPos != null &&
-                              currentPos.accuracy > 120.0) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                    'GPS accuracy is low (±${currentPos.accuracy.round()}m). Waiting for better lock...'),
-                                backgroundColor: AppColors.warning,
-                              ),
-                            );
-                            return;
-                          }
-
-                          final target = _resolvedDest ?? widget.destination;
-                          final navigator = Navigator.of(context);
-                          final messenger = ScaffoldMessenger.of(context);
-                          navigator.pop(true);
-
-                          // Start active navigation
-                          final ok =
-                              await NavigationService.instance.startNavigation(
-                            target,
-                            startLocation: _resolvedStart,
-                          );
-                          if (ok && navigator.mounted) {
-                            navigator.pushNamed('/active-navigation');
-                          } else if (messenger.mounted) {
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    'Unable to calculate motorcycle route or obtain GPS. Check permissions.'),
-                              ),
-                            );
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _C.primary,
-                    foregroundColor: _C.onPrimary,
-                    disabledBackgroundColor: _C.primary.withValues(alpha: 0.3),
-                    disabledForegroundColor:
-                        _C.onSurface.withValues(alpha: 0.4),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 4,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.navigation_rounded, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        _isLoadingPreview
-                            ? 'CALCULATING ROUTE...'
-                            : 'START RIDE',
-                        style: TextStyle(
-                          fontFamily: 'Stack Sans Text',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(
-                    'CANCEL',
-                    style: TextStyle(
-                      fontFamily: 'Stack Sans Text',
-                      fontSize: 13,
-                      color: _C.textSec,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+                      ],
+                      if (_error != null) ...[
+                        const SizedBox(height: 16),
+                        Semantics(
+                            liveRegion: true,
+                            child: Text(_error!,
+                                style: const TextStyle(
+                                    color: AppColors.errorLight,
+                                    height: 1.45))),
+                        if (!_starting)
+                          Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                  onPressed: _loading ? null : _loadPreview,
+                                  icon: const Icon(Icons.refresh_rounded,
+                                      size: 18),
+                                  label: const Text('Try again'))),
+                      ],
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                          onPressed: _loading ||
+                                  _starting ||
+                                  _findingFuel ||
+                                  _route == null
+                              ? null
+                              : _startRide,
+                          icon: _starting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.navigation_outlined, size: 20),
+                          label: Text(_starting
+                              ? 'Starting ride…'
+                              : _fuelStop == null
+                                  ? 'Start ride'
+                                  : 'Start ride via fuel')),
+                      ValueListenableBuilder(
+                          valueListenable: JustRideBleService
+                              .instance.connectionStateNotifier,
+                          builder: (context, _, child) => JustRideBleService
+                                  .instance.isDeviceConnected
+                              ? const SizedBox.shrink()
+                              : const Padding(
+                                  padding: EdgeInsets.only(top: 12),
+                                  child: Text(
+                                      'Connect your device to start the ride.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.textSecondary)))),
+                    ])),
+          )),
     );
   }
 
-  Widget _buildMetricTile({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: _C.cardBg,
-        borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-        border: Border.all(color: _C.cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Stack Sans Text',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: _C.textSec,
-                ),
-              ),
-            ],
+  Widget _routeChoices() {
+    final fastest = _options.reduce(
+        (a, b) => a.totalDurationSeconds <= b.totalDurationSeconds ? a : b);
+    final shortest = _options.reduce(
+        (a, b) => a.totalDistanceMeters <= b.totalDistanceMeters ? a : b);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (index, option) in _options.indexed)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            selected: identical(option, _route),
+            leading: Icon(identical(option, _route)
+                ? Icons.radio_button_checked
+                : Icons.radio_button_off),
+            title: Text(identical(option, fastest)
+                ? (identical(option, shortest)
+                    ? 'Fastest and shortest'
+                    : 'Fastest')
+                : (identical(option, shortest)
+                    ? 'Shortest'
+                    : 'Route ${index + 1}')),
+            subtitle: Text(
+                '${_duration(option.totalDurationSeconds)} · ${_distance(option.totalDistanceMeters)}${_comparison(option, fastest)}'),
+            onTap: _starting || _findingFuel
+                ? null
+                : () => setState(() {
+                      _route = option;
+                      _fuelStop = null;
+                      _fuelMessage = null;
+                    }),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'Stack Sans Text',
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: _C.onSurface,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
-  String _formatDuration(int seconds) {
-    if (seconds <= 60) return '1 min';
-    final mins = (seconds / 60).round();
-    if (mins < 60) return '$mins min';
-    final hrs = mins ~/ 60;
-    final rem = mins % 60;
-    return rem == 0 ? '$hrs hr' : '$hrs hr $rem m';
+  String _comparison(NavigationRoute route, NavigationRoute fastest) {
+    if (identical(route, fastest)) return '';
+    final seconds = route.totalDurationSeconds - fastest.totalDurationSeconds;
+    final metres = route.totalDistanceMeters - fastest.totalDistanceMeters;
+    return [
+      '',
+      seconds == 0
+          ? 'Same time'
+          : '+${seconds >= 60 ? '${seconds ~/ 60} min ' : ''}${seconds % 60} sec',
+      if (metres.abs() >= 1)
+        '${_distance(metres.abs())} ${metres < 0 ? 'shorter' : 'longer'}'
+      else
+        'Same distance',
+    ].join(' · ');
   }
 
-  String _formatDistance(double meters) {
-    if (meters >= 1000) {
-      return '${(meters / 1000).toStringAsFixed(1)} km';
-    }
-    return '${meters.round()} m';
-  }
-
-  Widget _buildEndpointRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: _C.cardBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _C.cardBorder),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 17, color: color),
-          const SizedBox(width: 10),
-          Text('$label  ',
-              style: TextStyle(
-                  fontFamily: 'Stack Sans Text',
-                  fontSize: 10,
-                  color: _C.textSec,
-                  fontWeight: FontWeight.w700)),
-          Expanded(
-              child: Text(value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontFamily: 'Stack Sans Text',
-                      fontSize: 13,
-                      color: _C.onSurface))),
-        ],
-      ),
-    );
+  Widget _metric(String label, String value) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: AppTextStyles.bodySmall),
+        const SizedBox(height: 4),
+        Text(value, style: AppTextStyles.headingLarge)
+      ]);
+  String _distance(double metres) => metres < 1000
+      ? '${metres.round()} m'
+      : '${(metres / 1000).toStringAsFixed(1)} km';
+  String _duration(int seconds) {
+    final minutes = (seconds / 60).ceil();
+    return minutes >= 60
+        ? '${minutes ~/ 60} hr ${minutes % 60} min'
+        : '$minutes min';
   }
 }

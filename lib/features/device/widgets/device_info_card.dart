@@ -12,15 +12,13 @@ class DeviceInfoCard extends StatelessWidget {
   final String firmwareVersion;
   final String newVersion;
   final String deviceName;
-  final int batteryPercent;
 
   const DeviceInfoCard({
     super.key,
     this.hasUpdate = true,
     this.firmwareVersion = 'v2.1.0',
     this.newVersion = 'v2.2.0',
-    this.deviceName = 'JustRide Pro HUD',
-    this.batteryPercent = 98,
+    this.deviceName = 'JustRide device',
   });
 
   @override
@@ -223,7 +221,7 @@ class DeviceInfoCard extends StatelessWidget {
                       title: 'Connection',
                       value: isConnected ? 'Strong' : 'Disconnected',
                       subtitle:
-                          isConnected ? 'BLE 5.2' : 'Auto-reconnecting...',
+                          isConnected ? 'Connected' : 'Reconnecting…',
                       valueColor:
                           isConnected ? AppColors.primary : AppColors.textMuted,
                     ),

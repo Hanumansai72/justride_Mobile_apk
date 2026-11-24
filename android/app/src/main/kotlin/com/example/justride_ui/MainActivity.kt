@@ -83,7 +83,7 @@ class MainActivity : FlutterActivity() {
             JustRideCompanionRuntime.publish(this)
         } catch(e: Exception) {
             JustRideCompanionRuntime.preferences(this).edit().putBoolean("enabled",false).apply()
-            failCompanion("Unable to observe device presence: ${e.javaClass.simpleName}")
+            failCompanion("Could not finish device setup. Please try again from Device settings.")
             JustRideCompanionRuntime.publish(this)
         }
     }
@@ -187,7 +187,7 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call,result ->
                 if(call.method=="enable") {
                     try {enableCompanion(call.argument<String>("address") ?: "",call.argument<Boolean>("prompt") ?: false,result)}
-                    catch(e: Exception){result.error("COMPANION_SETUP",e.message,null)}
+                    catch(e: Exception){result.error("COMPANION_SETUP","Automatic connection couldn’t be set up. Check Bluetooth permissions and try again.",null)}
                 } else result.notImplemented()
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.justride.app/diagnostics")
@@ -212,6 +212,13 @@ class MainActivity : FlutterActivity() {
                         } catch (_: android.content.ActivityNotFoundException) {
                             result.error("NO_BROWSER", "No browser is available to download the update", null)
                         }
+                    }
+                } else if (call.method == "dialEmergency112") {
+                    try {
+                        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:112")))
+                        result.success(true)
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        result.error("NO_DIALER", "No phone dialer is available", null)
                     }
                 } else result.notImplemented()
             }
@@ -272,6 +279,15 @@ class MainActivity : FlutterActivity() {
         notifChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NOTIFICATION_CHANNEL).apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "getInstalledNotificationApps" -> {
+                        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                        val apps = packageManager.queryIntentActivities(launcher, 0)
+                            .map { it.activityInfo.applicationInfo }
+                            .filter { it.packageName != packageName }
+                            .distinctBy { it.packageName }
+                            .associate { it.packageName to it.loadLabel(packageManager).toString() }
+                        result.success(apps)
+                    }
                     "isNotificationAccessGranted" -> {
                         val cn = ComponentName(this@MainActivity, JustRideNotificationListener::class.java)
                         val flat = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners")

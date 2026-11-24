@@ -19,6 +19,9 @@ class RouteWindowSegment {
   /// Ordered polyline points in local screen space (X: 0..320, Y: 0..240)
   final List<ScreenPoint> points;
 
+  /// Two-bit traffic codes for displayed edges, or empty when unavailable.
+  final List<int> traffic;
+
   /// Number of leading line segments already travelled in this window.
   final int completedSegmentCount;
   final int progressPercent;
@@ -33,6 +36,7 @@ class RouteWindowSegment {
 
   const RouteWindowSegment({
     required this.points,
+    this.traffic = const [],
     this.completedSegmentCount = 0,
     this.progressPercent = 0,
     this.routeIndex = 0,
@@ -45,6 +49,7 @@ class RouteWindowSegment {
   /// Empty / fallback segment
   const RouteWindowSegment.empty()
       : points = const [],
+        traffic = const [],
         completedSegmentCount = 0,
         progressPercent = 0,
         routeIndex = 0,
@@ -76,6 +81,7 @@ class RouteWindowTransformer {
     required LatLng riderPosition,
     required double riderHeadingDeg,
     required List<LatLng> polylinePoints,
+    List<int> trafficByEdge = const [],
     required LatLng destination,
     int minimumRouteIndex = 0,
     double? distanceToManeuverMeters,
@@ -131,6 +137,38 @@ class RouteWindowTransformer {
       }
     }
     final snappedRider = roadPosition;
+    int trafficAcross(int from, int to) {
+      var worst = 0;
+      var unknown = false;
+      for (var i = from; i < to; i++) {
+        final code = trafficByEdge[closestIdx + i];
+        if (code == 3) return 3;
+        if (code == 0) unknown = true;
+        worst = math.max(worst, code);
+      }
+      return unknown && worst < 2 ? 0 : worst;
+    }
+
+    final hasTraffic = trafficByEdge.isNotEmpty &&
+        trafficByEdge.length == polylinePoints.length - 1;
+    List<int> sampleIndices(List<LatLng> points, int limit) =>
+        _subsampleIndices(
+          points,
+          limit,
+          hasTraffic
+              ? (i) =>
+                  trafficByEdge[closestIdx + i - 1] !=
+                  trafficByEdge[closestIdx + i]
+              : null,
+        );
+    List<int> sampledTraffic(List<int> indices, {int past = 0}) => hasTraffic
+        ? [
+            ...List.filled(past, 0),
+            for (var i = 1; i < indices.length; i++)
+              trafficAcross(indices[i - 1], indices[i]),
+          ]
+        : const [];
+
     if (overviewViewport != null) {
       ScreenPoint project(LatLng point) {
         final p =
@@ -143,8 +181,10 @@ class RouteWindowTransformer {
         snappedRider,
         ...polylinePoints.skip(closestIdx + 1)
       ];
+      final indices = sampleIndices(remaining, maxPointsToSend);
       return RouteWindowSegment(
-          points: _subsample(remaining, maxPointsToSend).map(project).toList(),
+          points: [for (final i in indices) project(remaining[i])],
+          traffic: sampledTraffic(indices),
           routeIndex: closestIdx,
           isDestinationVisible: true,
           destinationScreenPoint: project(destination),
@@ -226,9 +266,11 @@ class RouteWindowTransformer {
     }
 
     // 3. Subsample if more than maxPointsToSend
+    final indices =
+        sampleIndices(upcomingPoints, maxPointsToSend - past.length);
     final List<LatLng> sampledPoints = [
       ...past,
-      ..._subsample(upcomingPoints, maxPointsToSend - past.length),
+      for (final i in indices) upcomingPoints[i],
     ];
 
     double completedMeters = 0;
@@ -321,6 +363,7 @@ class RouteWindowTransformer {
 
     return RouteWindowSegment(
       points: screenPoints,
+      traffic: sampledTraffic(indices, past: past.length),
       completedSegmentCount: past.length,
       progressPercent: progressPercent,
       routeIndex: closestIdx,
@@ -369,8 +412,10 @@ class RouteWindowTransformer {
     return ScreenPoint(p.x.clamp(0, screenWidth), p.y.clamp(0, screenHeight));
   }
 
-  static List<LatLng> _subsample(List<LatLng> points, int maxCount) {
-    if (points.length <= maxCount) return points;
+  static List<int> _subsampleIndices(
+      List<LatLng> points, int maxCount, bool Function(int)? trafficChangesAt) {
+    if (points.length <= maxCount)
+      return List.generate(points.length, (i) => i);
 
     // Preserve real road corners before filling the remainder evenly.  A
     // uniform sample can discard the one point that represents a right/left
@@ -397,14 +442,21 @@ class RouteWindowTransformer {
       }
     }
 
+    if (trafficChangesAt != null) {
+      for (var i = 1;
+          selected.length < maxCount && i < points.length - 1;
+          i++) {
+        if (trafficChangesAt(i)) selected.add(i);
+      }
+    }
+
     // Fill unused BLE point slots with regular samples to keep long straights
     // smooth and visibly continuous.
     for (var i = 1; selected.length < maxCount && i < points.length - 1; i++) {
       final index = (i * (points.length - 1) / (maxCount - 1)).round();
       selected.add(index);
     }
-    final indices = selected.toList()..sort();
-    return indices.map((index) => points[index]).toList();
+    return selected.toList()..sort();
   }
 
   static double _bearing(LatLng from, LatLng to) {

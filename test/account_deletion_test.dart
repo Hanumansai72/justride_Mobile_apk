@@ -25,7 +25,7 @@ void main() {
       'only successful OTP deletion clears credentials and local ride/device data',
       () async {
     var accepted = false;
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       final backend = BackendService.instance;
       expect(
           (await backend.deleteAccount(password: 'current', otp: '123456'))
@@ -76,7 +76,7 @@ void main() {
     var failUnlink = true;
     var otpRequests = 0;
     var deletes = 0;
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       await tester.pumpWidget(MaterialApp(
           theme: buildAppTheme(),
           home: const DeleteAccountScreen(),

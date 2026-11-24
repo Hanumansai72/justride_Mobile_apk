@@ -14,7 +14,7 @@ void main() {
   });
   test('429 exposes Retry-After and does not erase authentication', () async {
     await ApiClient.instance.saveAuthToken('test-token');
-    final result = await http.runWithClient(
+    final result = await ApiClient.runWithClient(
       () => ApiClient.instance.get('/devices/my-device'),
       () => MockClient((request) async => http.Response(
           jsonEncode({'success': false, 'message': 'Please wait.'}), 429,
@@ -40,7 +40,7 @@ void main() {
       '_id': 'device', 'devicename': 'JustRide', 'is_active': true,
       'is_blocked': false, 'is_retired': false,
     }));
-    final result = await http.runWithClient(
+    final result = await ApiClient.runWithClient(
       () => BackendService.instance.getMyDevice(),
       () => MockClient((_) async => http.Response('{"message":"Please wait"}', 429,
         headers: {'retry-after': '23'})),
@@ -54,7 +54,7 @@ void main() {
       'concurrent device checks share one API request without caching later checks',
       () async {
     var calls = 0;
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       final first = BackendService.instance.getMyDevice();
       final second = BackendService.instance.getMyDevice();
       expect(identical(first, second), isTrue);

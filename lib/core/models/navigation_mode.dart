@@ -1,4 +1,4 @@
-﻿/// Defines the three navigation operating modes supported by the JustRide HUD.
+/// Defines the three navigation operating modes supported by the JustRide HUD.
 enum NavigationMode {
   /// Full turn-by-turn route guidance with maneuver instructions.
   route,

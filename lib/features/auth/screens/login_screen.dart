@@ -88,11 +88,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 40),
                         // Titles
-                        Text('Welcome back!',
+                        Text('Sign in',
                             style: AppTextStyles.displayMedium),
                         const SizedBox(height: 8),
                         Text(
-                          'Login to continue your journey',
+                          'Continue to JustRide',
                           style: AppTextStyles.bodyMedium
                               .copyWith(color: AppColors.textSecondary),
                         ),

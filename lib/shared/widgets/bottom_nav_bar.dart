@@ -8,10 +8,10 @@ class JustRideBottomNavBar extends StatelessWidget {
       {super.key, required this.currentIndex, required this.onTap});
   final int currentIndex;
   final ValueChanged<int> onTap;
-  static const labels = ['Home', 'Places', 'Device', 'Profile'];
+  static const labels = ['Home', 'Community', 'Device', 'Profile'];
   static const icons = [
     Icons.home_outlined,
-    Icons.explore_outlined,
+    Icons.groups_2_outlined,
     Icons.navigation_outlined
   ];
 

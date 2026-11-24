@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/destination.dart';
 
@@ -211,7 +210,7 @@ class MapsUrlParser {
   /// Handles "Shared route From <origin> to <destination>" as well as single place shares,
   /// dropped pins, DMS coordinates, and shortened/full Google Maps links.
   static Future<ParsedShareResult?> parseSharedContent(String sharedText,
-      {bool resolveShortLinks = true}) async {
+      {bool resolveShortLinks = true, http.Client? client}) async {
     final text = sharedText.trim();
     if (text.isEmpty) return null;
 
@@ -234,8 +233,6 @@ class MapsUrlParser {
 
       routeOrigin = _parseEndpointString(rawOrigin);
       routeDest = _parseEndpointString(rawDest);
-      debugPrint(
-          '[MapsUrlParser] Detected shared route - Origin: "${routeOrigin?.displayTitle}", Destination: "${routeDest?.displayTitle}"');
     }
 
     // 3. Check for DMS coordinates in text before URL parsing
@@ -250,10 +247,8 @@ class MapsUrlParser {
       ParsedShareResult? parsedResultFromUrl;
       try {
         parsedResultFromUrl = await parseUrlDetailed(foundUrl,
-            resolveShortLinks: resolveShortLinks);
-      } catch (e) {
-        debugPrint('[MapsUrlParser] Error parsing URL $foundUrl: $e');
-      }
+            resolveShortLinks: resolveShortLinks, client: client);
+      } catch (e) {}
 
       if (parsedResultFromUrl != null) {
         final parsedDest = parsedResultFromUrl.destination;
@@ -347,8 +342,6 @@ class MapsUrlParser {
 
       // If URL parsing failed or returned 0,0, but we have clean extraText
       if (extraText.isNotEmpty) {
-        debugPrint(
-            '[MapsUrlParser] Fallback to extracted place name: "$extraText"');
         return ParsedShareResult(
           destination: Destination(
             name: extraText,
@@ -427,14 +420,15 @@ class MapsUrlParser {
 
   /// Analyzes any text shared into JustRide to extract a Destination.
   /// Maintained for backwards compatibility. Delegates to [parseSharedContent].
-  static Future<Destination?> parseSharedText(String sharedText) async {
-    final result = await parseSharedContent(sharedText);
+  static Future<Destination?> parseSharedText(String sharedText,
+      {http.Client? client}) async {
+    final result = await parseSharedContent(sharedText, client: client);
     return result?.destination;
   }
 
   /// Parses a Google Maps URL and extracts both destination and optional origin (for /maps/dir/ routes).
   static Future<ParsedShareResult?> parseUrlDetailed(String inputUrl,
-      {bool resolveShortLinks = true}) async {
+      {bool resolveShortLinks = true, http.Client? client}) async {
     String finalUrl = inputUrl.trim();
 
     // If it's a shortened URL (goo.gl / maps.app.goo.gl), resolve the redirect chain
@@ -442,13 +436,11 @@ class MapsUrlParser {
     if (inputHost == 'goo.gl' || inputHost == 'maps.app.goo.gl') {
       if (!resolveShortLinks) return null;
       try {
-        final resolved = await _resolveRedirectChain(finalUrl);
+        final resolved = await _resolveRedirectChain(finalUrl, client: client);
         if (resolved != null && resolved.isNotEmpty) {
           finalUrl = resolved;
         }
-      } catch (e) {
-        debugPrint('[MapsUrlParser] Redirect resolution exception: $e');
-      }
+      } catch (e) {}
     }
 
     final uri = Uri.tryParse(finalUrl);
@@ -745,8 +737,10 @@ class MapsUrlParser {
 
   /// Follows HTTP redirects up to 6 hops, parsing final URL and HTML body
   /// (OG image markers, staticmap centers, and app initialization state).
-  static Future<String?> _resolveRedirectChain(String initialUrl) async {
-    final client = http.Client();
+  static Future<String?> _resolveRedirectChain(String initialUrl,
+      {http.Client? client}) async {
+    final ownsClient = client == null;
+    client ??= http.Client();
     var currentUrl = initialUrl;
     final elapsed = Stopwatch()..start();
     Duration remaining() => Duration(
@@ -776,11 +770,12 @@ class MapsUrlParser {
             final continueParam = nextUri.queryParameters['continue'];
             if (continueParam != null && continueParam.isNotEmpty) {
               currentUrl = continueParam;
-              debugPrint(
-                  '[MapsUrlParser] Extracted target URL from consent page: $currentUrl');
             }
           }
 
+          // A CID is already the exact place identity. Fetching another page
+          // can lose it to generic metadata, consent pages, or a timeout.
+          if (googleCid(currentUrl) != null) return currentUrl;
           final query = nextUri.queryParameters['destination'] ??
               nextUri.queryParameters['daddr'] ??
               nextUri.queryParameters['q'] ??
@@ -788,7 +783,6 @@ class MapsUrlParser {
           // A text-only query still needs the page's actual place identity.
           if ((currentUrl.contains('!3d') && currentUrl.contains('!4d')) ||
               currentUrl.contains('/maps/dir/') ||
-              googleCid(currentUrl) != null ||
               nextUri.queryParameters.containsKey('query_place_id') ||
               nextUri.queryParameters.containsKey('place_id') ||
               query.startsWith('place_id:') ||
@@ -830,6 +824,58 @@ class MapsUrlParser {
             currentUrl = content;
           }
 
+          // Some Maps share pages are client-side shells: they return 200 with
+          // the exact place identity in metadata instead of an HTTP redirect.
+          final canonical = RegExp(
+            r'<link[^>]*rel=["\x27]canonical["\x27][^>]*href=["\x27]([^"\x27]+)["\x27]',
+            caseSensitive: false,
+          ).firstMatch(body);
+          final canonicalUrl = canonical?.group(1)?.replaceAll('&amp;', '&');
+          if (canonicalUrl != null && canonicalUrl.isNotEmpty) {
+            currentUrl = Uri.parse(currentUrl).resolve(canonicalUrl).toString();
+            if (currentUrl.contains('!3d') && currentUrl.contains('!4d')) {
+              return currentUrl;
+            }
+          }
+
+          final jsRedirect = RegExp(
+            r'''(?:window\.location(?:\.href)?|location\.replace)\s*(?:=|\()\s*["\x27]([^"\x27]+)["\x27]''',
+            caseSensitive: false,
+          ).firstMatch(body);
+          if (jsRedirect != null) {
+            currentUrl = Uri.parse(currentUrl)
+                .resolve(jsRedirect.group(1)!.replaceAll('&amp;', '&'))
+                .toString();
+            continue;
+          }
+
+          // Resolve CID-only share pages by their exact place identity. A name
+          // search alone can silently select a different branch of a business.
+          final ogTitle = RegExp(
+            r'<meta[^>]*(?:property|name)=["\x27]og:title["\x27][^>]*content=["\x27]([^"\x27]+)["\x27]',
+            caseSensitive: false,
+          ).firstMatch(body)?.group(1);
+          final pageTitle = ogTitle ??
+              RegExp(
+                r'<title[^>]*>(.*?)</title>',
+                caseSensitive: false,
+                dotAll: true,
+              ).firstMatch(body)?.group(1);
+          final title = pageTitle
+              ?.replaceAll(
+                  RegExp(r'\s+-\s+Google Maps\s*$', caseSensitive: false), '')
+              .replaceAll('&amp;', '&')
+              .trim();
+          final cid = googleCid(body) ?? googleCid(currentUrl);
+          if (!_ogImageMarkerRegex.hasMatch(body) &&
+              cid != null &&
+              title != null &&
+              title.isNotEmpty &&
+              title.toLowerCase() != 'google maps') {
+            return 'https://www.google.com/maps/place/'
+                '${Uri.encodeComponent(title)}/?cid=$cid';
+          }
+
           // 3. Check OpenGraph image markers (Exact pin coordinates in staticmap marker URL)
           final ogImageMatch = _ogImageMarkerRegex.firstMatch(body);
           if (ogImageMatch != null && !currentUrl.contains('/maps/dir/')) {
@@ -850,10 +896,9 @@ class MapsUrlParser {
       }
       return currentUrl;
     } catch (e) {
-      debugPrint('[MapsUrlParser] _resolveRedirectChain error: $e');
       return currentUrl;
     } finally {
-      client.close();
+      if (ownsClient) client.close();
     }
   }
 

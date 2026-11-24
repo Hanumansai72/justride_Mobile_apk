@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart';
+import '../../../core/services/offline_touring_service.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../core/services/ride_history_service.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
+import '../../../core/models/destination.dart';
 import '../../../core/models/navigation_session.dart';
+import '../../navigation/widgets/destination_confirm_sheet.dart';
+import '../../community/community_explore_screen.dart';
 
 class RideHistoryCard extends StatelessWidget {
   const RideHistoryCard({super.key, required this.ride});
@@ -11,10 +17,7 @@ class RideHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = (ride.endTime ?? ride.startTime).toLocal();
-    final dateText =
-        '${MaterialLocalizations.of(context).formatMediumDate(date)} · '
-        '${TimeOfDay.fromDateTime(date).format(context)}';
+    final dateText = _dateTime(context, ride.startTime);
     return InkWell(
         onTap: () async {
           final history = RideHistoryService.instance;
@@ -24,28 +27,103 @@ class RideHistoryCard extends StatelessWidget {
             if (!context.mounted ||
                 owner != (await history.currentUserId() ?? 'guest')) return;
             if (!context.mounted) return;
+            final cleanPoints = _cleanTrail(points);
             await showModalBottomSheet<void>(
                 context: context,
-                builder: (context) => SafeArea(
+                builder: (sheetContext) => SafeArea(
                     child: Padding(
                         padding: const EdgeInsets.all(24),
                         child:
                             Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text(ride.summary, textAlign: TextAlign.center),
                           Text(
-                              'Average ${ride.averageSpeedKmh.toStringAsFixed(1)} km/h'),
+                              '${_place(ride.origin, start: true)} → ${_place(ride.destination)}',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.headingSmall),
+                          const SizedBox(height: 12),
+                          Wrap(
+                              spacing: 12,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                _historyMetric('Distance',
+                                    '${ride.distanceKm.toStringAsFixed(1)} km'),
+                                _historyMetric('Duration',
+                                    '${(ride.durationSeconds / 60).round()} min'),
+                                _historyMetric('Average',
+                                    '${ride.averageSpeedKmh.toStringAsFixed(1)} km/h'),
+                                _historyMetric('Top speed',
+                                    '${ride.maxSpeedKmh.toStringAsFixed(1)} km/h'),
+                              ]),
+                          const SizedBox(height: 8),
+                          Text('Started ${_dateTime(context, ride.startTime)}',
+                              style: AppTextStyles.bodySmall),
+                          if (ride.endTime != null)
+                            Text('Ended ${_dateTime(context, ride.endTime!)}',
+                                style: AppTextStyles.bodySmall),
                           const SizedBox(height: 16),
-                          if (points.length < 2)
+                          if (!ride.isMeaningfulRide || cleanPoints.length < 2)
                             const Text(
-                                'GPS trail unavailable for this journey.')
+                                'No reliable GPS trail was recorded for this ride.')
                           else
                             SizedBox(
-                                height: 240,
+                                height: 200,
                                 width: double.infinity,
                                 child: CustomPaint(
-                                    painter: _TrailPainter(points))),
-                          const Text(
-                              'Recorded GPS trail · gaps are left unconnected'),
+                                    painter: _TrailPainter(cleanPoints))),
+                          if (ride.destination != null &&
+                              _hasCoordinates(ride.destination!))
+                            FilledButton.icon(
+                              icon: const Icon(Icons.navigation_outlined),
+                              label:
+                                  const Text('Navigate to destination again'),
+                              onPressed: () {
+                                Navigator.of(sheetContext).pop();
+                                DestinationConfirmSheet.show(
+                                    context, ride.destination!);
+                              },
+                            ),
+                          if (ride.status == 'completed')
+                            TextButton.icon(
+                              icon: const Icon(Icons.edit_outlined),
+                              label: const Text('Write a ride experience'),
+                              onPressed: () {
+                                Navigator.of(sheetContext).pop();
+                                Navigator.of(context)
+                                    .push(MaterialPageRoute<bool>(
+                                  builder: (_) =>
+                                      CommunityExperienceEditor(ride: ride),
+                                ));
+                              },
+                            ),
+                          if (!kIsWeb &&
+                              ride.isMeaningfulRide &&
+                              cleanPoints.length >= 3)
+                            TextButton.icon(
+                              icon: const Icon(Icons.offline_pin_outlined),
+                              label: const Text('Save for offline touring'),
+                              onPressed: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                try {
+                                  final pack = OfflineTouringPack.fromTrail(
+                                      ride, cleanPoints);
+                                  await OfflineTouringService.save(owner, pack);
+                                  if (!context.mounted) return;
+                                  Navigator.pop(sheetContext);
+                                  messenger.showSnackBar(const SnackBar(
+                                      content: Text(
+                                          'Saved in Ride tools → Offline touring')));
+                                } on FormatException catch (error) {
+                                  if (context.mounted)
+                                    messenger.showSnackBar(
+                                        SnackBar(content: Text(error.message)));
+                                } catch (_) {
+                                  if (context.mounted)
+                                    messenger.showSnackBar(const SnackBar(
+                                        content: Text(
+                                            'Could not save the offline track.')));
+                                }
+                              },
+                            ),
                         ]))));
           } catch (_) {
             if (context.mounted)
@@ -73,7 +151,7 @@ class RideHistoryCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis)),
             ]),
             const SizedBox(height: 8),
-            Text('From ${ride.origin?.displayTitle ?? 'Start'}',
+            Text('From ${_place(ride.origin, start: true)}',
                 style: AppTextStyles.bodySmall,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis),
@@ -83,15 +161,107 @@ class RideHistoryCard extends StatelessWidget {
                   style: AppTextStyles.labelLarge),
               Text('${(ride.durationSeconds / 60).ceil()} min',
                   style: AppTextStyles.labelLarge),
+              Text('Avg ${ride.averageSpeedKmh.toStringAsFixed(1)} km/h',
+                  style: AppTextStyles.labelLarge),
+              Text('Max ${ride.maxSpeedKmh.toStringAsFixed(1)} km/h',
+                  style: AppTextStyles.labelLarge),
               Text(ride.status == 'stopped' ? 'Ended early' : 'Completed',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.primary)),
             ]),
             const SizedBox(height: 10),
-            Text(dateText, style: AppTextStyles.bodySmall),
+            Text('Started $dateText', style: AppTextStyles.bodySmall),
+            if (ride.endTime != null)
+              Text('Ended ${_dateTime(context, ride.endTime!)}',
+                  style: AppTextStyles.bodySmall),
+            if (ride.destination != null && _hasCoordinates(ride.destination!))
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () =>
+                      DestinationConfirmSheet.show(context, ride.destination!),
+                  icon: const Icon(Icons.navigation_outlined),
+                  label: const Text('Navigate to this destination again'),
+                ),
+              ),
           ]),
         ));
   }
+}
+
+String _place(Destination? place, {bool start = false}) {
+  if (place == null) {
+    return start ? 'Starting point not recorded' : 'Destination not recorded';
+  }
+  if (start &&
+      (place.name == 'Start' || place.name?.trim().isEmpty == true) &&
+      _hasCoordinates(place)) {
+    return 'Start · ${place.latitude.toStringAsFixed(4)}, ${place.longitude.toStringAsFixed(4)}';
+  }
+  return place.displayTitle;
+}
+
+Widget _historyMetric(String label, String value) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: AppTextStyles.bodySmall),
+        const SizedBox(height: 3),
+        Text(value, style: AppTextStyles.labelLarge),
+      ],
+    );
+
+String _dateTime(BuildContext context, DateTime value) {
+  final date = value.toLocal();
+  return '${MaterialLocalizations.of(context).formatMediumDate(date)} · ${TimeOfDay.fromDateTime(date).format(context)}';
+}
+
+bool _hasCoordinates(Destination destination) =>
+    destination.latitude.isFinite &&
+    destination.longitude.isFinite &&
+    destination.latitude.abs() <= 90 &&
+    destination.longitude.abs() <= 180 &&
+    (destination.latitude != 0 || destination.longitude != 0);
+
+List<Map<String, dynamic>> _cleanTrail(List<Map<String, dynamic>> points) {
+  final clean = <Map<String, dynamic>>[];
+  var breakNext = true;
+  for (final raw in points) {
+    final lat = raw['lat'], lon = raw['lon'];
+    if (lat is! num ||
+        lon is! num ||
+        !lat.isFinite ||
+        !lon.isFinite ||
+        lat < -90 ||
+        lat > 90 ||
+        lon < -180 ||
+        lon > 180 ||
+        (raw['accuracy'] is num && (raw['accuracy'] as num) > 35)) {
+      breakNext = true;
+      continue;
+    }
+    var segment = breakNext || raw['segment'] == true || clean.isEmpty;
+    if (clean.isNotEmpty && !segment) {
+      final previous = clean.last;
+      final priorAt = DateTime.tryParse(previous['at']?.toString() ?? '');
+      final currentAt = DateTime.tryParse(raw['at']?.toString() ?? '');
+      if (priorAt != null && currentAt != null) {
+        final seconds = currentAt.difference(priorAt).inMilliseconds / 1000;
+        final meters = Geolocator.distanceBetween(
+            (previous['lat'] as num).toDouble(),
+            (previous['lon'] as num).toDouble(),
+            lat.toDouble(),
+            lon.toDouble());
+        if (seconds <= 0 || meters / seconds > 55) {
+          segment = true;
+        } else if (meters < 7) {
+          continue;
+        }
+      }
+    }
+    clean.add({...raw, 'segment': segment});
+    breakNext = false;
+  }
+  return clean;
 }
 
 class _TrailPainter extends CustomPainter {

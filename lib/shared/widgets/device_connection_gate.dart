@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_shell.dart';
 import '../../core/services/backend_service.dart';
 import '../../features/device/screens/device_pairing_screen.dart';
 
@@ -37,7 +38,7 @@ class _DeviceConnectionGateState extends State<DeviceConnectionGate> {
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          return widget.builder(context);
+          return AppShell(child: widget.builder(context));
         },
       );
 }

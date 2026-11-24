@@ -7,24 +7,34 @@ const _companionChannel = MethodChannel('com.justride.app/companion');
 const _mediaTimeout = Duration(seconds: 3);
 
 void setSystemMediaListener(void Function(Map<Object?, Object?>)? listener) {
-  _mediaChannel.setMethodCallHandler(listener == null ? null : (call) async {
-    if (call.method == 'mediaChanged' && call.arguments is Map) {
-      listener(Map<Object?, Object?>.from(call.arguments as Map));
-    }
-  });
+  _mediaChannel.setMethodCallHandler(listener == null
+      ? null
+      : (call) async {
+          if (call.method == 'mediaChanged' && call.arguments is Map) {
+            listener(Map<Object?, Object?>.from(call.arguments as Map));
+          }
+        });
 }
 
 Future<bool> startSystemMediaUpdates() async {
   if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
   try {
-    return await _mediaChannel.invokeMethod<Object?>('watchMedia').timeout(_mediaTimeout) == true;
-  } on Exception { return false; }
+    return await _mediaChannel
+            .invokeMethod<Object?>('watchMedia')
+            .timeout(_mediaTimeout) ==
+        true;
+  } on Exception {
+    return false;
+  }
 }
 
 Future<void> stopSystemMediaUpdates() async {
   if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-  try { await _mediaChannel.invokeMethod<void>('unwatchMedia').timeout(_mediaTimeout); }
-  on Exception { /* Older native shells keep the polling fallback. */ }
+  try {
+    await _mediaChannel
+        .invokeMethod<void>('unwatchMedia')
+        .timeout(_mediaTimeout);
+  } on Exception {/* Older native shells keep the polling fallback. */}
 }
 
 Future<bool> _repairMediaBridge() async {
@@ -33,8 +43,7 @@ Future<bool> _repairMediaBridge() async {
             .invokeMethod<bool>('repairMediaBridge')
             .timeout(_mediaTimeout) ==
         true;
-  } on Exception catch (error) {
-    debugPrint('[BleMedia] Bridge repair failed: ${error.runtimeType}');
+  } on Exception {
     return false;
   }
 }
@@ -63,13 +72,9 @@ Future<Map<Object?, Object?>> readSystemMedia({int? command}) async {
         final accepted = await _mediaChannel
             .invokeMethod<bool>(methods[command - 1])
             .timeout(_mediaTimeout);
-        if (accepted != true) {
-          debugPrint('[BleMedia] Command $command rejected by player');
-        }
+        if (accepted != true) {}
       }
-    } on Exception catch (error) {
-      debugPrint('[BleMedia] Command $command failed: ${error.runtimeType}');
-    }
+    } on Exception {}
   }
   Future<Map<Object?, Object?>> snapshot() async {
     final value = await _mediaChannel
@@ -84,15 +89,9 @@ Future<Map<Object?, Object?>> readSystemMedia({int? command}) async {
     if (await _repairMediaBridge()) {
       try {
         return await snapshot();
-      } on Exception catch (error) {
-        debugPrint(
-            '[BleMedia] Snapshot after repair failed: ${error.runtimeType}');
-      }
+      } on Exception {}
     }
-  } on PlatformException catch (error) {
-    debugPrint('[BleMedia] Snapshot failed: ${error.code}');
-  } on TimeoutException {
-    debugPrint('[BleMedia] Snapshot timed out');
-  }
+  } on PlatformException {
+  } on TimeoutException {}
   return const {'state': 7};
 }

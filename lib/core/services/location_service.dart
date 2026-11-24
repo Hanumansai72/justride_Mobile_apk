@@ -2,11 +2,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
-import '../utils/speed_filter.dart';
+import '../utils/gps_motion_filter.dart';
 
 /// Service responsible for GPS acquisition, speed, heading, and permission management.
 ///
-/// Speed is always passed through [SpeedFilter] before being emitted.
+/// Position and speed share one motion filter before being emitted.
 class LocationService with WidgetsBindingObserver {
   LocationService._();
   static final LocationService instance = LocationService._();
@@ -19,29 +19,37 @@ class LocationService with WidgetsBindingObserver {
   LocationPermission _permission = LocationPermission.denied;
   DateTime? _lastLiveFixAt;
 
-  /// Stateful speed filter — reused across updates to track previous speed.
-  final SpeedFilter _speedFilter = SpeedFilter();
+  final GpsMotionFilter _motionFilter = GpsMotionFilter();
 
   final ValueNotifier<Position?> positionNotifier =
       ValueNotifier<Position?>(null);
 
-  /// Filtered, display-ready speed in km/h. Always 0.0 when stationary.
-  /// Never shows GPS jitter noise.
+  /// Filtered, display-ready speed in km/h.
   final ValueNotifier<double> speedKmhNotifier = ValueNotifier<double>(0.0);
 
   final ValueNotifier<double> headingNotifier = ValueNotifier<double>(0.0);
   final ValueNotifier<bool> isGpsAvailableNotifier = ValueNotifier<bool>(false);
 
+  @visibleForTesting
+  void resetFixForTesting() {
+    _currentPosition = null;
+    positionNotifier.value = null;
+    _previousPosition = null;
+    _motionFilter.reset();
+  }
+
   Position? get currentPosition => _currentPosition;
   bool get isGpsAvailable => isGpsAvailableNotifier.value;
 
   /// HUD guidance must not present an old/bad fix as live while recovery polls.
+  static const navigationFixTimeout = Duration(seconds: 10);
+
   static bool navigationFixFresh(Position? fix, DateTime now) =>
       fix != null &&
       fix.accuracy.isFinite &&
       fix.accuracy <= 50 &&
       now.toUtc().difference(fix.timestamp.toUtc()).abs() <=
-          const Duration(seconds: 10);
+          navigationFixTimeout;
   bool get hasFreshNavigationFix =>
       navigationFixFresh(positionNotifier.value, DateTime.now());
 
@@ -55,7 +63,6 @@ class LocationService with WidgetsBindingObserver {
     try {
       _isServiceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!_isServiceEnabled) {
-        debugPrint('[LocationService] Location services are disabled.');
         isGpsAvailableNotifier.value = false;
         return false;
       }
@@ -64,14 +71,12 @@ class LocationService with WidgetsBindingObserver {
       if (_permission == LocationPermission.denied) {
         _permission = await Geolocator.requestPermission();
         if (_permission == LocationPermission.denied) {
-          debugPrint('[LocationService] Location permissions are denied');
           isGpsAvailableNotifier.value = false;
           return false;
         }
       }
 
       if (_permission == LocationPermission.deniedForever) {
-        debugPrint('[LocationService] Location permissions permanently denied');
         isGpsAvailableNotifier.value = false;
         return false;
       }
@@ -79,7 +84,6 @@ class LocationService with WidgetsBindingObserver {
       isGpsAvailableNotifier.value = true;
       return true;
     } catch (e) {
-      debugPrint('[LocationService] Error ensuring permissions: $e');
       isGpsAvailableNotifier.value = false;
       return false;
     }
@@ -101,25 +105,23 @@ class LocationService with WidgetsBindingObserver {
       );
       if (_isFreshUsableFix(pos)) {
         _onPositionUpdate(pos);
-        return pos;
+        return _currentPosition;
       }
-      debugPrint(
-          '[LocationService] Current GPS fix is stale or inaccurate. Falling back to last known.');
+
       final lastKnown = await Geolocator.getLastKnownPosition();
       if (lastKnown != null &&
           _isFreshUsableFix(lastKnown, maxAgeSeconds: 1800)) {
         _onPositionUpdate(lastKnown);
-        return lastKnown;
+        return _currentPosition;
       }
       if (_currentPosition != null) return _currentPosition;
       return null;
     } catch (e) {
-      debugPrint('[LocationService] getCurrentPosition error: $e');
       final lastKnown = await Geolocator.getLastKnownPosition();
       if (lastKnown != null &&
           _isFreshUsableFix(lastKnown, maxAgeSeconds: 1800)) {
         _onPositionUpdate(lastKnown);
-        return lastKnown;
+        return _currentPosition;
       }
       if (_currentPosition != null) return _currentPosition;
       return null;
@@ -156,7 +158,7 @@ class LocationService with WidgetsBindingObserver {
 
     await stopTracking();
     final trackingGeneration = _trackingGeneration;
-    _speedFilter.reset();
+    _motionFilter.reset();
     _previousPosition = null;
     _lastLiveFixAt = DateTime.now();
     isGpsAvailableNotifier.value = true;
@@ -200,7 +202,6 @@ class LocationService with WidgetsBindingObserver {
         return false;
       }
     } catch (e) {
-      debugPrint('[LocationService] Unable to start ride location stream: $e');
       if (trackingGeneration == _trackingGeneration) await stopTracking();
       return false;
     }
@@ -213,17 +214,18 @@ class LocationService with WidgetsBindingObserver {
       if (!_trackingActive || trackingGeneration != _trackingGeneration) return;
       final lastFix = _lastLiveFixAt;
       if (lastFix != null &&
-          DateTime.now().difference(lastFix) > const Duration(seconds: 45)) {
+          DateTime.now().difference(lastFix) > navigationFixTimeout) {
         if (isGpsAvailableNotifier.value) {
-          debugPrint(
-              '[LocationService] No live GPS fix for 45s. Marking GPS lost.');
           isGpsAvailableNotifier.value = false;
           speedKmhNotifier.value = 0.0;
         }
         // The live stream remains active. Back off extra one-shot requests
         // during a prolonged outage instead of starting another every 4 s.
         final now = DateTime.now();
-        if (_recoveryPollBusy || (_nextRecoveryPoll != null && now.isBefore(_nextRecoveryPoll!))) return;
+        if (_recoveryPollBusy ||
+            (_nextRecoveryPoll != null && now.isBefore(_nextRecoveryPoll!))) {
+          return;
+        }
         _recoveryPollBusy = true;
         try {
           final fix = await Geolocator.getCurrentPosition(
@@ -233,7 +235,8 @@ class LocationService with WidgetsBindingObserver {
             ),
           );
           if (_trackingActive && trackingGeneration == _trackingGeneration) {
-            if (_isFreshUsableFix(fix, maxAgeSeconds: 30) && fix.accuracy <= 120.0) {
+            if (_isFreshUsableFix(fix, maxAgeSeconds: 30) &&
+                fix.accuracy <= 120.0) {
               _onPositionUpdate(fix);
             } else {
               _recoveryPollFailures = (_recoveryPollFailures + 1).clamp(0, 3);
@@ -266,13 +269,8 @@ class LocationService with WidgetsBindingObserver {
         _streamNeedsRecovery = false;
         _recoveryTimer?.cancel();
         _onPositionUpdate(pos);
-        if (kDebugMode) debugPrint('[LocationService] Live fix: '
-            '${pos.latitude.toStringAsFixed(6)},${pos.longitude.toStringAsFixed(6)} '
-            '±${pos.accuracy.toStringAsFixed(0)}m '
-            '${speedKmhNotifier.value.toStringAsFixed(1)}km/h');
       },
       onError: (e) {
-        debugPrint('[LocationService] GPS stream error: $e');
         isGpsAvailableNotifier.value = false;
         speedKmhNotifier.value = 0.0;
         _scheduleRecovery();
@@ -299,12 +297,10 @@ class LocationService with WidgetsBindingObserver {
           WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
         return;
       }
-      debugPrint(
-          '[LocationService] Recovering GPS with the active ride settings.');
+
       try {
         await _startStream(_trackingSettings!);
       } catch (e) {
-        debugPrint('[LocationService] Recovery failed: $e');
         _scheduleRecovery();
       }
     });
@@ -320,7 +316,12 @@ class LocationService with WidgetsBindingObserver {
   // ── Internal Update Handler ──────────────────────────────────────────────
 
   void _onPositionUpdate(Position pos) {
+    if (_currentPosition != null &&
+        !pos.timestamp.isAfter(_currentPosition!.timestamp)) {
+      return;
+    }
     if (!_isFreshUsableFix(pos, maxAgeSeconds: 30) ||
+        pos.accuracy < 0 ||
         pos.accuracy > 120 ||
         !pos.latitude.isFinite ||
         !pos.longitude.isFinite ||
@@ -330,19 +331,16 @@ class LocationService with WidgetsBindingObserver {
       speedKmhNotifier.value = 0;
       return;
     }
+    final filteredPosition = _motionFilter.process(pos);
+    if (filteredPosition == null) return;
+    pos = filteredPosition;
     _lastLiveFixAt = DateTime.now();
     _recoveryPollFailures = 0;
     _nextRecoveryPoll = null;
     _currentPosition = pos;
     isGpsAvailableNotifier.value = true;
 
-    // Respect a valid zero-speed fix. GPS coordinate drift must never
-    // override it, and inaccurate/missing speed is not inferred from position.
-    final filtered = _speedFilter.process(
-      rawSpeedMs: pos.speed,
-      speedAccuracy: pos.speedAccuracy,
-    );
-    speedKmhNotifier.value = filtered ?? 0;
+    speedKmhNotifier.value = pos.speed * 3.6;
 
     // ── Heading: vector bearing from movement or sensor ──────────────────
     final kmh = speedKmhNotifier.value;
@@ -369,8 +367,6 @@ class LocationService with WidgetsBindingObserver {
           headingNotifier.value = pos.heading;
         }
       }
-    } else if (pos.heading > 0 && !pos.heading.isNaN) {
-      headingNotifier.value = pos.heading;
     }
 
     _previousPosition = pos;
@@ -407,7 +403,7 @@ class LocationService with WidgetsBindingObserver {
     _gpsWatchdog = null;
     _lastLiveFixAt = null;
     _previousPosition = null;
-    _speedFilter.reset();
+    _motionFilter.reset();
   }
 
   void dispose() {

@@ -39,20 +39,18 @@ class ShareService {
           _processSharedFile(value.first);
         }
       },
-      onError: (err) {
-        debugPrint('[ShareService] getMediaStream error: $err');
-      },
+      onError: (err) {},
     );
 
     // 2. Process initial share from receive_sharing_intent (cold-start)
-    ReceiveSharingIntent.instance.getInitialMedia().then((List<SharedMediaFile> value) {
+    ReceiveSharingIntent.instance
+        .getInitialMedia()
+        .then((List<SharedMediaFile> value) {
       if (value.isNotEmpty) {
         _processSharedFile(value.first);
         ReceiveSharingIntent.instance.reset();
       }
-    }).catchError((err) {
-      debugPrint('[ShareService] getInitialMedia error: $err');
-    });
+    }).catchError((err) {});
 
     // 3. Fail-safe Native MethodChannel bridge for Android onNewIntent / cold start
     _initNativeShareChannel();
@@ -63,7 +61,6 @@ class ShareService {
       if (call.method == 'onSharedTextReceived') {
         final text = call.arguments?.toString();
         if (text != null && text.trim().isNotEmpty) {
-          debugPrint('[ShareService] Received shared text from native channel: $text');
           await handleSharedText(text.trim());
         }
       }
@@ -74,19 +71,15 @@ class ShareService {
         .invokeMethod<String>('getInitialSharedText')
         .then((payload) {
       if (payload != null && payload.trim().isNotEmpty) {
-        debugPrint('[ShareService] Retrieved initial text from native channel: $payload');
         handleSharedText(payload.trim());
       }
-    }).catchError((err) {
-      debugPrint('[ShareService] getInitialSharedText error: $err');
-    });
+    }).catchError((err) {});
   }
 
   Future<void> _processSharedFile(SharedMediaFile file) async {
     final text = file.path.trim();
     if (text.isEmpty) return;
 
-    debugPrint('[ShareService] Received shared content: $text');
     await handleSharedText(text);
   }
 
@@ -96,7 +89,6 @@ class ShareService {
     if (_lastProcessedPayload == text &&
         _lastProcessedTime != null &&
         now.difference(_lastProcessedTime!).inSeconds < 4) {
-      debugPrint('[ShareService] Ignoring duplicate share payload within 4s.');
       return destinationSharedNotifier.value;
     }
     _lastProcessedPayload = text;
@@ -104,10 +96,11 @@ class ShareService {
 
     final generation = ++_shareGeneration;
     try {
-      final parsed = await MapsUrlParser.parseSharedContent(text, resolveShortLinks: false);
+      final parsed = await MapsUrlParser.parseSharedContent(text,
+          resolveShortLinks: false);
       if (generation != _shareGeneration) return null;
       if (parsed == null) {
-        debugPrint('[ShareService] Could not parse destination from text.');
+        _showShareError();
         return null;
       }
 
@@ -116,18 +109,25 @@ class ShareService {
 
       currentSharedStartLocation = start;
       destinationSharedNotifier.value = dest;
-      debugPrint(
-          '[ShareService] Received shared destination: ${dest.displayTitle} (${dest.latitude}, ${dest.longitude})'
-          '${start != null ? " with start: ${start.displayTitle} (${start.latitude}, ${start.longitude})" : ""}');
 
       // Attempt to immediately display confirmation sheet if navigator context is available
       tryPresentSharedDestination();
 
       return dest;
-    } catch (e) {
-      debugPrint('[ShareService] Error parsing shared text: $e');
+    } catch (_) {
+      if (generation == _shareGeneration) _showShareError();
       return null;
     }
+  }
+
+  void _showShareError() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      appMessengerKey.currentState?.showSnackBar(const SnackBar(
+        content: Text(
+            'Couldn’t read the shared location. Share a place or pin from Maps again.'),
+      ));
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Presents the destination confirmation sheet on top of whatever screen the user is on.
@@ -136,26 +136,27 @@ class ShareService {
     final dest = destinationSharedNotifier.value;
     if (dest == null) return;
 
-    final targetContext = context ?? appNavigatorKey.currentContext;
+    final targetContext =
+        context ?? appNavigatorKey.currentState?.overlay?.context;
     if (targetContext == null) return;
 
     // Do not show bottom sheet over splash screen; wait for dashboard to mount
     final route = ModalRoute.of(targetContext);
     if (route != null && route.settings.name == AppRoutes.splash) {
-      debugPrint('[ShareService] App on splash screen, holding shared destination until dashboard.');
       return;
     }
 
     final startLoc = currentSharedStartLocation;
-    clearSharedDestination();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!targetContext.mounted) return;
+      if (!targetContext.mounted ||
+          !identical(destinationSharedNotifier.value, dest)) return;
+      clearSharedDestination();
       await DestinationConfirmSheet.show(
-          targetContext,
-          dest,
-          startLocation: startLoc,
-        );
+        targetContext,
+        dest,
+        startLocation: startLoc,
+      );
     });
     WidgetsBinding.instance.ensureVisualUpdate();
   }

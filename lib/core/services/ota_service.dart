@@ -1,3 +1,4 @@
+import '../utils/user_facing_error.dart';
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -99,13 +100,9 @@ class JustRideOtaService {
 
       final found =
           _controlChr != null && _dataChr != null && _statusChr != null;
-      if (!found) {
-        debugPrint(
-            '[OTA] Error: JustRide OTA GATT Service (0xFF10) not found on device.');
-      }
+      if (!found) {}
       return found;
     } catch (e) {
-      debugPrint('[OTA] Error discovering characteristics: $e');
       return false;
     }
   }
@@ -124,7 +121,6 @@ class JustRideOtaService {
       // Step 1: Download firmware binary over HTTPS
       _updateProgress(OtaState.downloading, 0.05,
           'Downloading firmware v$targetVersion...');
-      debugPrint('[OTA] Fetching firmware binary from: $downloadUrl');
 
       Uint8List firmwareBytes;
       final uri = Uri.tryParse(downloadUrl);
@@ -136,15 +132,15 @@ class JustRideOtaService {
               await client.send(request).timeout(const Duration(seconds: 30));
           if (response.statusCode != 200)
             throw StateError(
-                'Firmware download failed. Use a direct HTTPS download URL.');
+                'The update couldn’t be downloaded. Please try again.');
           const limit = 0x1b0000;
           if ((response.contentLength ?? 0) > limit)
-            throw StateError('Firmware exceeds the device update partition.');
+            throw StateError('This update is too large for your device. Choose a compatible update.');
           final bytes = BytesBuilder(copy: false);
           await for (final chunk
               in response.stream.timeout(const Duration(seconds: 15))) {
             if (bytes.length + chunk.length > limit)
-              throw StateError('Firmware exceeds the device update partition.');
+              throw StateError('This update is too large for your device. Choose a compatible update.');
             bytes.add(chunk);
           }
           firmwareBytes = bytes.takeBytes();
@@ -152,21 +148,19 @@ class JustRideOtaService {
           client.close();
         }
       } else {
-        throw StateError('Firmware downloads require a direct HTTPS URL.');
+        throw StateError('This download link is unavailable. Please try again later.');
       }
-
-      debugPrint(
-          '[OTA] Download complete: ${firmwareBytes.length} bytes. Initiating BLE flash...');
 
       // Step 2: Flash to ESP32 over BLE
       final success =
           await _flashRawBytes(device: device, firmwareBytes: firmwareBytes);
       return success;
     } catch (e) {
-      debugPrint('[OTA] Download and flash failed: $e');
       _updateProgress(OtaState.failed, 0.0, 'Update failed',
           error: e is StateError
-              ? e.message.toString()
+              ? userFacingError(e.message.toString(),
+                  fallback:
+                      'The update couldn’t complete. Keep your device on and try again.')
               : 'Firmware download failed. Check the connection and retry.');
       _isUpdating = false;
       return false;
@@ -209,7 +203,7 @@ class JustRideOtaService {
       if (ble.firmwareChipId == 9) {
         if (!ble.signedOtaSupported)
           throw StateError(
-              'Install the signed Waveshare firmware by USB first.');
+              'This device needs an initial update by USB. Contact support for help.');
         await ble.requestPowerStatus();
         await Future<void>.delayed(const Duration(milliseconds: 300));
         if (!powerAllowsUpdate(ble.powerStatus.value, DateTime.now()))
@@ -224,13 +218,9 @@ class JustRideOtaService {
       }
 
       // 2. Negotiate higher MTU for fast, safe OTA chunking (up to 256 or 512 bytes)
-      int negotiatedMtu = 247;
       try {
-        negotiatedMtu = await device.requestMtu(256);
-        debugPrint('[OTA] Negotiated MTU: $negotiatedMtu bytes');
-      } catch (e) {
-        debugPrint('[OTA] MTU negotiation optional note: $e');
-      }
+        await device.requestMtu(256);
+      } catch (e) {}
 
       // 3. Subscribe before START so the final device verification cannot be missed.
       final finalStatus = Completer<int>();
@@ -245,8 +235,6 @@ class JustRideOtaService {
         if (data.isNotEmpty) {
           final statusCode = data[0];
           final progressPct = data.length > 1 ? data[1] : 0;
-          debugPrint(
-              '[OTA] Notification from ESP32 -> Status: $statusCode, Pct: $progressPct%');
 
           if (!updateStarted) return;
           if (statusCode == 1 && !readyStatus.isCompleted)
@@ -274,13 +262,12 @@ class JustRideOtaService {
       final byteData = ByteData.sublistView(startPayload, 1, 5);
       byteData.setUint32(0, size, Endian.little);
 
-      debugPrint('[OTA] Sending START command (Size: $size bytes)...');
       updateStarted = true;
       await _controlChr!.write(startPayload, withoutResponse: false);
 
       if (await readyStatus.future.timeout(const Duration(seconds: 25)) != 1) {
         throw StateError(
-            'Device rejected the update. Check power and signed firmware.');
+            'Your device couldn’t accept this update. Keep it powered on and try again.');
       }
 
       // Calculate safe chunk size based on MTU (header takes 3 bytes in ATT + 2 bytes sequence)
@@ -320,8 +307,6 @@ class JustRideOtaService {
             await _dataChr!.write(packet, withoutResponse: false);
             written = true;
           } catch (err) {
-            debugPrint(
-                '[OTA] Chunk $i write failed (attempt ${retry + 1}/4): $err');
             if (retry < 3) {
               await Future.delayed(Duration(milliseconds: 50 * (retry + 1)));
             } else {
@@ -332,20 +317,18 @@ class JustRideOtaService {
 
         final progress = (i + 1) / totalChunks;
         final pct = (progress * 100).toInt();
-        if (i % 10 == 0 || i == totalChunks - 1) {
-          debugPrint('[OTA] Chunk $i/$totalChunks written. Progress: $pct%');
-        }
+        if (i % 10 == 0 || i == totalChunks - 1) {}
         _updateProgress(
             OtaState.transferring, progress, 'Installing update ($pct%)...');
       }
 
       if (await writtenStatus.future.timeout(const Duration(seconds: 30)) !=
           2) {
-        throw StateError('Device could not finish writing the firmware.');
+        throw StateError('The update didn’t finish. Keep your device powered on and try again.');
       }
       _updateProgress(
           OtaState.verifying, 0.98, 'Verifying update signature...');
-      debugPrint('[OTA] Sending FINISH command...');
+
       finishSent = true;
       await _controlChr!.write([_kCmdFinish], withoutResponse: false);
       final result = await finalStatus.future.timeout(
@@ -359,11 +342,10 @@ class JustRideOtaService {
 
       _updateProgress(
           OtaState.success, 1.0, 'Update successful! Restarting device...');
-      debugPrint('[OTA] Sending REBOOT command...');
+
       try {
         await _controlChr!.write([_kCmdReboot], withoutResponse: true);
       } catch (e) {
-        debugPrint('[OTA] Firmware verified, but reboot command failed: $e');
         _updateProgress(OtaState.success, 1.0,
             'Update verified. Restart the device to apply it.');
       }
@@ -371,10 +353,11 @@ class JustRideOtaService {
       _isUpdating = false;
       return true;
     } catch (e) {
-      debugPrint('[OTA] Flash error: $e');
       _updateProgress(OtaState.failed, 0.0, 'Update failed',
           error: e is StateError
-              ? e.message.toString()
+              ? userFacingError(e.message.toString(),
+                  fallback:
+                      'The update couldn’t complete. Keep your device on and try again.')
               : 'Update interrupted or rejected. Keep the device powered and retry.');
       _isUpdating = false;
       try {

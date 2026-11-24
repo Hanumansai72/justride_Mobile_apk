@@ -53,8 +53,6 @@ class GoogleAuthService {
       final String? idToken = auth.idToken;
       final String? accessToken = auth.accessToken;
 
-      debugPrint('[GoogleAuthService] Signed in: ${account.email}');
-
       if ((idToken == null || idToken.isEmpty) &&
           (accessToken == null || accessToken.isEmpty)) {
         return const GoogleAuthResult(
@@ -84,8 +82,7 @@ class GoogleAuthService {
               : 'Unable to sign in. Please try again.',
         );
       }
-    } catch (e, stack) {
-      debugPrint('[GoogleAuthService] Exception: $e\n$stack');
+    } catch (e) {
       return const GoogleAuthResult(
         success: false,
         message: 'Unable to sign in with Google. Please try again.',

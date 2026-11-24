@@ -1,3 +1,5 @@
+import 'notification_listener_service.dart';
+import 'navigation_service.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -57,10 +59,17 @@ class TelephonyService {
       ValueNotifier<IncomingCallInfo>(const IncomingCallInfo());
 
   bool _isListening = false;
+  bool _watchingRideState = false;
+  bool _callWasSuppressed = false;
 
   void init() {
     _channel.setMethodCallHandler(_handleNativeMethodCall);
     startListening();
+    if (!_watchingRideState) {
+      _watchingRideState = true;
+      NavigationService.instance.rideStateNotifier
+          .addListener(_onRideStateChange);
+    }
   }
 
   Future<void> startListening() async {
@@ -68,10 +77,8 @@ class TelephonyService {
     try {
       await _channel.invokeMethod('startListening');
       _isListening = true;
-      debugPrint('[TelephonyService] Started telephony monitoring');
     } catch (e) {
       _isListening = false;
-      debugPrint('[TelephonyService] startListening error: $e');
     }
   }
 
@@ -79,9 +86,7 @@ class TelephonyService {
     try {
       _isListening = false;
       await _channel.invokeMethod('stopListening');
-    } catch (e) {
-      debugPrint('[TelephonyService] stopListening error: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> _handleNativeMethodCall(MethodCall call) async {
@@ -89,8 +94,6 @@ class TelephonyService {
       final args = call.arguments as Map<dynamic, dynamic>?;
       final stateStr = args?['state'] as String? ?? 'IDLE';
       final number = args?['number'] as String? ?? '';
-
-      debugPrint('[TelephonyService] onCallStateChanged: $stateStr ($number)');
 
       PhoneCallStatus newStatus;
       switch (stateStr) {
@@ -117,16 +120,26 @@ class TelephonyService {
       final args = call.arguments as Map<dynamic, dynamic>?;
       final granted = args?['granted'] == true;
       _isListening = granted;
-      debugPrint('[TelephonyService] Phone-state permission granted: $granted');
     }
   }
 
+  void _onRideStateChange() {
+    final suppressed = !NotificationListenerService.instance.allowCallOverlay;
+    if (_callWasSuppressed == suppressed) return;
+    _callWasSuppressed = suppressed;
+    if (callInfoNotifier.value.hasActiveCall) unawaited(syncDisplay());
+  }
+
   Future<void> syncDisplay() async {
+    final notifications = NotificationListenerService.instance;
+    await notifications.settingsReady;
     int actions = 0;
     try {
       actions = await _channel.invokeMethod<int>('getCallCapabilities') ?? 0;
     } catch (_) {}
-    final info = callInfoNotifier.value;
+    final info = notifications.allowCallOverlay
+        ? callInfoNotifier.value
+        : const IncomingCallInfo();
     await BleNavigationService.instance.sendCallState(
         info.status.index, actions, info.displayName,
         number: info.callerNumber);
@@ -137,7 +150,6 @@ class TelephonyService {
     try {
       return await _channel.invokeMethod<bool>('answerCall') ?? false;
     } catch (e) {
-      debugPrint('[TelephonyService] answerCall error: $e');
       return false;
     }
   }
@@ -147,7 +159,6 @@ class TelephonyService {
     try {
       return await _channel.invokeMethod<bool>('rejectCall') ?? false;
     } catch (e) {
-      debugPrint('[TelephonyService] rejectCall error: $e');
       return false;
     }
   }

@@ -51,7 +51,6 @@ class PushNotificationService with WidgetsBindingObserver {
         });
       }
     } catch (_) {
-      debugPrint('[Push] Registration unavailable; will retry on resume.');
     } finally {
       _syncing = false;
     }

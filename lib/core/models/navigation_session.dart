@@ -75,6 +75,14 @@ class NavigationSession {
   /// Whether this session has completed.
   bool get isCompleted => endTime != null;
 
+  /// Ignore very short GPS drift sessions in history and ridden totals.
+  bool get isMeaningfulRide =>
+      endTime != null &&
+      distanceMeters.isFinite &&
+      distanceMeters >= 250 &&
+      durationSeconds >= 30 &&
+      (status == 'completed' || status == 'stopped');
+
   /// Formatted summary string for display / logging.
   String get summary {
     final km = (distanceMeters / 1000).toStringAsFixed(1);

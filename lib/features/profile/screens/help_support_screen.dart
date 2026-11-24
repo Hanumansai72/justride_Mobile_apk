@@ -43,9 +43,9 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(title: const Text('Help Center'), actions: [
+        appBar: AppBar(title: const Text('Help and support'), actions: [
           IconButton(
-              tooltip: 'My Tickets',
+              tooltip: 'Support requests',
               onPressed: () => Navigator.pushNamed(context, '/my-tickets'),
               icon: const Icon(Icons.confirmation_number_outlined))
         ]),
@@ -70,14 +70,14 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               return ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                   children: [
-                    Text('Get back to the ride.',
+                    Text('Find an answer',
                         style: Theme.of(context)
                             .textTheme
                             .headlineSmall
                             ?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     const Text(
-                        'Find answers, check your connection, and get help.',
+                        'Search help or contact support.',
                         style: TextStyle(color: AppColors.textSecondary)),
                     const SizedBox(height: 16),
                     TextField(
@@ -165,11 +165,11 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                                           builder: (_) =>
                                               const SupportTicketScreen())),
                                   icon: const Icon(Icons.add),
-                                  label: const Text('Create support ticket')),
+                                  label: const Text('Contact support')),
                               OutlinedButton(
                                   onPressed: () => Navigator.pushNamed(
                                       context, '/my-tickets'),
-                                  child: const Text('My Tickets')),
+                                  child: const Text('Support requests')),
                             ])),
                     TextButton(
                         onPressed: () => showLicensePage(

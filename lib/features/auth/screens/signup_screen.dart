@@ -187,7 +187,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                         // Heading
                         Text(
-                          'Create Account',
+                          'Create account',
                           style: TextStyle(
                             fontFamily: 'Stack Sans Text',
                             fontSize: 26,
@@ -197,7 +197,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Create your account to start riding',
+                          'Your account keeps your rides and saved places together.',
                           style: AppTextStyles.bodyMedium
                               .copyWith(color: AppColors.textSecondary),
                         ),
@@ -274,7 +274,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                         // Full Name
                         AuthTextField(
-                          label: 'Full Name',
+                          label: 'Full name',
                           hintText: 'Enter your full name',
                           prefixIcon: Icons.person_outline_rounded,
                           controller: _nameController,
@@ -283,7 +283,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                         // Email
                         AuthTextField(
-                          label: 'Email Address',
+                          label: 'Email address',
                           hintText: 'Enter your email',
                           prefixIcon: Icons.email_outlined,
                           keyboardType: TextInputType.emailAddress,
@@ -293,7 +293,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                         // Phone Number (Required by backend)
                         AuthTextField(
-                          label: 'Phone Number',
+                          label: 'Phone number',
                           hintText: '+1 234 567 8900',
                           prefixIcon: Icons.phone_outlined,
                           keyboardType: TextInputType.phone,
@@ -324,7 +324,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                         // Confirm Password
                         AuthTextField(
-                          label: 'Confirm Password',
+                          label: 'Confirm password',
                           hintText: 'Re-enter your password',
                           prefixIcon: Icons.lock_reset_rounded,
                           obscureText: _obscureConfirm,
@@ -355,8 +355,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                     () => _agreeToTerms = val ?? false),
                                 activeColor: AppColors.primary,
                                 checkColor: AppColors.background,
-                                side: const BorderSide(
-                                    color: AppColors.primary),
+                                side:
+                                    const BorderSide(color: AppColors.primary),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(4),
                                 ),
@@ -402,7 +402,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                     children: [
                                       Flexible(
                                           child: Text(
-                                        'Create Account',
+                                        'Create account',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(

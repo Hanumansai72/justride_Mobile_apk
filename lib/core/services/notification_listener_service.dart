@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'ble_navigation_service.dart';
+import 'navigation_service.dart';
+import 'telephony_service.dart';
+
+enum RideNotificationMode { callsOnly, selectedApps, off }
 
 /// Information model representing strictly the latest notification received.
 class LatestNotificationInfo {
@@ -36,11 +40,61 @@ class NotificationListenerService {
 
   bool _isInitialized = false;
   final displayEnabled = ValueNotifier<bool>(false);
+  final rideMode = ValueNotifier(RideNotificationMode.callsOnly);
+  final allowedPackages = ValueNotifier<Set<String>>(const {});
+  Future<Map<String, String>> installedApps() async =>
+      await _channel.invokeMapMethod<String, String>(
+          'getInstalledNotificationApps') ??
+      const {};
   late final Future<void> _settingsReady = _loadSettings();
+  Future<void> get settingsReady => _settingsReady;
+
   Future<void> _loadSettings() async {
-    displayEnabled.value = (await SharedPreferences.getInstance())
-            .getBool('hud_notifications_enabled') ??
-        false;
+    final prefs = await SharedPreferences.getInstance();
+    displayEnabled.value = prefs.getBool('hud_notifications_enabled') ?? false;
+    final savedMode = prefs.getString('hud_ride_notification_mode');
+    rideMode.value = RideNotificationMode.values.firstWhere(
+      (mode) => mode.name == savedMode,
+      orElse: () => RideNotificationMode.callsOnly,
+    );
+    allowedPackages.value = Set.unmodifiable(
+        prefs.getStringList('hud_ride_allowed_packages') ?? const <String>[]);
+  }
+
+  Future<void> setRideMode(RideNotificationMode mode) async {
+    await _settingsReady;
+    rideMode.value = mode;
+    await (await SharedPreferences.getInstance())
+        .setString('hud_ride_notification_mode', mode.name);
+    if (NavigationService.instance.isNavigating &&
+        TelephonyService.instance.callInfoNotifier.value.hasActiveCall) {
+      await TelephonyService.instance.syncDisplay();
+    }
+  }
+
+  Future<void> setAllowedPackages(Set<String> packages) async {
+    await _settingsReady;
+    allowedPackages.value = Set.unmodifiable(packages);
+    await (await SharedPreferences.getInstance())
+        .setStringList('hud_ride_allowed_packages', packages.toList());
+  }
+
+  bool get allowCallOverlay =>
+      !NavigationService.instance.isNavigating ||
+      rideMode.value != RideNotificationMode.off;
+
+  bool allowsAppNotification(String? packageName) {
+    final nav = NavigationService.instance;
+    if (!nav.isNavigating) return true;
+    final state = nav.currentState;
+    return displayEnabled.value &&
+        rideMode.value == RideNotificationMode.selectedApps &&
+        allowedPackages.value.contains(packageName) &&
+        state.gpsAvailable &&
+        !state.rerouting &&
+        state.maneuverDistanceMeters > 120 &&
+        state.maneuverState != 'TURN_ACTIVE' &&
+        state.maneuverState != 'TURN_PREVIEW';
   }
 
   Future<void> setDisplayEnabled(bool value) async {
@@ -56,7 +110,6 @@ class NotificationListenerService {
     _isInitialized = true;
     unawaited(_settingsReady);
     _channel.setMethodCallHandler(_handleNativeMethodCall);
-    debugPrint('[NotificationListenerService] Initialized.');
   }
 
   /// Checks if notification access is granted in Android system settings
@@ -66,7 +119,6 @@ class NotificationListenerService {
           await _channel.invokeMethod<bool>('isNotificationAccessGranted');
       return granted ?? false;
     } catch (e) {
-      debugPrint('[NotificationListenerService] Error checking access: $e');
       return false;
     }
   }
@@ -75,10 +127,7 @@ class NotificationListenerService {
   Future<void> openNotificationSettings() async {
     try {
       await _channel.invokeMethod('openNotificationSettings');
-    } catch (e) {
-      debugPrint(
-          '[NotificationListenerService] Error opening notification settings: $e');
-    }
+    } catch (e) {}
   }
 
   /// Sends custom/in-app notification directly to the ESP32 HUD display (strictly latest only)
@@ -104,6 +153,8 @@ class NotificationListenerService {
         final title = args['title']?.toString() ?? '';
         final message = args['message']?.toString() ?? '';
         final pkg = args['package']?.toString() ?? '';
+        final appName = args['appName']?.toString() ?? '';
+        if (!allowsAppNotification(pkg)) return;
 
         final info = LatestNotificationInfo(
           title: title,
@@ -113,14 +164,12 @@ class NotificationListenerService {
         );
 
         latestNotificationNotifier.value = info;
-        debugPrint(
-            '[NotificationListenerService] Latest notification: "$title" - "$message" ($pkg)');
 
         // The BLE service waits for its initial characteristic discovery when a
         // display is connected, so an early notification is not discarded.
         await BleNavigationService.instance.sendLatestNotification(
             title, message,
-            appName: args['appName']?.toString() ?? 'Alert');
+            appName: appName.isEmpty ? 'Alert' : appName, packageName: pkg);
       }
     }
   }

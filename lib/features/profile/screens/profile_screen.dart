@@ -1,12 +1,12 @@
 import '../../../shared/widgets/device_connection_gate.dart';
 import 'help_support_screen.dart';
+import 'subscription_screen.dart';
 import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../widgets/profile_header.dart';
 
 import '../widgets/profile_card.dart';
@@ -20,7 +20,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final int _navIndex = 3; // Profile is index 3
   UserModel? _user;
   bool _isLoading = true;
 
@@ -58,7 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             side: const BorderSide(color: AppColors.border),
           ),
           title: Text(
-            'Edit Profile',
+            'Edit profile',
             style: TextStyle(
               fontFamily: 'Stack Sans Text',
               color: AppColors.textPrimary,
@@ -78,7 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
-                    labelText: 'Full Name',
+                    labelText: 'Full name',
                     labelStyle: TextStyle(
                         fontFamily: 'Stack Sans Text',
                         color: AppColors.textSecondary),
@@ -99,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fontSize: 14),
                   cursorColor: AppColors.primary,
                   decoration: InputDecoration(
-                    labelText: 'Phone Number',
+                    labelText: 'Phone number',
                     labelStyle: TextStyle(
                         fontFamily: 'Stack Sans Text',
                         color: AppColors.textSecondary),
@@ -117,7 +116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL',
+              child: Text('Cancel',
                   style: TextStyle(
                       fontFamily: 'Stack Sans Text',
                       color: AppColors.textSecondary)),
@@ -191,7 +190,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             side: const BorderSide(color: AppColors.border),
           ),
           title: Text(
-            'Change Password',
+            'Change password',
             style: TextStyle(
               fontFamily: 'Stack Sans Text',
               color: AppColors.textPrimary,
@@ -252,7 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogCtx).pop(),
-              child: Text('CANCEL',
+              child: Text('Cancel',
                   style: TextStyle(
                       fontFamily: 'Stack Sans Text',
                       color: AppColors.textSecondary)),
@@ -332,8 +331,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Expanded(
               child: _isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary),
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
                     )
                   : RefreshIndicator(
                       onRefresh: _fetchProfile,
@@ -362,19 +361,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: JustRideBottomNavBar(
-        currentIndex: _navIndex,
-        onTap: (i) {
-          if (i == 3) return;
-          if (i == 0) {
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          } else if (i == 1) {
-            Navigator.of(context).pushReplacementNamed('/places');
-          } else if (i == 2) {
-            Navigator.of(context).pushReplacementNamed('/device');
-          }
-        },
-      ),
     );
   }
 
@@ -390,21 +376,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           ProfileMenuItem(
             icon: Icons.edit_note_rounded,
-            title: 'Edit Profile',
+            title: 'Edit profile',
             subtitle: 'Update your name and phone number',
             onTap: _showEditProfileDialog,
           ),
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(
             icon: Icons.lock_reset_rounded,
-            title: 'Change Password',
+            title: 'Change password',
             subtitle: 'Update your login password and security',
             onTap: _showChangePasswordDialog,
           ),
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(
             icon: Icons.delete_forever_outlined,
-            title: 'Delete Account',
+            title: 'Delete account',
             subtitle: 'Permanently remove your account and data',
             onTap: _showDeleteAccountDialog,
           ),
@@ -424,36 +410,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         children: [
           ProfileMenuItem(
-            icon: Icons.bluetooth_rounded,
-            title: 'My Devices',
-            subtitle: 'View and manage your JustRide devices',
-            onTap: () => Navigator.of(context).pushNamed('/device'),
-          ),
-          const Divider(color: AppColors.divider, height: 1, indent: 56),
-          ProfileMenuItem(
             icon: Icons.tune_rounded,
-            title: 'Hardware & Device Settings',
-            subtitle: 'Speedometer customization & telemetry settings',
+            title: 'Device settings',
+            subtitle: 'Display and riding preferences',
             onTap: () => Navigator.of(context).pushNamed('/device-settings'),
           ),
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(
-            icon: Icons.notifications_outlined,
-            title: 'Notifications & Alerts',
-            subtitle: 'Firmware updates, device status alerts',
-            onTap: () => Navigator.of(context).pushNamed('/notifications'),
+            icon: Icons.workspace_premium_outlined,
+            title: 'Subscription',
+            subtitle: 'View your plan and Premium access',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => const SubscriptionScreen())),
           ),
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(
             icon: Icons.confirmation_number_outlined,
-            title: 'My Support Tickets',
+            title: 'Support requests',
             subtitle: 'Track active and resolved issue requests',
             onTap: () => Navigator.of(context).pushNamed('/my-tickets'),
           ),
           const Divider(color: AppColors.divider, height: 1, indent: 56),
           ProfileMenuItem(
             icon: Icons.headset_mic_outlined,
-            title: 'Help Center',
+            title: 'Help and support',
             subtitle: 'FAQs, report problems and connect with support',
             onTap: () => Navigator.of(context).push(DevicePageRoute(
                 builder: (_) =>
@@ -493,7 +473,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const Icon(Icons.logout_rounded, size: 20),
             const SizedBox(width: 8),
-            Text('Log Out',
+            Text('Sign out',
                 style: AppTextStyles.labelLarge
                     .copyWith(color: AppColors.errorText)),
           ],

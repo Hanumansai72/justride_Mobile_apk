@@ -62,7 +62,7 @@ void main() {
     tester.view.physicalSize = const Size(320, 740);
     addTearDown(tester.view.reset);
     var requests = 0;
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       await tester.pumpWidget(
           MaterialApp(theme: buildAppTheme(), home: const HelpSupportScreen()));
       final loading = tester
@@ -131,7 +131,7 @@ void main() {
       (tester) async {
     var accepted = false;
     var votes = 0;
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       await tester.pumpWidget(
           MaterialApp(theme: buildAppTheme(), home: const HelpSupportScreen()));
       final loading = tester
@@ -170,6 +170,39 @@ void main() {
             }));
   });
 
+  testWidgets('reply uses the returned thread without a second GET', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 900);
+    addTearDown(tester.view.reset);
+    final requests = <String>[];
+    await ApiClient.runWithClient(() async {
+      await tester.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: const SupportTicketScreen(ticketId: 'ticket-a'),
+      ));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Reply to support'), 'Additional details');
+      await reveal(tester, find.text('Send reply'), 150);
+      await tester.tap(find.text('Send reply'));
+      await tester.pumpAndSettle();
+      expect(find.text('IN PROGRESS'), findsOneWidget);
+      expect(find.text('Please review background permissions.'), findsOneWidget);
+      expect(requests, [
+        'GET /api/support/tickets/ticket-a',
+        'POST /api/support/tickets/ticket-a/messages',
+      ]);
+    }, () => MockClient((request) async {
+      requests.add('${request.method} ${request.url.path}');
+      return http.Response(jsonEncode({
+        'success': true,
+        'data': request.method == 'GET'
+            ? ticket()
+            : ticket(status: 'in_progress', replied: true),
+      }), 200);
+    }));
+  });
+
   testWidgets(
       'ticket errors preserve draft; retry saves category and opens backend thread',
       (tester) async {
@@ -178,7 +211,7 @@ void main() {
     addTearDown(tester.view.reset);
     var saves = 0;
     var replies = 0;
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       await tester.pumpWidget(MaterialApp(
           theme: buildAppTheme(),
           home: const SupportTicketScreen(
@@ -295,7 +328,7 @@ void main() {
   test(
       'screenshots use authenticated multipart with the correct image MIME type',
       () async {
-    await http.runWithClient(() async {
+    await ApiClient.runWithClient(() async {
       final response = await BackendService.instance.uploadSupportScreenshot(
           bytes: [1, 2, 3], filename: 'support.png', contentType: 'image/png');
       expect(response.success, isTrue);

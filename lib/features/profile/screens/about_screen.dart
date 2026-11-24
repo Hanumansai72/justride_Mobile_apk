@@ -30,7 +30,6 @@ class _AboutScreenState extends State<AboutScreen> {
   bool _isChecking = false;
   String? _updateStatus;
   String? _installedVersion;
-  int? _installedBuild;
 
   @override
   void initState() {
@@ -45,7 +44,6 @@ class _AboutScreenState extends State<AboutScreen> {
     await updates.check();
     if (!mounted) return;
     setState(() {
-      _installedBuild = updates.installedBuild;
       _installedVersion = updates.installedVersion;
       _latestApkRelease = updates.hasUpdate ? updates.release : null;
       _updateStatus = updates.error ??
@@ -62,58 +60,13 @@ class _AboutScreenState extends State<AboutScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.bg,
-      appBar: _buildAppBar(context),
+      appBar: AppBar(
+          title: const Text('About JustRide'), automaticallyImplyLeading: true),
       body: SafeArea(top: false, child: _buildBody()),
     );
   }
 
   // â”€â”€ App Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56),
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 56,
-          decoration: const BoxDecoration(
-            color: _C.bg,
-            border: Border(
-              bottom: BorderSide(color: _C.outlineVariant, width: 1),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () {
-                  if (Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
-                  } else {
-                    Navigator.of(context).pushReplacementNamed('/dashboard');
-                  }
-                },
-                icon: const Icon(Icons.arrow_back_rounded,
-                    color: _C.textSec, size: 24),
-              ),
-              Image.asset(
-                'assets/justride-logo-horizontal.png',
-                width: 140,
-                fit: BoxFit.contain,
-                semanticLabel: 'JustRide',
-              ),
-              IconButton(
-                onPressed: () =>
-                    Navigator.of(context).pushNamed('/profile-settings'),
-                icon: const Icon(Icons.settings_outlined,
-                    color: _C.textSec, size: 24),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildBody() {
@@ -154,7 +107,7 @@ class _AboutScreenState extends State<AboutScreen> {
               borderRadius: BorderRadius.circular(AppConstants.radiusCircle),
             ),
             child: Text(
-              '${_installedVersion ?? AppConstants.appVersion} (Build ${_installedBuild ?? '…'})',
+              _installedVersion ?? AppConstants.appVersion,
               style: TextStyle(
                 fontFamily: 'Stack Sans Text',
                 fontSize: 12,
@@ -186,7 +139,7 @@ class _AboutScreenState extends State<AboutScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Update Available: v${_latestApkRelease!.version} (b${_latestApkRelease!.buildNumber})',
+                          'Update available: ${_latestApkRelease!.version}',
                           style: AppTextStyles.bodyMedium.copyWith(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700),
@@ -225,13 +178,13 @@ class _AboutScreenState extends State<AboutScreen> {
           const SizedBox(height: AppConstants.spacingSm),
           _LinkTile(
             icon: Icons.description_outlined,
-            label: 'Terms & Conditions',
+            label: 'Terms and conditions',
             onTap: () => Navigator.of(context).pushNamed(AppRoutes.terms),
           ),
           const SizedBox(height: AppConstants.spacingSm),
           _LinkTile(
             icon: Icons.privacy_tip_outlined,
-            label: 'Privacy Policy',
+            label: 'Privacy policy',
             onTap: () => Navigator.of(context).pushNamed(AppRoutes.privacy),
           ),
           const SizedBox(height: AppConstants.spacingSection),

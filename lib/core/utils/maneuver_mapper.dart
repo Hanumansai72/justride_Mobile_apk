@@ -16,7 +16,13 @@ class ManeuverMapper {
     if (upper.contains('U_TURN') || upper.contains('UTURN')) return 'U_TURN';
     if (upper.contains('ROUNDABOUT')) return 'ROUNDABOUT';
     if (upper.contains('MERGE')) return 'MERGE';
-    if (upper.contains('EXIT') || upper.contains('RAMP')) return 'EXIT';
+    for (final type in ['RAMP', 'FORK', 'EXIT']) {
+      if (upper.contains(type)) {
+        if (upper.contains('LEFT')) return '${type}_LEFT';
+        if (upper.contains('RIGHT')) return '${type}_RIGHT';
+        return type == 'RAMP' ? 'EXIT' : type;
+      }
+    }
     if (upper.contains('LEFT')) return 'LEFT';
     if (upper.contains('RIGHT')) return 'RIGHT';
     if (upper.contains('DESTINATION') || upper.contains('ARRIVE')) return 'ARRIVE';
@@ -136,6 +142,13 @@ class ManeuverMapper {
         return 'MERGE';
       case 'EXIT':
         return 'TAKE EXIT';
+      case 'EXIT_LEFT': return 'EXIT LEFT';
+      case 'EXIT_RIGHT': return 'EXIT RIGHT';
+      case 'RAMP_LEFT': return 'TAKE LEFT RAMP';
+      case 'RAMP_RIGHT': return 'TAKE RIGHT RAMP';
+      case 'FORK_LEFT': return 'KEEP LEFT';
+      case 'FORK_RIGHT': return 'KEEP RIGHT';
+      case 'FORK': return 'AT FORK';
       case 'ARRIVE':
         return 'YOU HAVE ARRIVED';
       case 'STRAIGHT':
@@ -166,7 +179,15 @@ class ManeuverMapper {
       case 'MERGE':
         return Icons.merge_type_rounded;
       case 'EXIT':
+      case 'EXIT_RIGHT':
+      case 'RAMP_RIGHT':
         return Icons.ramp_right_rounded;
+      case 'EXIT_LEFT':
+      case 'RAMP_LEFT':
+        return Icons.ramp_left_rounded;
+      case 'FORK_LEFT': return Icons.fork_left_rounded;
+      case 'FORK_RIGHT': return Icons.fork_right_rounded;
+      case 'FORK': return Icons.fork_right_rounded;
       case 'ARRIVE':
         return Icons.flag_rounded;
       case 'STRAIGHT':
@@ -178,6 +199,15 @@ class ManeuverMapper {
   /// Text arrow symbol for compact logging or fallbacks
   static String toArrowSymbol(String maneuver) {
     switch (maneuver.toUpperCase()) {
+      case 'EXIT_LEFT':
+      case 'RAMP_LEFT':
+      case 'FORK_LEFT':
+        return '↖';
+      case 'EXIT':
+      case 'EXIT_RIGHT':
+      case 'RAMP_RIGHT':
+      case 'FORK_RIGHT':
+        return '↗';
       case 'LEFT':
         return '←';
       case 'RIGHT':

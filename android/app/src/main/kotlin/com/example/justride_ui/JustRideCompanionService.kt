@@ -11,7 +11,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.util.Log
 import androidx.core.content.ContextCompat
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
@@ -75,7 +74,7 @@ object JustRideCompanionRuntime {
                         "resume" -> { preferences(app).edit().putBoolean("paused",false).apply();result.success(null) }
                         else -> result.notImplemented()
                     }
-                } catch(e: Exception) {result.error("COMPANION",e.message,null)}
+                } catch(e: Exception) {result.error("COMPANION","Automatic connection is unavailable. Check Bluetooth permissions and try again.",null)}
             }
         }
         created.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint(loader.findAppBundlePath(),"companionMain"))
@@ -100,7 +99,7 @@ object JustRideCompanionRuntime {
         val prefs=preferences(context)
         if(!prefs.getBoolean("enabled",false))return
         val address=prefs.getString("address",null) ?: return
-        try {observe(context,address)} catch(e: Exception) {Log.w("JustRideCompanion","Presence observation unavailable: ${e.javaClass.simpleName}")}
+        try {observe(context,address)} catch(e: Exception) {}
     }
 
     fun disable(context: Context) {
@@ -114,7 +113,7 @@ object JustRideCompanionRuntime {
                 val cdm=manager(context)
                 if(Build.VERSION.SDK_INT>=33)cdm.myAssociations.filter {it.deviceMacAddress?.toString().equals(address,true)}.forEach {cdm.disassociate(it.id)}
                 else cdm.disassociate(address)
-            } catch(e: Exception) {Log.w("JustRideCompanion","Association cleanup: ${e.javaClass.simpleName}")}
+            } catch(e: Exception) {}
         }
         publish(context)
     }

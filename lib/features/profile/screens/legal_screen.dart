@@ -15,7 +15,7 @@ class LegalScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(isPrivacy ? 'Privacy Policy' : 'Terms & Conditions'),
+        title: Text(isPrivacy ? 'Privacy policy' : 'Terms and conditions'),
       ),
       body: SafeArea(
         top: false,

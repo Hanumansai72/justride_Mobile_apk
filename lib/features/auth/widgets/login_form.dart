@@ -203,7 +203,7 @@ class _LoginFormState extends State<LoginForm> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Login',
+                        'Sign in',
                         style: AppTextStyles.button.copyWith(fontSize: 16),
                       ),
                       const SizedBox(width: 8),

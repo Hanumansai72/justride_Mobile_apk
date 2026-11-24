@@ -190,7 +190,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                     ],
                     if (_status != null)
                       Text(
-                          'Deletion code will be sent to ${_status!['email']}.',
+                          'A verification code will be sent to your account email.',
                           style: AppTextStyles.bodySmall),
                     const SizedBox(height: 16),
                     if (_sent) ...[

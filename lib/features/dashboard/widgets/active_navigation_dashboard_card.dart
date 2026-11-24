@@ -73,8 +73,8 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                             const SizedBox(width: 6),
                             Text(
                               isRerouting
-                                  ? 'OFF ROUTE'
-                                  : 'LIVE NAVIGATION ACTIVE',
+                                  ? 'Updating route'
+                                  : 'Ride in progress',
                               style: TextStyle(
                                 fontFamily: 'Stack Sans Text',
                                 fontSize: 11,
@@ -158,7 +158,7 @@ class ActiveNavigationDashboardCard extends StatelessWidget {
                                     size: 13, color: AppColors.errorText),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'CANCEL',
+                                  'Cancel',
                                   style: TextStyle(
                                     fontFamily: 'Stack Sans Text',
                                     fontSize: 10,

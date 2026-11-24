@@ -137,6 +137,9 @@ class _DisplayCustomizationScreenState
   }
 
   Future<void> _backupImageToBackend(Uint8List bytes, String filename) async {
+    // The device can disconnect or change while image conversion is running.
+    // Recheck before sending the original image to cloud storage.
+    if (!BleNavigationService.instance.photoUploadSupported) return;
     setState(() => _isBackingUpToBackend = true);
     try {
       final res = await BackendService.instance.uploadCustomDisplayImage(
@@ -232,14 +235,14 @@ class _DisplayCustomizationScreenState
           ),
         ),
         content: Text(
-          'This will remove the custom image from your JustRide device and cloud storage, restoring the default speedometer HUD.',
+          'Remove your display photo and restore the default screen?',
           style: TextStyle(
               fontFamily: 'Stack Sans Text', color: _C.textSec, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('CANCEL',
+            child: Text('Cancel',
                 style: TextStyle(
                     fontFamily: 'Stack Sans Text', color: _C.textSec)),
           ),
@@ -294,50 +297,21 @@ class _DisplayCustomizationScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.bg,
-      appBar: _buildAppBar(context),
+      appBar: AppBar(title: const Text('Display photo')),
       body: ValueListenableBuilder<String?>(
         valueListenable: BleNavigationService.instance.firmwareVersion,
         builder: (context, _, child) =>
             BleNavigationService.instance.photoUploadSupported
                 ? _buildBody(context)
-                : const Center(child: Text('Connect a 2.8-inch display')),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(56),
-      child: SafeArea(
-        bottom: false,
-        child: Container(
-          height: 56,
-          decoration: const BoxDecoration(
-            color: _C.bg,
-            border: Border(bottom: BorderSide(color: _C.outlineVariant)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_rounded,
-                    color: _C.textSec, size: 24),
-              ),
-              Text(
-                'Display Customization',
-                style: TextStyle(
-                  fontFamily: 'Stack Sans Text',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: _C.primary,
-                ),
-              ),
-              const SizedBox(width: 48),
-            ],
-          ),
-        ),
+                : const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(AppConstants.pagePadding),
+                      child: Text(
+                        'Display photos are not supported on JustRide Aventura.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
       ),
     );
   }
@@ -601,7 +575,7 @@ class _DisplayCustomizationScreenState
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'SPEED',
+                'Speed',
                 style: TextStyle(
                   fontFamily: 'Stack Sans Text',
                   fontSize: 8,
@@ -637,7 +611,7 @@ class _DisplayCustomizationScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'JUST RIDE HUD DISPLAY',
+                  'JustRide display',
                   style: TextStyle(
                     fontFamily: 'Stack Sans Text',
                     fontSize: 10,

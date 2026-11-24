@@ -85,13 +85,9 @@ class ImageTransferService {
       }
 
       final found = _controlChr != null && _dataChr != null;
-      if (!found) {
-        debugPrint(
-            '[IMG] Image Transfer GATT Service (0xFF20) characteristics not found on device.');
-      }
+      if (!found) {}
       return found;
     } catch (e) {
-      debugPrint('[IMG] Error discovering image characteristics: $e');
       return false;
     }
   }
@@ -104,8 +100,6 @@ class ImageTransferService {
       return false;
     final totalBytes = rgb565Bytes.length;
     if (totalBytes != kTotalBytes) {
-      debugPrint(
-          '[IMG] sendImage: expected $kTotalBytes bytes, got ${rgb565Bytes.length}');
       return false;
     }
 
@@ -122,23 +116,16 @@ class ImageTransferService {
 
       try {
         await device.requestMtu(256);
-      } catch (e) {
-        debugPrint('[IMG] MTU negotiation note: $e');
-      }
+      } catch (e) {}
 
       if (_statusChr != null) {
         try {
           await _statusChr!.setNotifyValue(true);
           _statusSub?.cancel();
           _statusSub = _statusChr!.onValueReceived.listen((data) {
-            if (data.length >= 2) {
-              debugPrint(
-                  '[IMG] ESP32 status: 0x${data[0].toRadixString(16)} ${data[1]}%');
-            }
+            if (data.length >= 2) {}
           });
-        } catch (e) {
-          debugPrint('[IMG] Status notification warning: $e');
-        }
+        } catch (e) {}
       }
 
       await Future.delayed(const Duration(milliseconds: 150));
@@ -149,7 +136,6 @@ class ImageTransferService {
       final bd = ByteData.sublistView(startPayload, 1, 5);
       bd.setUint32(0, totalBytes, Endian.little);
 
-      debugPrint('[IMG] Sending START (size=$totalBytes bytes)...');
       try {
         await _controlChr!.write(startPayload, withoutResponse: false);
       } catch (_) {
@@ -206,7 +192,7 @@ class ImageTransferService {
       }
 
       // 3. Send FINISH command
-      debugPrint('[IMG] Sending FINISH...');
+
       try {
         await _controlChr!.write([_kCmdFinish], withoutResponse: false);
       } catch (_) {
@@ -229,7 +215,6 @@ class ImageTransferService {
       _isTransferring = false;
       return true;
     } catch (e) {
-      debugPrint('[IMG] Transfer error: $e');
       _updateProgress(ImageTransferState.failed, 0, 'Transfer failed',
           error:
               'Unable to send the image. Reconnect your device and try again.');
@@ -272,7 +257,6 @@ class ImageTransferService {
       }
       return false;
     } catch (e) {
-      debugPrint('[ImageTransferService] resetImage error: $e');
       return false;
     }
   }

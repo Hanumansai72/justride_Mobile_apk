@@ -13,7 +13,7 @@ final _internalDetails = RegExp(
   r'\b(?:exception|stacktrace|traceback|socketexception|clientexception|'
   r'platformexception|formatexception|typeerror|nosuchmethoderror|'
   r'sqlstate|sql|mongoose|mongodb|postgres|econnrefused|enotfound|'
-  r'localhost|esp32|gatt|rgb565|sharedpreferences)\b|'
+  r'localhost|esp32|gatt|rgb565|sharedpreferences|hud|tft|ble|stack|syntaxerror)\b|'
   r'\b(?:bearer\s+|eyJ[A-Za-z0-9_-]+\.|api[_ -]?key|access[_ -]?token)|'
   r'/(?:home|usr|var|tmp|api)/',
   caseSensitive: false,

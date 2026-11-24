@@ -7,7 +7,6 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_text_styles.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/services/backend_service.dart';
-import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../widgets/device_action_tile.dart';
 import 'device_pairing_screen.dart';
 
@@ -20,7 +19,6 @@ class DeviceScreen extends StatefulWidget {
 
 class _DeviceScreenState extends State<DeviceScreen>
     with VisiblePagePolling<DeviceScreen> {
-  final int _navIndex = 2; // Device is index 2
   DeviceModel? _device;
   bool _isLoading = true;
   double? _brightnessDraft;
@@ -143,19 +141,6 @@ class _DeviceScreenState extends State<DeviceScreen>
       backgroundColor: AppColors.background,
       appBar: _DeviceAppBar(),
       body: _buildBody(),
-      bottomNavigationBar: JustRideBottomNavBar(
-        currentIndex: _navIndex,
-        onTap: (i) {
-          if (i == 2) return;
-          if (i == 0) {
-            Navigator.of(context).pushReplacementNamed('/dashboard');
-          } else if (i == 1) {
-            Navigator.of(context).pushReplacementNamed('/places');
-          } else if (i == 3) {
-            Navigator.of(context).pushReplacementNamed('/profile');
-          }
-        },
-      ),
     );
   }
 
@@ -183,10 +168,7 @@ class _DeviceScreenState extends State<DeviceScreen>
                       builder: (context, _, child) {
                         final connected =
                             JustRideBleService.instance.isDeviceConnected;
-                        return Text(
-                            connected
-                                ? 'Connected'
-                                : 'Offline · paired to your account',
+                        return Text(connected ? 'Connected' : 'Offline',
                             style: TextStyle(
                                 color: connected
                                     ? AppColors.primary
@@ -196,13 +178,15 @@ class _DeviceScreenState extends State<DeviceScreen>
                     ),
                   ])),
             ]),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+            _deviceStatusCard(),
+            const SizedBox(height: 16),
             ValueListenableBuilder<BluetoothConnectionState>(
               valueListenable:
                   JustRideBleService.instance.connectionStateNotifier,
               builder: (context, connection, _) => _brightnessControl(),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             ValueListenableBuilder<String?>(
               valueListenable: BleNavigationService.instance.firmwareVersion,
               builder: (context, _, child) =>
@@ -223,15 +207,72 @@ class _DeviceScreenState extends State<DeviceScreen>
                 title: 'Hardware settings',
                 onTap: () =>
                     Navigator.of(context).pushNamed('/device-settings')),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
             ValueListenableBuilder<String?>(
               valueListenable: BleNavigationService.instance.firmwareVersion,
-              builder: (context, version, _) => Text(
+              builder: (context, version, _) => Center(
+                child: Text(
                   'Firmware ${version ?? _device?.firmwareVersion ?? '—'}',
-                  style: AppTextStyles.bodyMedium),
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted),
+                ),
+              ),
             ),
           ],
         ),
+      );
+
+  Widget _deviceStatusCard() =>
+      ValueListenableBuilder<BluetoothConnectionState>(
+        valueListenable: JustRideBleService.instance.connectionStateNotifier,
+        builder: (context, _, __) {
+          final connected = JustRideBleService.instance.isDeviceConnected;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: connected
+                      ? AppColors.primary.withValues(alpha: .12)
+                      : AppColors.backgroundInset,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  connected
+                      ? Icons.bluetooth_connected
+                      : Icons.bluetooth_disabled,
+                  color: connected ? AppColors.primary : AppColors.textMuted,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Display connection',
+                          style: AppTextStyles.labelLarge),
+                      const SizedBox(height: 3),
+                      Text(
+                          connected
+                              ? 'Ready to ride'
+                              : 'Reconnect to adjust settings',
+                          style: AppTextStyles.bodySmall),
+                    ]),
+              ),
+              Icon(Icons.circle,
+                  size: 9,
+                  color: connected ? AppColors.connected : AppColors.textMuted),
+            ]),
+          );
+        },
       );
 
   Widget _brightnessControl() {
@@ -296,7 +337,13 @@ class _DeviceScreenState extends State<DeviceScreen>
                     title: const Text('Automatic day/night'),
                     subtitle: const Text('85% by day · 35% at night'),
                     value: value,
-                    onChanged: ble.setAutomaticBrightness)),
+                    onChanged: (enabled) async {
+                      final sent = await ble.setAutomaticBrightness(enabled);
+                      if (!sent && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Could not update brightness. Connect the display and try again.')));
+                      }
+                    })),
           ])),
     );
   }

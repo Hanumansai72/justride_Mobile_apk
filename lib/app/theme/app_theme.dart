@@ -9,6 +9,20 @@ ThemeData buildAppTheme() {
     useMaterial3: true,
     brightness: Brightness.dark,
     fontFamily: 'Stack Sans Text',
+    textTheme: const TextTheme(
+      headlineLarge:
+          TextStyle(fontSize: 30, fontWeight: FontWeight.w600, height: 1.15),
+      headlineMedium:
+          TextStyle(fontSize: 26, fontWeight: FontWeight.w600, height: 1.2),
+      titleLarge:
+          TextStyle(fontSize: 22, fontWeight: FontWeight.w600, height: 1.25),
+      titleMedium:
+          TextStyle(fontSize: 16, fontWeight: FontWeight.w500, height: 1.35),
+      bodyLarge: TextStyle(fontSize: 16, height: 1.5),
+      bodyMedium: TextStyle(fontSize: 14, height: 1.45),
+      bodySmall: TextStyle(fontSize: 13, height: 1.4),
+      labelLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+    ),
     scaffoldBackgroundColor: AppColors.background,
     colorScheme: const ColorScheme.dark(
       primary: AppColors.primary,
@@ -91,10 +105,38 @@ ThemeData buildAppTheme() {
       dragHandleColor: AppColors.textMuted,
     ),
     snackBarTheme: const SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16))),
       backgroundColor: AppColors.surfaceElevated,
       contentTextStyle: TextStyle(color: AppColors.textPrimary),
       actionTextColor: AppColors.primary,
     ),
+
+    listTileTheme: const ListTileThemeData(
+      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      minVerticalPadding: 12,
+      iconColor: AppColors.primary,
+      textColor: AppColors.textPrimary,
+      titleTextStyle: TextStyle(
+          fontFamily: 'Stack Sans Text',
+          fontSize: 16,
+          fontWeight: FontWeight.w500),
+      subtitleTextStyle: TextStyle(
+          fontFamily: 'Stack Sans Text',
+          fontSize: 13,
+          height: 1.4,
+          color: AppColors.textSecondary),
+    ),
+    textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            minimumSize: const Size(48, 48))),
+    switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected)
+                ? AppColors.background
+                : AppColors.textMuted)),
 
     // ── AppBar ───────────────────────────────────────────────────────────────
     appBarTheme: AppBarTheme(
@@ -108,7 +150,9 @@ ThemeData buildAppTheme() {
         statusBarIconBrightness: Brightness.light,
       ),
       centerTitle: false,
-      titleTextStyle: AppTextStyles.headingMedium,
+      toolbarHeight: 64,
+      titleSpacing: 20,
+      titleTextStyle: AppTextStyles.headingLarge,
       iconTheme: const IconThemeData(color: AppColors.textPrimary),
     ),
 
@@ -129,8 +173,8 @@ ThemeData buildAppTheme() {
       backgroundColor: AppColors.surface,
       selectedItemColor: AppColors.primary,
       unselectedItemColor: AppColors.textMuted,
-      showSelectedLabels: true,
-      showUnselectedLabels: true,
+      showSelectedLabels: false,
+      showUnselectedLabels: false,
       type: BottomNavigationBarType.fixed,
       elevation: 0,
     ),

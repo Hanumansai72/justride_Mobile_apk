@@ -20,7 +20,23 @@ class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
   // Reuse HTTP connections instead of opening a new client for each request.
-  final http.Client _client = http.Client();
+  final http.Client _sharedClient = http.Client();
+  static final _clientOverrideKey = Object();
+  http.Client get _client =>
+      Zone.current[_clientOverrideKey] as http.Client? ?? _sharedClient;
+
+  @visibleForTesting
+  static Future<T> runWithClient<T>(
+    Future<T> Function() run,
+    http.Client Function() createClient,
+  ) async {
+    final client = createClient();
+    try {
+      return await runZoned(run, zoneValues: {_clientOverrideKey: client});
+    } finally {
+      client.close();
+    }
+  }
 
   // Production / Staging Backend Host
   static const String baseUrl = 'https://backend.justride.cc/api';
@@ -293,8 +309,6 @@ class ApiClient {
     try {
       // Check 401 Unauthorized or 403 Session Invalidation
       if (res.statusCode == 401) {
-        debugPrint(
-            '[ApiClient] 401 Unauthorized encountered. Redirecting to Login...');
         handleSessionExpired();
       }
 
